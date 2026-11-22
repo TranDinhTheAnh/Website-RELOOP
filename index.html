@@ -261,12 +261,13 @@
           <button onclick="setCategoryFilter('Quần')" class="cat-pill px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition">Quần</button>
           <button onclick="setCategoryFilter('Váy')" class="cat-pill px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition">Váy</button>
           <button onclick="setCategoryFilter('Áo khoác')" class="cat-pill px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition">Áo khoác</button>
+          <button onclick="setCategoryFilter('Set & Phụ kiện')" class="cat-pill px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition">Set & Phụ kiện</button>
         </div>
 
         <!-- Circular Filter Toggle + Search -->
         <div class="flex flex-wrap sm:flex-nowrap items-center gap-3">
           <label class="inline-flex items-center gap-2 cursor-pointer select-none bg-emerald-50/80 border border-emerald-200 px-3 py-2 rounded-xl">
-            <input type="checkbox" id="filter-circular-only" onchange="renderMarketplace()" class="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4">
+            <input type="checkbox" id="filter-circular-only" onchange="resetMarketplaceLimit(); renderMarketplace()" class="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4">
             <span class="text-xs font-semibold text-emerald-800 whitespace-nowrap">
               <i class="fa-solid fa-certificate text-emerald-600 mr-1"></i>Chỉ hiện Tuần hoàn Vòng 2+
             </span>
@@ -274,17 +275,31 @@
 
           <div class="relative flex-1 sm:w-60">
             <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
-            <input type="text" id="marketplace-search" oninput="renderMarketplace()" placeholder="Tìm tên áo, chất liệu..." class="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none focus:border-emerald-500 bg-slate-50 focus:bg-white transition" />
+            <input type="text" id="marketplace-search" oninput="resetMarketplaceLimit(); renderMarketplace()" placeholder="Tìm 100+ mẫu áo, quần, chất liệu..." class="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none focus:border-emerald-500 bg-slate-50 focus:bg-white transition" />
           </div>
         </div>
       </div>
 
       <!-- Product Grid -->
       <div>
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="text-lg sm:text-xl font-bold text-gray-900">Sản phẩm đã kiểm định AI <span id="marketplace-count" class="text-sm font-normal text-gray-500">(8 sản phẩm)</span></h2>
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <h2 class="text-lg sm:text-xl font-bold text-gray-900">Sản phẩm đã kiểm định AI <span id="marketplace-count" class="text-sm font-normal text-gray-500">(100 sản phẩm)</span></h2>
+          <div class="flex items-center gap-2">
+            <label for="marketplace-sort" class="text-xs font-semibold text-gray-500 whitespace-nowrap">Sắp xếp:</label>
+            <select id="marketplace-sort" onchange="renderMarketplace()" class="px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-gray-800 focus:outline-none focus:border-emerald-500">
+              <option value="default">Mới cập nhật</option>
+              <option value="condition-desc">Độ mới cao nhất (%)</option>
+              <option value="price-asc">Giá: Thấp → Cao</option>
+              <option value="price-desc">Giá: Cao → Thấp</option>
+              <option value="cycle-desc">Nhiều vòng đời nhất</option>
+            </select>
+          </div>
         </div>
         <div id="marketplace-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 sm:gap-6">
+          <!-- Populated dynamically via JS -->
+        </div>
+        <!-- Pagination / Load More Controls -->
+        <div id="marketplace-pagination" class="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-2xs">
           <!-- Populated dynamically via JS -->
         </div>
       </div>
@@ -416,6 +431,7 @@
                     <option value="Quần">Quần</option>
                     <option value="Váy">Váy</option>
                     <option value="Áo khoác">Áo khoác</option>
+                    <option value="Set & Phụ kiện">Set & Phụ kiện</option>
                   </select>
                 </div>
 
@@ -1082,6 +1098,7 @@
     const state = {
       activeTab: 'marketplace',
       categoryFilter: 'all',
+      marketplaceLimit: 16,
       wardrobeFilter: 'all',
       stylistTrend: 'all',
       stylistAnchorId: 'w-1',
@@ -1302,6 +1319,183 @@
       // Cart starts with 1 item so user can immediately test checkout or add more
       cart: ['p-2']
     };
+
+    // ---------------------------------------------------------
+    // 1B. EXPAND CATALOG TO 100 DIVERSE CIRCULAR FASHION ITEMS
+    // ---------------------------------------------------------
+    (function populateHundredFashionItems() {
+      const categoryPhotos = {
+        'Áo': [
+          'https://images.unsplash.com/photo-1598033129183-c4f50c736f10?auto=format&fit=crop&w=700&q=85',
+          'https://images.unsplash.com/photo-1596755094514-f87e34085b2c?auto=format&fit=crop&w=700&q=85',
+          'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=700&q=85',
+          'https://images.unsplash.com/photo-1618354691373-d851c5c3a990?auto=format&fit=crop&w=700&q=85',
+          'https://images.unsplash.com/photo-1564257631407-4deb1f99d992?auto=format&fit=crop&w=700&q=85',
+          'https://images.unsplash.com/photo-1602810318383-e386cc2a3ccf?auto=format&fit=crop&w=700&q=85'
+        ],
+        'Quần': [
+          'https://images.unsplash.com/photo-1594633312681-425c7b97ccd1?auto=format&fit=crop&w=700&q=85',
+          'https://images.unsplash.com/photo-1541099649105-f69ad21f3246?auto=format&fit=crop&w=700&q=85',
+          'https://images.unsplash.com/photo-1509631179647-0177331693ae?auto=format&fit=crop&w=700&q=85',
+          'https://images.unsplash.com/photo-1584370848010-d7fe6bc767ec?auto=format&fit=crop&w=700&q=85',
+          'https://images.unsplash.com/photo-1473966968600-fa801b869a1a?auto=format&fit=crop&w=700&q=85'
+        ],
+        'Váy': [
+          'https://images.unsplash.com/photo-1583496661160-fb5886a0aaaa?auto=format&fit=crop&w=700&q=85',
+          'https://images.unsplash.com/photo-1595777457583-95e059d581b8?auto=format&fit=crop&w=700&q=85',
+          'https://images.unsplash.com/photo-1572804013309-59a88b7e92f1?auto=format&fit=crop&w=700&q=85',
+          'https://images.unsplash.com/photo-1515372039744-b8f02a3ae446?auto=format&fit=crop&w=700&q=85',
+          'https://images.unsplash.com/photo-1566174053879-31528523f8ae?auto=format&fit=crop&w=700&q=85'
+        ],
+        'Áo khoác': [
+          'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?auto=format&fit=crop&w=700&q=85',
+          'https://images.unsplash.com/photo-1434389677669-e08b4cac3105?auto=format&fit=crop&w=700&q=85',
+          'https://images.unsplash.com/photo-1544022613-e87ca75a784a?auto=format&fit=crop&w=700&q=85',
+          'https://images.unsplash.com/photo-1551028719-00167b16eac5?auto=format&fit=crop&w=700&q=85',
+          'https://images.unsplash.com/photo-1520975954732-35dd22299614?auto=format&fit=crop&w=700&q=85'
+        ],
+        'Set & Phụ kiện': [
+          'https://images.unsplash.com/photo-1590874103328-eac38a683ce7?auto=format&fit=crop&w=700&q=85',
+          'https://images.unsplash.com/photo-1584917865442-de89df76afd3?auto=format&fit=crop&w=700&q=85',
+          'https://images.unsplash.com/photo-1523381210434-271e8be1f52b?auto=format&fit=crop&w=700&q=85',
+          'https://images.unsplash.com/photo-1576566588028-4147f3842f27?auto=format&fit=crop&w=700&q=85'
+        ]
+      };
+
+      // 92 distinct curated items -> combined with p-1..p-8 = 100 diverse items!
+      const extraCatalogSpecs = [
+        // ÁO (26 mẫu thêm -> tổng 28 áo)
+        ['Áo Sơ Mi Lụa Tơ Tằm Cổ Đức Kem Nhạt', 'Áo', 'M', 'Kem Nhạt', '100% Lụa Tơ Tằm Tự Nhiên', 97, 380000, 890000, 2, 'Công Sở Hiện Đại'],
+        ['Áo Thun Sợi Tre Bamboo Trắng Tinh Khôi', 'Áo', 'S', 'Trắng Tinh', '95% Bamboo Sợi Tre', 96, 175000, 390000, 1, 'Minimalist Thanh Lịch'],
+        ['Áo Polo Dệt Kim Cổ Bẻ Xanh Rêu', 'Áo', 'L', 'Xanh Rêu', 'Cotton Dệt Kim Thoáng Khí', 94, 260000, 580000, 2, 'Dạo Phố Cuối Tuần'],
+        ['Áo Sơ Mi Kẻ Sọc Xanh Dương Cổ Điển', 'Áo', 'M', 'Xanh Dương Sọc', '100% Cotton Poplin', 95, 275000, 640000, 2, 'Công Sở Hiện Đại'],
+        ['Áo Len Tăm Mỏng Cổ Vuông Nâu Hạt Dẻ', 'Áo', 'S', 'Nâu Hạt Dẻ', 'Len Cotton Mềm Mịn', 93, 230000, 520000, 1, 'Minimalist Thanh Lịch'],
+        ['Áo Blouse Tay Bồng Cổ Nơ Trắng Sữa', 'Áo', 'M', 'Trắng Sữa', 'Voan Tơ Hữu Cơ', 96, 285000, 670000, 2, 'Công Sở Hiện Đại'],
+        ['Áo Sơ Mi Flannel Kẻ Caro Nâu Be', 'Áo', 'L', 'Caro Nâu Be', '100% Cotton Flannel', 91, 265000, 620000, 3, 'Dạo Phố Cuối Tuần'],
+        ['Áo Thun Oversize In Họa Tiết Rừng Xanh', 'Áo', 'FreeSize', 'Trắng Ngà', '100% Organic Cotton', 95, 195000, 450000, 1, 'Dạo Phố Cuối Tuần'],
+        ['Áo Sơ Mi Cổ Trụ Vải Đũi Xanh Bạc Hà', 'Áo', 'M', 'Xanh Bạc Hà', 'Đũi Linen Tự Nhiên', 94, 270000, 610000, 2, 'Minimalist Thanh Lịch'],
+        ['Áo Hai Dây Lụa Satin Vàng Champagne', 'Áo', 'S', 'Vàng Champagne', 'Lụa Satin Tái Chế', 98, 210000, 490000, 1, 'Minimalist Thanh Lịch'],
+        ['Áo Sơ Mi Denim Mềm WASH Xanh Nhạt', 'Áo', 'M', 'Xanh Denim Nhạt', '100% Tencel Denim', 92, 310000, 720000, 2, 'Dạo Phố Cuối Tuần'],
+        ['Áo Thun Gân Tăm Cổ Tròn Màu Xám Tiêu', 'Áo', 'S', 'Xám Tiêu', 'Cotton Rib Co Giãn', 95, 165000, 380000, 1, 'Minimalist Thanh Lịch'],
+        ['Áo Kiểu Peplum Nhẹ Phối Cúc Gỗ', 'Áo', 'M', 'Be Cát', 'Linen Pha Cotton', 93, 280000, 650000, 2, 'Công Sở Hiện Đại'],
+        ['Áo Len Cổ Lọ Mỏng Đen Tuyền Thanh Lịch', 'Áo', 'M', 'Đen Tuyền', 'Merino Wool Mỏng', 96, 295000, 710000, 2, 'Công Sở Hiện Đại'],
+        ['Áo Sơ Mi Tay Ngắn Cổ Cuba Xanh Navy', 'Áo', 'L', 'Xanh Navy', '100% Viscose Sợi Gỗ', 94, 250000, 560000, 1, 'Dạo Phố Cuối Tuần'],
+        ['Áo Croptop Linen Buộc Nơ Lưng Trắng', 'Áo', 'S', 'Trắng Tự Nhiên', '100% Linen Mộc', 95, 225000, 510000, 1, 'Dạo Phố Cuối Tuần'],
+        ['Áo Sơ Mi Oxford Hồng Phấn Nhẹ Nhàng', 'Áo', 'M', 'Hồng Phấn', 'Cotton Oxford Hữu Cơ', 93, 275000, 630000, 2, 'Công Sở Hiện Đại'],
+        ['Áo Thun Dài Tay Kẻ Ngang Thủy Thủ', 'Áo', 'M', 'Trắng Kẻ Navy', '100% Cotton Dày Dặn', 92, 215000, 480000, 3, 'Dạo Phố Cuối Tuần'],
+        ['Áo Gile Dệt Kim Họa Tiết Trám Kem Nâu', 'Áo', 'FreeSize', 'Kem Phối Nâu', 'Cotton Knit Mềm', 96, 245000, 550000, 1, 'Minimalist Thanh Lịch'],
+        ['Áo Sơ Mi Voan Xếp Ly Ngực Xanh Pastel', 'Áo', 'S', 'Xanh Pastel', 'Chiffon Tái Chế Mịn', 94, 265000, 610000, 2, 'Công Sở Hiện Đại'],
+        ['Áo Polo Thể Thao Sợi Tái Chế Xám Bạc', 'Áo', 'L', 'Xám Bạc', 'Recycled Poly Cotton', 95, 235000, 540000, 1, 'Dạo Phố Cuối Tuần'],
+        ['Áo Sơ Mi Oversize Kaki Mỏng Xanh Olive', 'Áo', 'FreeSize', 'Xanh Olive', 'Cotton Kaki Mềm', 93, 290000, 680000, 2, 'Dạo Phố Cuối Tuần'],
+        ['Áo Kiểu Cổ Tim Tay Lỡ Màu Nâu Đất', 'Áo', 'M', 'Nâu Đất', 'Tencel Mềm Mịn', 95, 255000, 590000, 1, 'Minimalist Thanh Lịch'],
+        ['Áo Thun Cổ Tim Cotton Mộc Màu Yến Mạch', 'Áo', 'M', 'Yến Mạch', '100% Organic Cotton', 97, 185000, 420000, 1, 'Minimalist Thanh Lịch'],
+        ['Áo Sơ Mi Cổ Sen Thêu Hoa Nhỏ Thủ Công', 'Áo', 'S', 'Trắng Kem', 'Cotton Thô Mềm', 92, 305000, 720000, 2, 'Dạo Phố Cuối Tuần'],
+        ['Áo Sweatshirt Nỉ Da Cá Xanh Cổ Vịt', 'Áo', 'L', 'Xanh Cổ Vịt', '100% Cotton Da Cá', 91, 295000, 690000, 2, 'Dạo Phố Cuối Tuần'],
+
+        // QUẦN (22 mẫu thêm -> tổng 24 quần)
+        ['Quần Jeans Ống Rộng Xanh Bạc Vintage', 'Quần', 'M', 'Xanh Bạc', '100% Cotton Denim', 93, 370000, 860000, 2, 'Dạo Phố Cuối Tuần'],
+        ['Quần Tây Công Sở Ống Đứng Đen Tuyền', 'Quần', 'S', 'Đen Tuyền', 'Tuyết Mưa Cao Cấp', 96, 330000, 760000, 2, 'Công Sở Hiện Đại'],
+        ['Quần Đũi Linen Ống Suông Trắng Kem', 'Quần', 'M', 'Trắng Kem', '100% Linen Tự Nhiên', 95, 310000, 710000, 1, 'Minimalist Thanh Lịch'],
+        ['Quần Kaki Chinos Dáng Slim Nâu Vàng', 'Quần', 'L', 'Nâu Vàng', 'Cotton Twill Co Giãn', 94, 345000, 790000, 2, 'Công Sở Hiện Đại'],
+        ['Quần Short Linen Cạp Cao Màu Be Sáng', 'Quần', 'S', 'Be Sáng', 'Linen Pha Cotton', 96, 220000, 490000, 1, 'Dạo Phố Cuối Tuần'],
+        ['Quần Tây Xếp Ly Đôi Màu Xám Chuột', 'Quần', 'M', 'Xám Chuột', 'Wool Blend Mịn', 95, 365000, 840000, 2, 'Công Sở Hiện Đại'],
+        ['Quần Jeans Baggy Cạp Cao Xanh Đậm', 'Quần', 'M', 'Xanh Indigo', 'Denim Tái Chế 12oz', 92, 355000, 820000, 3, 'Dạo Phố Cuối Tuần'],
+        ['Quần Culottes Lửng Xếp Ly Xanh Rêu', 'Quần', 'M', 'Xanh Rêu', 'Tencel Rũ Mềm', 94, 295000, 680000, 2, 'Minimalist Thanh Lịch'],
+        ['Quần Nhung Tăm Corduroy Ống Suông Nâu', 'Quần', 'L', 'Nâu Sôcôla', '100% Cotton Nhung Tăm', 93, 380000, 880000, 2, 'Dạo Phố Cuối Tuần'],
+        ['Quần Tây Ống Vẩy Nhẹ Hack Dáng Kem Sữa', 'Quần', 'S', 'Kem Sữa', 'Vải Sợi Tre Pha', 97, 350000, 810000, 1, 'Công Sở Hiện Đại'],
+        ['Quần Jogger Cotton Hữu Cơ Xám Nhạt', 'Quần', 'L', 'Xám Nhạt', '100% Organic Cotton', 92, 260000, 590000, 2, 'Dạo Phố Cuối Tuần'],
+        ['Quần Short Kaki Túi Hộp Xanh Olive', 'Quần', 'M', 'Xanh Olive', 'Cotton Kaki Bền Màu', 94, 235000, 530000, 1, 'Dạo Phố Cuối Tuần'],
+        ['Quần Âu Cạp Liền Khóa Lệch Màu Nâu Tây', 'Quần', 'M', 'Nâu Tây', 'Polyester Tái Chế Mịn', 96, 340000, 780000, 2, 'Công Sở Hiện Đại'],
+        ['Quần Jeans Trắng Ngà Ống Đứng Tối Giản', 'Quần', 'S', 'Trắng Ngà', '100% Cotton Denim', 95, 345000, 790000, 1, 'Minimalist Thanh Lịch'],
+        ['Quần Linen Dây Rút Thoải Mái Xanh Than', 'Quần', 'FreeSize', 'Xanh Than', 'Linen Mềm Mát', 93, 285000, 650000, 2, 'Dạo Phố Cuối Tuần'],
+        ['Quần Tây Baggy Công Sở Kẻ Sọc Mảnh', 'Quần', 'M', 'Xám Kẻ Sọc', 'Cotton Wool Nhẹ', 94, 360000, 830000, 2, 'Công Sở Hiện Đại'],
+        ['Quần Jeans Lửng Culottes Xanh Trung', 'Quần', 'S', 'Xanh Trung', 'Denim Cotton Mềm', 91, 315000, 730000, 3, 'Dạo Phố Cuối Tuần'],
+        ['Quần Kaki Ống Rộng Phối Đường Chỉ Nổi', 'Quần', 'L', 'Be Đậm', 'Cotton Canvas Mềm', 95, 355000, 810000, 1, 'Minimalist Thanh Lịch'],
+        ['Quần Short Jeans Cạp Cao Xanh Nhạt', 'Quần', 'M', 'Xanh Nhạt', '100% Cotton Denim', 93, 230000, 520000, 2, 'Dạo Phố Cuối Tuần'],
+        ['Quần Tây Lụa Mềm Ống Suông Đen Nhám', 'Quần', 'M', 'Đen Nhám', 'Tencel Lụa Thoáng', 96, 365000, 850000, 1, 'Công Sở Hiện Đại'],
+        ['Quần Palazzo Dáng Dài Màu Cát Sa Mạc', 'Quần', 'S', 'Cát Sa Mạc', 'Linen Cao Cấp', 95, 375000, 870000, 2, 'Minimalist Thanh Lịch'],
+        ['Quần Cargo Túi Hộp Mềm Xám Rêu', 'Quần', 'L', 'Xám Rêu', 'Cotton Ripstop Nhẹ', 92, 360000, 840000, 2, 'Dạo Phố Cuối Tuần'],
+
+        // VÁY (20 mẫu thêm -> tổng 22 váy)
+        ['Chân Váy Lụa Satin Dáng Dài Vàng Đồng', 'Váy', 'M', 'Vàng Đồng', 'Lụa Satin Tái Chế', 97, 330000, 760000, 2, 'Minimalist Thanh Lịch'],
+        ['Váy Sơ Mi Linen Thắt Eo Xanh Bơ Nhạt', 'Váy', 'M', 'Xanh Bơ Nhạt', '100% Linen Tự Nhiên', 95, 375000, 870000, 2, 'Công Sở Hiện Đại'],
+        ['Chân Váy Chữ A Kaki Cúc Trước Màu Be', 'Váy', 'S', 'Be Tự Nhiên', 'Cotton Kaki Mềm', 94, 265000, 610000, 2, 'Dạo Phố Cuối Tuần'],
+        ['Váy Hoa Nhí Cổ Vuông Tay Bồng Vintage', 'Váy', 'S', 'Kem Hoa Nhí', 'Voan Lụa Mềm Mại', 95, 325000, 740000, 1, 'Dạo Phố Cuối Tuần'],
+        ['Chân Váy Denim Dáng Dài Xẻ Tà Trước', 'Váy', 'M', 'Xanh Denim', '100% Cotton Denim', 93, 340000, 790000, 2, 'Dạo Phố Cuối Tuần'],
+        ['Váy Hai Dây Lụa Đen Tối Giản Thanh Thoát', 'Váy', 'S', 'Đen Tuyền', 'Lụa Tencel Mịn', 96, 315000, 730000, 1, 'Minimalist Thanh Lịch'],
+        ['Chân Váy Xếp Ly Nhỏ Dáng Midi Trắng Kem', 'Váy', 'FreeSize', 'Trắng Kem', 'Chiffon Tái Chế', 94, 290000, 670000, 2, 'Công Sở Hiện Đại'],
+        ['Váy Babydoll Cotton Hữu Cơ Trắng Tinh', 'Váy', 'FreeSize', 'Trắng Tinh', '100% Organic Cotton', 96, 295000, 680000, 1, 'Dạo Phố Cuối Tuần'],
+        ['Váy Công Sở Cổ Vest Kẻ Caro Xám Nhỏ', 'Váy', 'M', 'Xám Caro', 'Tuyết Mưa Mềm', 95, 390000, 910000, 2, 'Công Sở Hiện Đại'],
+        ['Chân Váy Len Dệt Kim Dáng Suông Nâu Sữa', 'Váy', 'M', 'Nâu Sữa', 'Cotton Knit Co Giãn', 93, 285000, 650000, 2, 'Minimalist Thanh Lịch'],
+        ['Váy Maxi Đũi Mộc Hai Dây Bản To', 'Váy', 'M', 'Be Mộc', '100% Đũi Linen', 94, 365000, 850000, 1, 'Dạo Phố Cuối Tuần'],
+        ['Chân Váy Bút Chì Công Sở Xẻ Sau Đen', 'Váy', 'S', 'Đen Tuyền', 'Cotton Twill Co Giãn', 96, 275000, 630000, 2, 'Công Sở Hiện Đại'],
+        ['Váy Yếm Corduroy Nhung Tăm Nâu Bò', 'Váy', 'M', 'Nâu Bò', 'Cotton Nhung Tăm', 92, 335000, 770000, 3, 'Dạo Phố Cuối Tuần'],
+        ['Váy Midi Cổ Tròn Tay Lỡ Xanh Cổ Vịt', 'Váy', 'L', 'Xanh Cổ Vịt', 'Tencel Mềm Mát', 95, 355000, 820000, 1, 'Công Sở Hiện Đại'],
+        ['Chân Váy Tầng Voan Tơ Hồng Phấn Nhẹ', 'Váy', 'S', 'Hồng Phấn', 'Voan Tơ Hữu Cơ', 94, 280000, 640000, 2, 'Dạo Phố Cuối Tuần'],
+        ['Váy Suông Dài Phối Cúc Gỗ Xanh Olive', 'Váy', 'M', 'Xanh Olive', 'Linen Pha Cotton', 93, 340000, 780000, 2, 'Minimalist Thanh Lịch'],
+        ['Váy Len Mỏng Dáng Ôm Cổ Tim Đen', 'Váy', 'S', 'Đen Tuyền', 'Merino Wool Pha', 96, 360000, 840000, 1, 'Minimalist Thanh Lịch'],
+        ['Chân Váy Midi Xòe Nhẹ Màu Xanh Navy', 'Váy', 'M', 'Xanh Navy', 'Cotton Poplin Đứng Form', 95, 295000, 680000, 2, 'Công Sở Hiện Đại'],
+        ['Váy Cổ Vuông Tay Bồng Vải Gingham Đen Trắng', 'Váy', 'S', 'Caro Đen Trắng', '100% Cotton Mềm', 92, 315000, 720000, 2, 'Dạo Phố Cuối Tuần'],
+        ['Váy Linen Dáng Dài Cổ Chữ V Màu Gạch Nung', 'Váy', 'L', 'Đỏ Gạch Nung', '100% Linen Tự Nhiên', 94, 370000, 860000, 1, 'Minimalist Thanh Lịch'],
+
+        // ÁO KHOÁC (16 mẫu thêm -> tổng 18 áo khoác)
+        ['Áo Khoác Denim Cổ Điển Xanh Indigo', 'Áo khoác', 'M', 'Xanh Indigo', '100% Cotton Denim 13oz', 94, 440000, 1050000, 2, 'Dạo Phố Cuối Tuần'],
+        ['Áo Blazer Linen Một Lớp Màu Be Cát', 'Áo khoác', 'M', 'Be Cát', '100% Linen Cao Cấp', 96, 470000, 1180000, 2, 'Công Sở Hiện Đại'],
+        ['Áo Khoác Tweed Dáng Ngắn Viền Đen Trắng', 'Áo khoác', 'S', 'Trắng Phối Đen', 'Dạ Tweed Dệt Nổi', 97, 520000, 1350000, 1, 'Công Sở Hiện Đại'],
+        ['Áo Cardigan Len Vặn Thừng Xanh Rêu Đậm', 'Áo khoác', 'FreeSize', 'Xanh Rêu Đậm', '100% Cotton Knit', 93, 340000, 790000, 2, 'Minimalist Thanh Lịch'],
+        ['Áo Khoác Bomber Kaki Nhẹ Màu Xám Đá', 'Áo khoác', 'L', 'Xám Đá', 'Cotton Kaki Chống Gió', 95, 430000, 990000, 1, 'Dạo Phố Cuối Tuần'],
+        ['Áo Khoác Trench Dáng Dài Màu Nâu Camel', 'Áo khoác', 'M', 'Nâu Camel', 'Gabardine Chống Thấm Nhẹ', 96, 580000, 1490000, 2, 'Công Sở Hiện Đại'],
+        ['Áo Hoodie Zip Nỉ Bông Hữu Cơ Xám Tiêu', 'Áo khoác', 'L', 'Xám Tiêu', '100% Organic Cotton', 92, 330000, 760000, 2, 'Dạo Phố Cuối Tuần'],
+        ['Áo Blazer Đen Cổ Điển Form Chuẩn', 'Áo khoác', 'M', 'Đen Tuyền', 'Wool Blend Thoáng Khí', 97, 495000, 1280000, 2, 'Công Sở Hiện Đại'],
+        ['Áo Khoác Gile Phao Siêu Nhẹ Tái Chế', 'Áo khoác', 'M', 'Xanh Navy', '100% Recycled Nylon', 95, 390000, 920000, 1, 'Dạo Phố Cuối Tuần'],
+        ['Áo Khoác Sơ Mi Shacket Dạ Kẻ Caro Nâu', 'Áo khoác', 'L', 'Caro Nâu Kem', 'Dạ Len Mềm Nhẹ', 94, 420000, 980000, 2, 'Dạo Phố Cuối Tuần'],
+        ['Áo Cardigan Dáng Dài Không Cúc Màu Yến Mạch', 'Áo khoác', 'FreeSize', 'Yến Mạch', 'Bamboo Cotton Knit', 95, 350000, 810000, 1, 'Minimalist Thanh Lịch'],
+        ['Áo Khoác Gió Mỏng Thể Thao Trắng Sữa', 'Áo khoác', 'M', 'Trắng Sữa', 'Polyester Tái Chế', 96, 345000, 790000, 1, 'Dạo Phố Cuối Tuần'],
+        ['Áo Blazer Kẻ Caro Nhỏ Phong Cách Hàn Quốc', 'Áo khoác', 'S', 'Nâu Caro Nhỏ', 'Cotton Pha Linen', 94, 460000, 1120000, 2, 'Công Sở Hiện Đại'],
+        ['Áo Khoác Kaki Túi Hộp Dáng Ngắn Xanh Olive', 'Áo khoác', 'M', 'Xanh Olive', '100% Cotton Twill', 93, 410000, 950000, 2, 'Dạo Phố Cuối Tuần'],
+        ['Áo Khoác Len Mỏng Cổ Tròn Cúc Ngọc Trai', 'Áo khoác', 'S', 'Hồng Phấn Nhạt', 'Cotton Knit Mịn', 96, 315000, 720000, 1, 'Minimalist Thanh Lịch'],
+        ['Áo Khoác Harrington Cổ Bẻ Xanh Than', 'Áo khoác', 'L', 'Xanh Than', 'Cotton Kaki Cao Cấp', 95, 450000, 1080000, 2, 'Dạo Phố Cuối Tuần'],
+
+        // SET & PHỤ KIỆN (8 mẫu -> tổng 8 set & phụ kiện)
+        ['Set Bộ Linen Áo Cổ Trụ & Quần Short Be', 'Set & Phụ kiện', 'M', 'Be Tự Nhiên', '100% Linen Mộc', 96, 460000, 1080000, 1, 'Minimalist Thanh Lịch'],
+        ['Set Công Sở Áo Ghi Lê & Quần Tây Xám', 'Set & Phụ kiện', 'M', 'Xám Khói', 'Tuyết Mưa Cao Cấp', 97, 540000, 1320000, 2, 'Công Sở Hiện Đại'],
+        ['Túi Tote Vải Bố Canvas Hữu Cơ In Tối Giản', 'Set & Phụ kiện', 'FreeSize', 'Kem Mộc', '100% Organic Canvas', 96, 150000, 340000, 1, 'Dạo Phố Cuối Tuần'],
+        ['Khăn Choàng Lụa Vuông Họa Tiết Thực Vật', 'Set & Phụ kiện', 'FreeSize', 'Xanh Rêu Vàng', '100% Lụa Tơ Tằm', 98, 190000, 450000, 2, 'Minimalist Thanh Lịch'],
+        ['Set Cardigan Mỏng & Áo Hai Dây Len Tăm', 'Set & Phụ kiện', 'FreeSize', 'Kem Sữa', 'Cotton Knit Mềm Mịn', 95, 380000, 880000, 2, 'Minimalist Thanh Lịch'],
+        ['Mũ Bucket Kaki Hữu Cơ Hai Mặt Đen Be', 'Set & Phụ kiện', 'FreeSize', 'Đen / Be', '100% Organic Cotton', 95, 140000, 320000, 1, 'Dạo Phố Cuối Tuần'],
+        ['Túi Đeo Chéo Da Thuần Chay Dáng Bán Nguyệt', 'Set & Phụ kiện', 'FreeSize', 'Nâu Bò', 'Da Táo Thuần Chay', 94, 360000, 850000, 2, 'Minimalist Thanh Lịch'],
+        ['Thắt Lưng Da Tái Chế Khóa Đồng Cổ Điển', 'Set & Phụ kiện', 'FreeSize', 'Nâu Đậm', 'Da Tái Chế Cao Cấp', 96, 170000, 390000, 2, 'Công Sở Hiện Đại']
+      ];
+
+      extraCatalogSpecs.forEach((spec, idx) => {
+        const [title, category, size, color, material, condition, price, originalPrice, cycle, trend] = spec;
+        const photoPool = categoryPhotos[category] || categoryPhotos['Áo'];
+        const image = photoPool[idx % photoPool.length];
+        const conditionLabel = condition >= 95 ? 'Như mới' : 'Rất tốt';
+        const pointsReward = Math.max(55, Math.min(115, Math.round(price / 4500) * 5));
+
+        state.products.push({
+          id: `p-${idx + 9}`,
+          title,
+          category,
+          size,
+          color,
+          material,
+          condition,
+          conditionLabel,
+          aiNote: `Bề mặt ${material.toLowerCase()} đạt độ mới ${condition}%, đường may sắc nét, màu ${color.toLowerCase()} bền đẹp tự nhiên.`,
+          price,
+          originalPrice,
+          cycle,
+          pointsReward,
+          trend,
+          fitAdvice: size === 'FreeSize'
+            ? 'Thiết kế FreeSize linh hoạt, phù hợp chiều cao 1m55–1m72, cân nặng 45–63kg.'
+            : `Kích cỡ ${size} chuẩn phom Châu Á, dễ phối cùng các món cơ bản trong tủ đồ tuần hoàn.`,
+          image
+        });
+      });
+    })();
 
     // Sample presets for AI Visual Listing
     const aiSellSamples = [
@@ -1692,6 +1886,7 @@
     // ---------------------------------------------------------
     function setCategoryFilter(cat) {
       state.categoryFilter = cat;
+      state.marketplaceLimit = 16;
       document.querySelectorAll('.cat-pill').forEach(btn => {
         const isMatch = (cat === 'all' && btn.textContent.trim() === 'Tất cả') || btn.textContent.trim() === cat;
         btn.className = isMatch
@@ -1701,17 +1896,43 @@
       renderMarketplace();
     }
 
+    function resetMarketplaceLimit() {
+      state.marketplaceLimit = 16;
+    }
+
+    function loadMoreMarketplace(step = 16) {
+      state.marketplaceLimit += step;
+      renderMarketplace();
+    }
+
+    function showAllMarketplace() {
+      state.marketplaceLimit = state.products.length;
+      renderMarketplace();
+    }
+
     function renderMarketplace() {
       const grid = document.getElementById('marketplace-grid');
+      const paginationBox = document.getElementById('marketplace-pagination');
       const onlyCircular = document.getElementById('filter-circular-only').checked;
       const query = document.getElementById('marketplace-search').value.trim().toLowerCase();
+      const sortMode = document.getElementById('marketplace-sort') ? document.getElementById('marketplace-sort').value : 'default';
 
-      const filtered = state.products.filter(p => {
+      let filtered = state.products.filter(p => {
         const matchCat = state.categoryFilter === 'all' || p.category === state.categoryFilter;
         const matchCirc = !onlyCircular || p.cycle >= 2;
-        const matchQuery = !query || p.title.toLowerCase().includes(query) || p.material.toLowerCase().includes(query) || p.color.toLowerCase().includes(query);
+        const matchQuery = !query || p.title.toLowerCase().includes(query) || p.material.toLowerCase().includes(query) || p.color.toLowerCase().includes(query) || p.category.toLowerCase().includes(query);
         return matchCat && matchCirc && matchQuery;
       });
+
+      if (sortMode === 'condition-desc') {
+        filtered = [...filtered].sort((a, b) => b.condition - a.condition);
+      } else if (sortMode === 'price-asc') {
+        filtered = [...filtered].sort((a, b) => a.price - b.price);
+      } else if (sortMode === 'price-desc') {
+        filtered = [...filtered].sort((a, b) => b.price - a.price);
+      } else if (sortMode === 'cycle-desc') {
+        filtered = [...filtered].sort((a, b) => b.cycle - a.cycle);
+      }
 
       document.getElementById('marketplace-count').textContent = `(${filtered.length} sản phẩm)`;
 
@@ -1723,10 +1944,13 @@
             <p class="text-xs text-gray-500">Thử đổi bộ lọc danh mục hoặc từ khóa tìm kiếm nhé.</p>
           </div>
         `;
+        if (paginationBox) paginationBox.classList.add('hidden');
         return;
       }
 
-      grid.innerHTML = filtered.map(p => {
+      const visibleItems = filtered.slice(0, state.marketplaceLimit);
+
+      grid.innerHTML = visibleItems.map(p => {
         const discountPct = Math.round((1 - p.price / p.originalPrice) * 100);
         const isCircularLoop = p.cycle >= 2;
         return `
@@ -1734,7 +1958,7 @@
             <div>
               <!-- Image Container -->
               <div onclick="openProductDetail('${p.id}')" class="relative aspect-[4/5] bg-brand-beige overflow-hidden cursor-pointer">
-                <img src="${p.image}" alt="${p.title}" onerror="this.onerror=null; this.src='https://placehold.co/600x750/F5F2EB/059669?text=${encodeURIComponent(p.category)}';" class="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
+                <img src="${p.image}" alt="${p.title}" loading="lazy" onerror="this.onerror=null; this.src='https://placehold.co/600x750/F5F2EB/059669?text=${encodeURIComponent(p.category)}';" class="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
                 
                 <!-- Top Badges -->
                 <div class="absolute top-3 left-3 right-3 flex items-start justify-between gap-1.5">
@@ -1796,895 +2020,29 @@
           </article>
         `;
       }).join('');
-    }
 
-    function openProductDetail(productId) {
-      const p = state.products.find(item => item.id === productId);
-      if (!p) return;
-
-      const isCircularLoop = p.cycle >= 2;
-      const content = document.getElementById('product-detail-content');
-      content.innerHTML = `
-        <div class="grid grid-cols-1 md:grid-cols-12">
-          <div class="md:col-span-5 bg-brand-beige relative aspect-[4/5] md:aspect-auto">
-            <img src="${p.image}" alt="${p.title}" onerror="this.onerror=null; this.src='https://placehold.co/600x750/F5F2EB/059669?text=${encodeURIComponent(p.category)}';" class="w-full h-full object-cover" />
-            <span class="absolute top-4 left-4 px-3 py-1 rounded-full bg-white/95 text-xs font-extrabold text-gray-900 shadow">
-              Độ mới AI: ${p.condition}% (${p.conditionLabel})
-            </span>
-          </div>
-
-          <div class="md:col-span-7 p-6 sm:p-7 flex flex-col justify-between space-y-5">
-            <div class="space-y-4">
-              <div class="flex items-start justify-between gap-3">
-                <div>
-                  <span class="text-xs font-bold text-emerald-700 uppercase tracking-wider">${p.category} • Vòng đời thứ ${p.cycle}</span>
-                  <h2 class="text-xl sm:text-2xl font-extrabold text-gray-900 mt-1">${p.title}</h2>
-                </div>
-                <button onclick="closeModal('product-detail-modal')" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-gray-600 flex items-center justify-center shrink-0">
-                  <i class="fa-solid fa-xmark"></i>
-                </button>
-              </div>
-
-              <!-- Mandatory Circular Authenticity Callout for Cycle 2+ -->
-              ${isCircularLoop ? `
-                <div class="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-300 flex items-start gap-3">
-                  <div class="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 mt-0.5">
-                    <i class="fa-solid fa-shield-check"></i>
-                  </div>
-                  <div>
-                    <p class="text-xs sm:text-sm font-extrabold text-emerald-900">
-                      “Sản phẩm chính hãng thuộc hệ tuần hoàn, đã được kiểm định từ vòng trước”
-                    </p>
-                    <p class="text-[11px] text-emerald-700 mt-0.5">
-                      Dữ liệu chất liệu & nguồn gốc được đồng bộ nguyên bản qua ${p.cycle} vòng đời sử dụng.
-                    </p>
-                  </div>
-                </div>
-              ` : `
-                <div class="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-gray-600 flex items-center gap-2">
-                  <i class="fa-solid fa-circle-check text-emerald-600"></i>
-                  <span>Sản phẩm vòng đời đầu tiên — Đã qua kiểm định hình ảnh AI RE:LOOP.</span>
-                </div>
-              `}
-
-              <!-- Price -->
-              <div class="flex items-baseline gap-3">
-                <span class="text-2xl font-extrabold text-gray-900">${formatVND(p.price)}</span>
-                <span class="text-sm text-gray-400 line-through">${formatVND(p.originalPrice)}</span>
-                <span class="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full">+${p.pointsReward} Điểm Xanh</span>
-              </div>
-
-              <!-- Specs Grid -->
-              <div class="grid grid-cols-2 gap-2.5 text-xs">
-                <div class="p-3 rounded-xl bg-slate-50 border border-slate-100">
-                  <span class="text-gray-400 block">Kích cỡ</span>
-                  <strong class="text-gray-900">Size ${p.size}</strong>
-                </div>
-                <div class="p-3 rounded-xl bg-slate-50 border border-slate-100">
-                  <span class="text-gray-400 block">Màu sắc</span>
-                  <strong class="text-gray-900">${p.color}</strong>
-                </div>
-                <div class="col-span-2 p-3 rounded-xl bg-slate-50 border border-slate-100">
-                  <span class="text-gray-400 block">Chất liệu</span>
-                  <strong class="text-gray-900">${p.material}</strong>
-                </div>
-              </div>
-
-              <!-- AI Inspection Note -->
-              <div class="p-3.5 rounded-2xl bg-brand-beige/80 border border-stone-200 text-xs space-y-1">
-                <p class="font-bold text-gray-900"><i class="fa-solid fa-wand-magic-sparkles text-emerald-600 mr-1.5"></i>Báo cáo kiểm định AI:</p>
-                <p class="text-gray-700 leading-relaxed">${p.aiNote}</p>
-              </div>
-            </div>
-
-            <!-- Action Buttons -->
-            <div class="flex flex-col sm:flex-row gap-2.5 pt-2">
-              <button onclick="closeModal('product-detail-modal'); openProductChat('${p.id}')" class="px-4 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-gray-900 text-xs font-bold transition flex items-center justify-center gap-2">
-                <i class="fa-solid fa-robot text-emerald-600"></i> Hỏi AI tư vấn size
+      if (paginationBox) {
+        paginationBox.classList.remove('hidden');
+        const remaining = filtered.length - visibleItems.length;
+        paginationBox.innerHTML = `
+          <p class="text-xs text-gray-600">
+            Đang hiển thị <strong class="text-gray-900">${visibleItems.length}</strong> / <strong class="text-gray-900">${filtered.length}</strong> sản phẩm tuần hoàn đã kiểm định AI
+          </p>
+          <div class="flex flex-wrap items-center gap-2">
+            ${remaining > 0 ? `
+              <button onclick="loadMoreMarketplace(16)" class="px-4 py-2 rounded-xl bg-gray-900 hover:bg-emerald-600 text-white text-xs font-bold transition">
+                Xem thêm ${Math.min(16, remaining)} mẫu tiếp theo
               </button>
-              <button onclick="addToCart('${p.id}'); closeModal('product-detail-modal')" class="flex-1 px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold shadow-sm transition flex items-center justify-center gap-2">
-                <i class="fa-solid fa-bag-shopping"></i> Thêm vào giỏ hàng
+              <button onclick="showAllMarketplace()" class="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-gray-800 text-xs font-bold transition">
+                Hiện tất cả (${filtered.length})
               </button>
-            </div>
-          </div>
-        </div>
-      `;
-      document.getElementById('product-detail-modal').classList.remove('hidden');
-    }
-
-    function closeModal(modalId) {
-      document.getElementById(modalId).classList.add('hidden');
-    }
-
-    // ---------------------------------------------------------
-    // 5. AI VISUAL LISTING & AUTO-PRICING (TAB 2)
-    // ---------------------------------------------------------
-    function handleSellFileUpload(event) {
-      const file = event.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        const randomPreset = aiSellSamples[Math.floor(Math.random() * aiSellSamples.length)];
-        runAIScanSimulation(e.target.result, {
-          ...randomPreset,
-          title: file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ') || randomPreset.title
-        });
-      };
-      reader.readAsDataURL(file);
-    }
-
-    function triggerSampleAIScan(index) {
-      const sample = aiSellSamples[index];
-      runAIScanSimulation(sample.image, sample);
-    }
-
-    function runAIScanSimulation(imageSrc, extractedData) {
-      currentSellImage = imageSrc;
-      const placeholder = document.getElementById('sell-upload-placeholder');
-      const previewImg = document.getElementById('sell-preview-img');
-      const overlay = document.getElementById('sell-scan-overlay');
-      const statusText = document.getElementById('sell-scan-status');
-      const badge = document.getElementById('sell-ai-badge');
-
-      placeholder.classList.add('hidden');
-      previewImg.src = imageSrc;
-      previewImg.classList.remove('hidden');
-      overlay.classList.remove('hidden');
-
-      badge.className = 'px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-bold';
-      badge.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> AI đang phân tích...';
-
-      const steps = [
-        'AI đang nhận diện form dáng & danh mục...',
-        'Đang phân tích cấu trúc sợi vải & màu sắc...',
-        'Đánh giá độ mới & định giá thị trường...'
-      ];
-      let stepIdx = 0;
-      statusText.textContent = steps[0];
-
-      const interval = setInterval(() => {
-        stepIdx++;
-        if (stepIdx < steps.length) {
-          statusText.textContent = steps[stepIdx];
-        }
-      }, 550);
-
-      setTimeout(() => {
-        clearInterval(interval);
-        overlay.classList.add('hidden');
-
-        // Fill AI extracted values into the form
-        document.getElementById('sell-title').value = extractedData.title;
-        document.getElementById('sell-category').value = extractedData.category;
-        document.getElementById('sell-size').value = extractedData.size;
-        document.getElementById('sell-color').value = extractedData.color;
-        document.getElementById('sell-material').value = extractedData.material;
-        document.getElementById('sell-price').value = extractedData.price;
-
-        currentSellOriginalPrice = extractedData.originalPrice;
-        currentSellCondition = extractedData.condition;
-        currentSellConditionLabel = extractedData.conditionLabel;
-        currentSellConditionNote = extractedData.conditionNote;
-
-        document.getElementById('sell-condition-score').textContent = `${extractedData.condition}%`;
-        document.getElementById('sell-condition-label').textContent = extractedData.conditionLabel;
-        document.getElementById('sell-condition-note').textContent = extractedData.conditionNote;
-        document.getElementById('sell-original-price-hint').textContent = `Giá gốc tham chiếu thị trường: ${formatVND(extractedData.originalPrice)}`;
-
-        badge.className = 'px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold';
-        badge.innerHTML = '<i class="fa-solid fa-check mr-1"></i> Đã trích xuất tự động';
-
-        showToast('AI hoàn tất phân tích!', `Độ mới ${extractedData.condition}% • Đề xuất giá ${formatVND(extractedData.price)}`);
-      }, 1700);
-    }
-
-    function submitNewListing(event) {
-      event.preventDefault();
-      if (!state.currentUser) {
-        showToast('Yêu cầu đăng nhập', 'Vui lòng đăng nhập hoặc tạo tài khoản để đăng bán và nhận Điểm Xanh.', 'info');
-        openAuthModal('login');
-        return;
-      }
-      const title = document.getElementById('sell-title').value.trim();
-      const category = document.getElementById('sell-category').value;
-      const size = document.getElementById('sell-size').value;
-      const color = document.getElementById('sell-color').value.trim();
-      const material = document.getElementById('sell-material').value.trim();
-      const price = parseInt(document.getElementById('sell-price').value, 10) || 300000;
-
-      const imageToUse = currentSellImage || aiSellSamples[0].image;
-
-      const newProduct = {
-        id: 'p-' + Date.now(),
-        title,
-        category,
-        size,
-        color,
-        material,
-        condition: currentSellCondition,
-        conditionLabel: currentSellConditionLabel,
-        aiNote: currentSellConditionNote,
-        price,
-        originalPrice: Math.max(currentSellOriginalPrice, Math.round(price * 2.1)),
-        cycle: 1,
-        pointsReward: 75,
-        trend: 'Minimalist Thanh Lịch',
-        fitAdvice: `Kích cỡ ${size} tiêu chuẩn, phù hợp người mặc size ${size} thông thường.`,
-        image: imageToUse
-      };
-
-      state.products.unshift(newProduct);
-      state.greenPoints += 120;
-      state.co2Saved += 4.2;
-      state.waterSaved += 950;
-      state.pointsHistory.unshift({
-        id: Date.now(),
-        title: `Đăng bán AI: ${title}`,
-        delta: '+120',
-        type: 'earn',
-        date: 'Vừa xong'
-      });
-
-      updateHeaderAndStats();
-      showToast('Đăng bán thành công! (+120 Điểm Xanh)', `Sản phẩm "${title}" đã lên kệ gian hàng tuần hoàn.`);
-      switchTab('marketplace');
-    }
-
-    // ---------------------------------------------------------
-    // 6. DIGITAL WARDROBE & AI STYLIST (TAB 3)
-    // ---------------------------------------------------------
-    function filterWardrobe(cat) {
-      state.wardrobeFilter = cat;
-      document.querySelectorAll('.wardrobe-filter').forEach(btn => {
-        const active = (cat === 'all' && btn.textContent.trim() === 'Tất cả') || btn.textContent.trim() === cat;
-        btn.className = active
-          ? 'wardrobe-filter active px-3 py-1.5 rounded-xl text-xs font-semibold transition bg-gray-900 text-white'
-          : 'wardrobe-filter px-3 py-1.5 rounded-xl text-xs font-semibold transition bg-slate-100 hover:bg-slate-200 text-gray-700';
-      });
-      renderWardrobe();
-    }
-
-    function renderWardrobe() {
-      const grid = document.getElementById('wardrobe-grid');
-      const items = state.wardrobe.filter(w => state.wardrobeFilter === 'all' || w.category === state.wardrobeFilter);
-
-      if (items.length === 0) {
-        grid.innerHTML = `<p class="col-span-full text-xs text-gray-500 py-6 text-center">Chưa có sản phẩm thuộc nhóm này trong tủ đồ của bạn.</p>`;
-        return;
-      }
-
-      grid.innerHTML = items.map(item => `
-        <div class="p-3.5 rounded-2xl border border-slate-200/90 bg-slate-50/60 flex gap-3.5 items-center">
-          <img src="${item.image}" alt="${item.title}" onerror="this.onerror=null; this.src='https://placehold.co/200x240/F5F2EB/059669?text=${encodeURIComponent(item.category)}';" class="w-20 h-24 rounded-xl object-cover bg-brand-beige shrink-0" />
-          <div class="flex-1 min-w-0 space-y-1.5">
-            <div class="flex items-center gap-1.5">
-              <span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">Vòng #${item.cycle}</span>
-              <span class="text-[11px] text-gray-500">Size ${item.size}</span>
-            </div>
-            <h4 class="text-xs sm:text-sm font-bold text-gray-900 truncate">${item.title}</h4>
-            <p class="text-[11px] text-gray-500 truncate">${item.material}</p>
-            <div class="flex flex-wrap gap-1.5 pt-1">
-              <button onclick="selectAnchorForStylist('${item.id}')" class="px-2.5 py-1 rounded-lg bg-white hover:bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold transition">
-                <i class="fa-solid fa-wand-magic-sparkles mr-1"></i>Phối đồ
-              </button>
-              ${item.reconsigned ? `
-                <span class="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 text-[11px] font-semibold">Đã ký gửi lại</span>
-              ` : `
-                <button onclick="openReconsignModal('${item.id}')" class="px-2.5 py-1 rounded-lg bg-gray-900 hover:bg-gray-800 text-white text-[11px] font-semibold transition">
-                  Ký gửi lại
-                </button>
-              `}
-            </div>
-          </div>
-        </div>
-      `).join('');
-    }
-
-    function setStylistTrend(trend) {
-      state.stylistTrend = trend;
-      document.querySelectorAll('.trend-pill').forEach(btn => {
-        const active = (trend === 'all' && btn.textContent.trim() === 'Tất cả xu hướng') || btn.textContent.trim() === trend;
-        btn.className = active
-          ? 'trend-pill active px-3.5 py-2 rounded-xl text-xs font-semibold transition bg-emerald-600 text-white'
-          : 'trend-pill px-3.5 py-2 rounded-xl text-xs font-semibold transition bg-white hover:bg-stone-100 text-gray-700 border border-stone-200';
-      });
-      renderStylistOutfits();
-    }
-
-    function selectAnchorForStylist(wardrobeId) {
-      state.stylistAnchorId = wardrobeId;
-      renderStylistOutfits();
-      document.getElementById('ai-stylist-section').scrollIntoView({ behavior: 'smooth' });
-      showToast('AI Stylist đã cập nhật', 'Đã tạo set đồ mới xoay quanh món đồ bạn chọn trong tủ.');
-    }
-
-    function renderStylistOutfits() {
-      const container = document.getElementById('stylist-outfits-grid');
-      if (state.wardrobe.length === 0) {
-        container.innerHTML = `<p class="text-xs text-gray-600">Hãy mua ít nhất 1 sản phẩm để AI bắt đầu gợi ý phối đồ từ tủ đồ của bạn.</p>`;
-        return;
-      }
-
-      const anchorItem = state.wardrobe.find(w => w.id === state.stylistAnchorId) || state.wardrobe[0];
-      document.getElementById('stylist-anchor-label').innerHTML = `
-        Đang phối cùng món có sẵn: <strong class="text-gray-900">${anchorItem.title}</strong> (trong tủ đồ của bạn)
-      `;
-
-      // Pair the anchor wardrobe item with complementary marketplace items
-      const complementaryCandidates = state.products.filter(p => p.category !== anchorItem.category);
-      const outfits = complementaryCandidates.slice(0, 4).map((marketItem, idx) => {
-        const trends = ['Minimalist Thanh Lịch', 'Công Sở Hiện Đại', 'Dạo Phố Cuối Tuần'];
-        const assignedTrend = marketItem.trend || trends[idx % trends.length];
-        return {
-          id: `outfit-${idx}`,
-          trend: assignedTrend,
-          wardrobeItem: anchorItem,
-          marketItem: marketItem,
-          stylistReason: `Sự kết hợp giữa <strong>${anchorItem.title}</strong> (${anchorItem.color}) có sẵn trong tủ đồ của bạn cùng <strong>${marketItem.title}</strong> (${marketItem.material}) tạo tổng thể cân đối, hợp xu hướng ${assignedTrend}.`
-        };
-      }).filter(o => state.stylistTrend === 'all' || o.trend === state.stylistTrend);
-
-      if (outfits.length === 0) {
-        container.innerHTML = `<div class="col-span-full bg-white/80 p-6 rounded-2xl text-center text-xs text-gray-600">Chưa có set phối đồ nào thuộc phong cách này. Hãy chọn "Tất cả xu hướng" để xem thêm gợi ý từ AI!</div>`;
-        return;
-      }
-
-      container.innerHTML = outfits.map(outfit => `
-        <div class="bg-white rounded-3xl p-5 border border-stone-200/90 shadow-xs flex flex-col justify-between space-y-4">
-          <div class="space-y-3">
-            <div class="flex items-center justify-between">
-              <span class="px-3 py-1 rounded-full bg-brand-beige text-gray-800 text-[11px] font-bold">
-                Xu hướng: ${outfit.trend}
-              </span>
-              <span class="text-[11px] font-semibold text-emerald-700">
-                <i class="fa-solid fa-leaf mr-1"></i>Tiết kiệm 1 món mới
-              </span>
-            </div>
-
-            <!-- Visual Side-by-Side Combo -->
-            <div class="grid grid-cols-2 gap-3 items-stretch">
-              <!-- Item 1: Already in User's Wardrobe -->
-              <div class="p-2.5 rounded-2xl bg-emerald-50/70 border border-emerald-200 flex flex-col justify-between">
-                <div class="relative aspect-square rounded-xl overflow-hidden bg-white mb-2">
-                  <img src="${outfit.wardrobeItem.image}" onerror="this.onerror=null; this.src='https://placehold.co/300x300/ECFDF5/059669?text=Tu+Do';" class="w-full h-full object-cover" alt="${outfit.wardrobeItem.title}" />
-                  <span class="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-md bg-emerald-600 text-white text-[10px] font-bold">
-                    Có sẵn trong tủ
-                  </span>
-                </div>
-                <div>
-                  <p class="text-xs font-bold text-gray-900 line-clamp-1">${outfit.wardrobeItem.title}</p>
-                  <p class="text-[11px] text-emerald-800 font-semibold mt-0.5">0đ (Đồ của bạn)</p>
-                </div>
-              </div>
-
-              <!-- Item 2: Suggested Missing Piece from Marketplace -->
-              <div class="p-2.5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col justify-between">
-                <div class="relative aspect-square rounded-xl overflow-hidden bg-white mb-2">
-                  <img src="${outfit.marketItem.image}" onerror="this.onerror=null; this.src='https://placehold.co/300x300/F5F2EB/059669?text=Goi+Y';" class="w-full h-full object-cover" alt="${outfit.marketItem.title}" />
-                  <span class="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-md bg-gray-900 text-white text-[10px] font-bold">
-                    Gợi ý trên sàn
-                  </span>
-                </div>
-                <div>
-                  <p class="text-xs font-bold text-gray-900 line-clamp-1">${outfit.marketItem.title}</p>
-                  <p class="text-[11px] text-gray-900 font-extrabold mt-0.5">${formatVND(outfit.marketItem.price)} <span class="font-normal text-gray-500">• Mới ${outfit.marketItem.condition}%</span></p>
-                </div>
-              </div>
-            </div>
-
-            <p class="text-xs text-gray-600 leading-relaxed bg-slate-50 p-3 rounded-xl">
-              <i class="fa-solid fa-sparkles text-emerald-600 mr-1"></i>${outfit.stylistReason}
-            </p>
-          </div>
-
-          <button onclick="addToCart('${outfit.marketItem.id}')" class="w-full py-2.5 px-4 rounded-xl bg-gray-900 hover:bg-emerald-600 text-white text-xs font-bold transition flex items-center justify-center gap-2">
-            <i class="fa-solid fa-bag-shopping"></i> Thêm món còn thiếu vào giỏ (${formatVND(outfit.marketItem.price)})
-          </button>
-        </div>
-      `).join('');
-    }
-
-    // ---------------------------------------------------------
-    // 7. PURCHASED ORDERS & 1-CLICK RE-CONSIGNMENT (TAB 4)
-    // ---------------------------------------------------------
-    let activeReconsignItemId = null;
-    let reconsignPhotoUploaded = false;
-    let reconsignNewImage = '';
-
-    function renderPurchasedOrders() {
-      const container = document.getElementById('purchased-orders-list');
-      container.innerHTML = state.wardrobe.map(item => `
-        <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div class="flex items-center gap-4">
-            <img src="${item.image}" alt="${item.title}" onerror="this.onerror=null; this.src='https://placehold.co/200x240/F5F2EB/059669?text=${encodeURIComponent(item.category)}';" class="w-20 h-24 rounded-2xl object-cover bg-brand-beige shrink-0" />
-            <div class="space-y-1">
-              <div class="flex flex-wrap items-center gap-2">
-                <span class="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold">
-                  Đã mua ngày ${item.purchasedDate}
-                </span>
-                <span class="px-2.5 py-0.5 rounded-full bg-slate-100 text-gray-700 text-[11px] font-semibold">
-                  Vòng đời #${item.cycle}
-                </span>
-              </div>
-              <h3 class="text-base font-extrabold text-gray-900">${item.title}</h3>
-              <p class="text-xs text-gray-500">${item.category} • Màu: ${item.color} • Chất liệu: ${item.material} • Size ${item.size}</p>
-              <p class="text-xs font-semibold text-gray-700">Giá đã mua: ${formatVND(item.paidPrice)}</p>
-            </div>
-          </div>
-
-          <div class="flex sm:flex-col items-center sm:items-end justify-between gap-2 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-100">
-            ${item.reconsigned ? `
-              <span class="px-4 py-2 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold flex items-center gap-1.5">
-                <i class="fa-solid fa-circle-check text-emerald-600"></i> Đang ký gửi trên sàn (Vòng #${item.cycle + 1})
-              </span>
             ` : `
-              <button onclick="openReconsignModal('${item.id}')" class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold shadow-sm transition flex items-center gap-2">
-                <i class="fa-solid fa-rotate"></i> Ký gửi lại
-              </button>
-              <span class="text-[11px] text-gray-400">Không cần nhập lại thông tin</span>
+              <span class="px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 text-xs font-semibold">
+                <i class="fa-solid fa-check mr-1"></i>Đã hiển thị toàn bộ ${filtered.length} mẫu
+              </span>
             `}
           </div>
-        </div>
-      `).join('');
-    }
-
-    function openReconsignModal(wardrobeItemId) {
-      if (!state.currentUser) {
-        showToast('Yêu cầu đăng nhập', 'Vui lòng đăng nhập để sử dụng tính năng Ký gửi lại 1 chạm.', 'info');
-        openAuthModal('login');
-        return;
-      }
-      const item = state.wardrobe.find(w => w.id === wardrobeItemId);
-      if (!item) return;
-
-      activeReconsignItemId = wardrobeItemId;
-      reconsignPhotoUploaded = false;
-      reconsignNewImage = item.image;
-
-      const nextCycle = item.cycle + 1;
-      const estimatedCondition = Math.max(84, 95 - nextCycle * 3);
-      const suggestedResalePrice = Math.round((item.paidPrice * 0.78) / 10000) * 10000;
-
-      const body = document.getElementById('reconsign-modal-body');
-      body.innerHTML = `
-        <!-- Auto-Synced Metadata from Previous Seller -->
-        <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-extrabold text-gray-900 flex items-center gap-1.5">
-              <i class="fa-solid fa-link text-emerald-600"></i> Dữ liệu gốc đã đồng bộ tự động
-            </span>
-            <span class="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full">
-              Không cần nhập lại
-            </span>
-          </div>
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-            <div class="bg-white p-2.5 rounded-xl border border-slate-100">
-              <span class="text-gray-400 block text-[10px]">Tên sản phẩm</span>
-              <strong class="text-gray-800 line-clamp-1">${item.title}</strong>
-            </div>
-            <div class="bg-white p-2.5 rounded-xl border border-slate-100">
-              <span class="text-gray-400 block text-[10px]">Loại / Size</span>
-              <strong class="text-gray-800">${item.category} • ${item.size}</strong>
-            </div>
-            <div class="bg-white p-2.5 rounded-xl border border-slate-100">
-              <span class="text-gray-400 block text-[10px]">Màu sắc</span>
-              <strong class="text-gray-800">${item.color}</strong>
-            </div>
-            <div class="bg-white p-2.5 rounded-xl border border-slate-100">
-              <span class="text-gray-400 block text-[10px]">Chất liệu</span>
-              <strong class="text-gray-800 line-clamp-1">${item.material}</strong>
-            </div>
-          </div>
-        </div>
-
-        <!-- Step 2: Upload 1-2 Current Photos -->
-        <div class="space-y-2">
-          <label class="block text-xs font-bold text-gray-900">
-            Bước duy nhất: Cung cấp 1–2 ảnh tình trạng hiện tại của áo <span class="text-rose-500">*</span>
-          </label>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <label class="cursor-pointer p-4 rounded-2xl border-2 border-dashed border-slate-300 hover:border-emerald-500 bg-slate-50 flex flex-col items-center justify-center text-center gap-1.5 transition">
-              <i class="fa-solid fa-camera text-emerald-600 text-lg"></i>
-              <span class="text-xs font-bold text-gray-800">Tải lên 1–2 ảnh thực tế</span>
-              <span class="text-[11px] text-gray-500">Chụp mặt trước & tem/cổ áo</span>
-              <input type="file" accept="image/*" multiple class="hidden" onchange="handleReconsignPhotoSelect(event, ${estimatedCondition}, ${suggestedResalePrice})" />
-            </label>
-
-            <button type="button" onclick="simulateReconsignPhoto(${estimatedCondition}, ${suggestedResalePrice})" class="p-4 rounded-2xl border border-emerald-200 bg-emerald-50/70 hover:bg-emerald-100/70 flex flex-col items-center justify-center text-center gap-1.5 transition">
-              <i class="fa-solid fa-wand-magic-sparkles text-emerald-700 text-lg"></i>
-              <span class="text-xs font-bold text-emerald-900">Dùng ảnh chụp nhanh (Demo)</span>
-              <span class="text-[11px] text-emerald-700">Mô phỏng tải 2 ảnh hiện tại để AI chấm điểm</span>
-            </button>
-          </div>
-        </div>
-
-        <!-- AI Lifecycle Re-valuation Result Box -->
-        <div id="reconsign-ai-result" class="hidden p-4 rounded-2xl bg-emerald-50 border border-emerald-300 space-y-3 animate-fade-up">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-extrabold text-emerald-900">
-              <i class="fa-solid fa-robot mr-1.5"></i>AI Định giá theo Tình trạng & Số vòng đời
-            </span>
-            <span class="px-2.5 py-0.5 rounded-full bg-emerald-600 text-white text-[11px] font-bold">
-              Vòng đời thứ ${nextCycle}
-            </span>
-          </div>
-
-          <div class="grid grid-cols-2 gap-3">
-            <div class="bg-white p-3 rounded-xl">
-              <span class="text-[11px] text-gray-500 block">Độ mới hiện tại</span>
-              <strong class="text-lg font-extrabold text-emerald-700">${estimatedCondition}% (Rất tốt)</strong>
-            </div>
-            <div class="bg-white p-3 rounded-xl">
-              <span class="text-[11px] text-gray-500 block">Giá ký gửi AI đề xuất</span>
-              <strong class="text-lg font-extrabold text-gray-900">${formatVND(suggestedResalePrice)}</strong>
-            </div>
-          </div>
-
-          <div class="p-3 rounded-xl bg-white/90 border border-emerald-200 text-xs text-emerald-900 font-semibold flex items-start gap-2">
-            <i class="fa-solid fa-shield-check text-emerald-600 mt-0.5"></i>
-            <span>Nhãn xác thực tự động gắn trên gian hàng: <strong>“Sản phẩm chính hãng thuộc hệ tuần hoàn, đã được kiểm định từ vòng trước”</strong></span>
-          </div>
-        </div>
-
-        <div class="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
-          <button onclick="closeModal('reconsign-modal')" class="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-gray-700 text-xs font-bold">
-            Hủy
-          </button>
-          <button id="confirm-reconsign-btn" disabled onclick="confirmReconsignment(${nextCycle}, ${estimatedCondition}, ${suggestedResalePrice})" class="px-5 py-2.5 rounded-xl bg-emerald-600 disabled:bg-slate-300 disabled:cursor-not-allowed hover:bg-emerald-700 text-white text-xs font-bold transition flex items-center gap-1.5">
-            <i class="fa-solid fa-check"></i> Xác nhận Ký gửi lại (+150 ĐX)
-          </button>
-        </div>
-      `;
-
-      document.getElementById('reconsign-modal').classList.remove('hidden');
-    }
-
-    function handleReconsignPhotoSelect(event, condition, price) {
-      const file = event.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        reconsignNewImage = e.target.result;
-        activateReconsignAIResult(condition, price);
-      };
-      reader.readAsDataURL(file);
-    }
-
-    function simulateReconsignPhoto(condition, price) {
-      activateReconsignAIResult(condition, price);
-    }
-
-    function activateReconsignAIResult(condition, price) {
-      reconsignPhotoUploaded = true;
-      document.getElementById('reconsign-ai-result').classList.remove('hidden');
-      document.getElementById('confirm-reconsign-btn').disabled = false;
-      showToast('AI đã quét ảnh hiện tại', `Tính toán độ mới ${condition}% & định giá tuần hoàn ${formatVND(price)}.`);
-    }
-
-    function confirmReconsignment(nextCycle, condition, resalePrice) {
-      if (!reconsignPhotoUploaded || !activeReconsignItemId) return;
-      const item = state.wardrobe.find(w => w.id === activeReconsignItemId);
-      if (!item) return;
-
-      item.reconsigned = true;
-
-      // Publish to Marketplace with Cycle >= 2 and verified circular badge!
-      const circularProduct = {
-        id: 'p-circ-' + Date.now(),
-        title: item.title,
-        category: item.category,
-        size: item.size,
-        color: item.color,
-        material: item.material,
-        condition: condition,
-        conditionLabel: 'Rất tốt',
-        aiNote: `Đã qua kiểm định thực tế vòng đời #${nextCycle}. Chất liệu ${item.material} giữ form ổn định, đường may bền chắc.`,
-        price: resalePrice,
-        originalPrice: item.originalPrice,
-        cycle: nextCycle,
-        pointsReward: 85,
-        trend: 'Minimalist Thanh Lịch',
-        fitAdvice: `Kích cỡ ${item.size} chuẩn form như vòng trước.`,
-        image: reconsignNewImage || item.image
-      };
-
-      state.products.unshift(circularProduct);
-      state.greenPoints += 150;
-      state.co2Saved += 4.8;
-      state.waterSaved += 1100;
-      state.pointsHistory.unshift({
-        id: Date.now(),
-        title: `Ký gửi lại 1 chạm: ${item.title} (Vòng #${nextCycle})`,
-        delta: '+150',
-        type: 'earn',
-        date: 'Vừa xong'
-      });
-
-      updateHeaderAndStats();
-      closeModal('reconsign-modal');
-      renderPurchasedOrders();
-      showToast('Ký gửi tuần hoàn thành công! (+150 Điểm Xanh)', `"${item.title}" đã lên sàn với nhãn kiểm định từ vòng trước.`);
-      switchTab('marketplace');
-    }
-
-    // ---------------------------------------------------------
-    // 8. CART & CHECKOUT (AUTOMATICALLY SAVES TO DIGITAL WARDROBE)
-    // ---------------------------------------------------------
-    function toggleCartDrawer(open) {
-      const drawer = document.getElementById('cart-drawer');
-      drawer.classList.toggle('hidden', !open);
-      if (open) renderCart();
-    }
-
-    function addToCart(productId) {
-      if (state.cart.includes(productId)) {
-        showToast('Sản phẩm đã có trong giỏ', 'Mỗi món đồ tuần hoàn là phiên bản duy nhất.', 'info');
-        toggleCartDrawer(true);
-        return;
-      }
-      state.cart.push(productId);
-      updateHeaderAndStats();
-      const p = state.products.find(item => item.id === productId);
-      showToast('Đã thêm vào giỏ hàng', p ? p.title : 'Sản phẩm tuần hoàn');
-    }
-
-    function removeFromCart(productId) {
-      state.cart = state.cart.filter(id => id !== productId);
-      updateHeaderAndStats();
-      renderCart();
-    }
-
-    function renderCart() {
-      const container = document.getElementById('cart-items-container');
-      const voucherSelect = document.getElementById('cart-voucher-select');
-
-      // Populate available unused vouchers
-      const availableVouchers = state.vouchers.filter(v => !v.used);
-      const currentSelectedVal = voucherSelect.value;
-      voucherSelect.innerHTML = `<option value="0">Không áp dụng mã giảm giá</option>` +
-        availableVouchers.map(v => `<option value="${v.amount}" ${String(v.amount) === currentSelectedVal ? 'selected' : ''}>Mã ${v.code} — Giảm ${formatVND(v.amount)}</option>`).join('');
-
-      if (state.cart.length === 0) {
-        container.innerHTML = `
-          <div class="text-center py-12 space-y-2">
-            <i class="fa-solid fa-bag-shopping text-3xl text-slate-300"></i>
-            <p class="text-sm font-bold text-gray-800">Giỏ hàng đang trống</p>
-            <p class="text-xs text-gray-500">Khám phá các món đồ tuần hoàn hoặc xem gợi ý phối đồ AI nhé!</p>
-          </div>
         `;
-        document.getElementById('cart-subtotal').textContent = '0đ';
-        document.getElementById('cart-discount').textContent = '-0đ';
-        document.getElementById('cart-total').textContent = '0đ';
-        return;
-      }
-
-      let subtotal = 0;
-      container.innerHTML = state.cart.map(id => {
-        const p = state.products.find(item => item.id === id);
-        if (!p) return '';
-        subtotal += p.price;
-        return `
-          <div class="flex gap-3.5 p-3 rounded-2xl bg-slate-50 border border-slate-200/80 items-center">
-            <img src="${p.image}" onerror="this.onerror=null; this.src='https://placehold.co/150x180/F5F2EB/059669?text=Item';" class="w-16 h-20 rounded-xl object-cover bg-brand-beige shrink-0" alt="${p.title}" />
-            <div class="flex-1 min-w-0">
-              <p class="text-xs font-bold text-gray-900 truncate">${p.title}</p>
-              <p class="text-[11px] text-gray-500">Size ${p.size} • Vòng #${p.cycle} • +${p.pointsReward} ĐX</p>
-              <p class="text-sm font-extrabold text-emerald-700 mt-1">${formatVND(p.price)}</p>
-            </div>
-            <button onclick="removeFromCart('${p.id}')" class="p-2 text-gray-400 hover:text-rose-600 transition" title="Xóa">
-              <i class="fa-solid fa-trash-can text-xs"></i>
-            </button>
-          </div>
-        `;
-      }).join('');
-
-      const discount = Math.min(subtotal, parseInt(voucherSelect.value, 10) || 0);
-      const total = Math.max(0, subtotal - discount);
-
-      document.getElementById('cart-subtotal').textContent = formatVND(subtotal);
-      document.getElementById('cart-discount').textContent = '-' + formatVND(discount);
-      document.getElementById('cart-total').textContent = formatVND(total);
-    }
-
-    function checkoutCart() {
-      if (!state.currentUser) {
-        toggleCartDrawer(false);
-        showToast('Đăng nhập để lưu vào Tủ đồ AI', 'Tạo tài khoản hoặc đăng nhập để tự động lưu trang phục vào Tủ đồ số và tích Điểm Xanh.', 'info');
-        openAuthModal('login');
-        return;
-      }
-      if (state.cart.length === 0) {
-        showToast('Giỏ hàng trống', 'Vui lòng chọn ít nhất 1 sản phẩm trước khi thanh toán.', 'info');
-        return;
-      }
-
-      const discountApplied = parseInt(document.getElementById('cart-voucher-select').value, 10) || 0;
-      if (discountApplied > 0) {
-        const usedVoucher = state.vouchers.find(v => !v.used && v.amount === discountApplied);
-        if (usedVoucher) usedVoucher.used = true;
-      }
-
-      let earnedPoints = 0;
-      const boughtTitles = [];
-
-      // Automatically add purchased items to Digital Wardrobe & remove from active marketplace stock
-      state.cart.forEach(id => {
-        const pIndex = state.products.findIndex(item => item.id === id);
-        if (pIndex !== -1) {
-          const p = state.products[pIndex];
-          earnedPoints += p.pointsReward;
-          boughtTitles.push(p.title);
-
-          state.wardrobe.unshift({
-            id: 'w-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
-            title: p.title,
-            category: p.category,
-            size: p.size,
-            color: p.color,
-            material: p.material,
-            cycle: p.cycle,
-            purchasedDate: 'Hôm nay',
-            reconsigned: false,
-            originalPrice: p.originalPrice,
-            paidPrice: p.price,
-            image: p.image
-          });
-
-          state.products.splice(pIndex, 1);
-        }
-      });
-
-      state.cart = [];
-      state.greenPoints += earnedPoints;
-      state.co2Saved += boughtTitles.length * 3.6;
-      state.waterSaved += boughtTitles.length * 850;
-      state.pointsHistory.unshift({
-        id: Date.now(),
-        title: `Mua ${boughtTitles.length} sản phẩm tuần hoàn`,
-        delta: `+${earnedPoints}`,
-        type: 'earn',
-        date: 'Vừa xong'
-      });
-
-      updateHeaderAndStats();
-      toggleCartDrawer(false);
-      showToast(
-        `Thanh toán thành công! (+${earnedPoints} Điểm Xanh)`,
-        'AI đã tự động lưu sản phẩm vào "Tủ đồ của tôi" để bạn phối đồ hoặc ký gửi lại sau này.'
-      );
-      switchTab('wardrobe');
-    }
-
-    // ---------------------------------------------------------
-    // 9. GREEN POINTS REDEMPTION & CHARITY DONATIONS (TAB 5)
-    // ---------------------------------------------------------
-    function renderPointsTab() {
-      updateHeaderAndStats();
-
-      // Render active vouchers
-      const voucherContainer = document.getElementById('user-vouchers-badges');
-      const unused = state.vouchers.filter(v => !v.used);
-      if (unused.length === 0) {
-        voucherContainer.innerHTML = `<span class="text-xs text-gray-400 italic">Chưa có mã — Đổi ngay bên dưới</span>`;
-      } else {
-        voucherContainer.innerHTML = unused.map(v => `
-          <span class="px-2.5 py-1 rounded-lg bg-amber-100 text-amber-900 text-xs font-bold border border-amber-200">
-            <i class="fa-solid fa-ticket mr-1"></i>${v.code} (-${formatVND(v.amount)})
-          </span>
-        `).join('');
-      }
-
-      // Render Charity Projects
-      const charityList = document.getElementById('charity-projects-list');
-      charityList.innerHTML = state.charityProjects.map(proj => {
-        const pct = Math.min(100, Math.round((proj.raisedVnd / proj.goalVnd) * 100));
-        return `
-          <div class="p-4 rounded-2xl border border-slate-200 hover:border-emerald-400 transition space-y-2.5">
-            <div class="flex items-start justify-between gap-3">
-              <div class="flex items-start gap-2.5">
-                <div class="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5">
-                  <i class="fa-solid ${proj.icon}"></i>
-                </div>
-                <div>
-                  <h4 class="text-sm font-bold text-gray-900">${proj.name}</h4>
-                  <p class="text-xs text-gray-500">${proj.desc}</p>
-                </div>
-              </div>
-              <button onclick="donatePointsToCharity('${proj.id}', 100, 25000)" class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shrink-0 transition">
-                Góp 100 ĐX (25.000đ)
-              </button>
-            </div>
-            <div>
-              <div class="flex justify-between text-[11px] font-semibold text-gray-600 mb-1">
-                <span>Đã quyên góp: <strong class="text-emerald-700">${formatVND(proj.raisedVnd)}</strong></span>
-                <span>Mục tiêu: ${formatVND(proj.goalVnd)} (${pct}%)</span>
-              </div>
-              <div class="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
-                <div class="h-full bg-emerald-500 rounded-full transition-all duration-500" style="width: ${pct}%"></div>
-              </div>
-            </div>
-          </div>
-        `;
-      }).join('');
-
-      // Render Ledger
-      const historyList = document.getElementById('points-history-list');
-      historyList.innerHTML = state.pointsHistory.map(h => `
-        <div class="py-3 flex items-center justify-between gap-2">
-          <div>
-            <p class="text-xs sm:text-sm font-semibold text-gray-900">${h.title}</p>
-            <p class="text-[11px] text-gray-400">${h.date}</p>
-          </div>
-          <span class="text-xs sm:text-sm font-extrabold ${h.type === 'earn' ? 'text-emerald-600' : 'text-amber-700'}">
-            ${h.delta} ĐX
-          </span>
-        </div>
-      `).join('');
-    }
-
-    function redeemVoucher(costPoints, discountVnd, codePrefix) {
-      if (state.greenPoints < costPoints) {
-        showToast('Chưa đủ Điểm Xanh', `Bạn cần ${costPoints} Điểm Xanh để đổi ưu đãi này.`, 'info');
-        return;
-      }
-
-      state.greenPoints -= costPoints;
-      const code = `${codePrefix}-${Math.floor(100 + Math.random() * 900)}`;
-      state.vouchers.push({ code, amount: discountVnd, used: false });
-      state.pointsHistory.unshift({
-        id: Date.now(),
-        title: `Đổi Voucher giảm ${formatVND(discountVnd)} (${code})`,
-        delta: `-${costPoints}`,
-        type: 'spend',
-        date: 'Vừa xong'
-      });
-
-      renderPointsTab();
-      showToast('Đổi Voucher thành công!', `Mã ${code} (-${formatVND(discountVnd)}) đã sẵn sàng dùng trong Giỏ hàng.`);
-    }
-
-    function donatePointsToCharity(projectId, costPoints, cashVnd) {
-      if (state.greenPoints < costPoints) {
-        showToast('Chưa đủ Điểm Xanh', `Bạn cần tối thiểu ${costPoints} Điểm Xanh để quy đổi đóng góp.`, 'info');
-        return;
-      }
-
-      const proj = state.charityProjects.find(c => c.id === projectId);
-      if (!proj) return;
-
-      state.greenPoints -= costPoints;
-      state.donatedVnd += cashVnd;
-      proj.raisedVnd += cashVnd;
-      state.pointsHistory.unshift({
-        id: Date.now(),
-        title: `Quy đổi hiện kim (${formatVND(cashVnd)}) góp "${proj.name}"`,
-        delta: `-${costPoints}`,
-        type: 'spend',
-        date: 'Vừa xong'
-      });
-
-      renderPointsTab();
-      showToast('Cảm ơn tấm lòng Sống Xanh!', `Bạn đã quy đổi ${costPoints} ĐX thành ${formatVND(cashVnd)} ủng hộ ${proj.name}.`);
-    }
-
-    function openCertificateModal() {
-      updateHeaderAndStats();
-      document.getElementById('certificate-modal').classList.remove('hidden');
-    }
-
-    // ---------------------------------------------------------
-    // 10. AI CHATBOT ASSISTANT (FLOATING WIDGET)
-    // ---------------------------------------------------------
-    function toggleChatbot(forceOpen) {
-      const win = document.getElementById('ai-chat-window');
-      if (typeof forceOpen === 'boolean') {
-        win.classList.toggle('hidden', !forceOpen);
-      } else {
-        win.classList.toggle('hidden');
-      }
-      if (!state.activeChatProduct && state.products.length > 0) {
-        state.activeChatProduct = state.products[0];
-        document.getElementById('chat-context-product').textContent = state.activeChatProduct.title;
       }
     }
 
