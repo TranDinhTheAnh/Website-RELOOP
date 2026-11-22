@@ -1,0 +1,2787 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RE:LOOP — Thời Trang Tuần Hoàn Tích Hợp AI</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Plus Jakarta Sans & Be Vietnam Pro -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Be Vietnam Pro"', '"Plus Jakarta Sans"', 'sans-serif'],
+            display: ['"Plus Jakarta Sans"', '"Be Vietnam Pro"', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              green: '#059669',
+              emerald: '#10B981',
+              light: '#ECFDF5',
+              beige: '#F5F2EB',
+              beigeDark: '#EAE4D7',
+              ink: '#111827',
+              surface: '#F8FAFC',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      font-family: 'Be Vietnam Pro', sans-serif;
+      background-color: #F8FAFC;
+      color: #111827;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    h1, h2, h3, .font-display {
+      font-family: 'Plus Jakarta Sans', 'Be Vietnam Pro', sans-serif;
+    }
+
+    /* Custom subtle scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #F8FAFC;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #CBD5E1;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94A3B8;
+    }
+
+    /* AI Scanning Laser Animation */
+    @keyframes scanBeam {
+      0% { top: 0%; opacity: 0.2; }
+      50% { top: 92%; opacity: 1; }
+      100% { top: 0%; opacity: 0.2; }
+    }
+    .ai-scan-line {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, transparent, #10B981, #34D399, #10B981, transparent);
+      box-shadow: 0 0 15px 3px rgba(16, 185, 129, 0.7);
+      animation: scanBeam 2s ease-in-out infinite;
+    }
+
+    /* Smooth fade-in */
+    @keyframes fadeSlideUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-up {
+      animation: fadeSlideUp 0.35s ease-out forwards;
+    }
+
+    /* Hide scrollbar for horizontal filter pills on mobile */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-emerald-100 selection:text-emerald-900">
+
+  <!-- ==================== TOP STICKY NAVIGATION ==================== -->
+  <header class="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16 sm:h-18 gap-3">
+        
+        <!-- Brand Logo -->
+        <button onclick="switchTab('marketplace')" class="flex items-center gap-2.5 text-left group focus:outline-none">
+          <div class="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-sm group-hover:bg-emerald-700 transition">
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </div>
+          <div>
+            <span class="font-display font-extrabold text-xl tracking-tight text-gray-900">RE:<span class="text-emerald-600">LOOP</span></span>
+            <span class="hidden sm:block text-[11px] font-medium text-gray-500 -mt-1">Circular Fashion AI</span>
+          </div>
+        </button>
+
+        <!-- Desktop Navigation Links -->
+        <nav class="hidden lg:flex items-center bg-slate-100/80 p-1 rounded-2xl border border-slate-200/60">
+          <button data-nav="marketplace" onclick="switchTab('marketplace')" class="nav-btn px-3.5 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-2">
+            <i class="fa-solid fa-store text-xs"></i> Khám phá
+          </button>
+          <button data-nav="sell" onclick="switchTab('sell')" class="nav-btn px-3.5 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-2">
+            <i class="fa-solid fa-wand-magic-sparkles text-xs"></i> Đăng bán AI
+          </button>
+          <button data-nav="wardrobe" onclick="switchTab('wardrobe')" class="nav-btn px-3.5 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-2">
+            <i class="fa-solid fa-shirt text-xs"></i> Tủ đồ & Phối đồ AI
+          </button>
+          <button data-nav="orders" onclick="switchTab('orders')" class="nav-btn px-3.5 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-2">
+            <i class="fa-solid fa-rotate text-xs"></i> Đơn đã mua / Ký gửi lại
+          </button>
+          <button data-nav="points" onclick="switchTab('points')" class="nav-btn px-3.5 py-2 rounded-xl text-sm font-semibold transition flex items-center gap-2">
+            <i class="fa-solid fa-leaf text-xs"></i> Điểm Xanh
+          </button>
+        </nav>
+
+        <!-- Right Status Badges: Green Points & Cart -->
+        <div class="flex items-center gap-2 sm:gap-3">
+          <!-- Green Points Pill -->
+          <button onclick="switchTab('points')" title="Xem & Đổi Điểm Xanh" class="flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 px-3 py-1.5 rounded-full text-xs sm:text-sm font-bold transition">
+            <span class="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px]">
+              <i class="fa-solid fa-leaf"></i>
+            </span>
+            <span id="header-points-display">450</span>
+            <span class="hidden sm:inline font-medium text-emerald-700">Điểm Xanh</span>
+          </button>
+
+          <!-- Cart Button -->
+          <button onclick="toggleCartDrawer(true)" class="relative p-2.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-gray-800 transition" aria-label="Giỏ hàng">
+            <i class="fa-solid fa-bag-shopping text-base"></i>
+            <span id="header-cart-count" class="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1 rounded-full bg-gray-900 text-white text-[11px] font-bold flex items-center justify-center">1</span>
+          </button>
+
+          <!-- User Account Controls (Rendered dynamically: Login/Register or Profile Dropdown) -->
+          <div id="header-auth-area" class="relative flex items-center gap-1.5">
+            <!-- Populated via renderHeaderAuth() -->
+          </div>
+
+          <!-- Mobile Hamburger -->
+          <button onclick="toggleMobileMenu()" class="lg:hidden p-2.5 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-gray-800" aria-label="Menu">
+            <i class="fa-solid fa-bars text-base"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mobile Navigation Drawer -->
+    <div id="mobile-nav-drawer" class="hidden lg:hidden bg-white border-t border-slate-200 px-4 py-3 space-y-1.5 shadow-lg">
+      <button data-nav="marketplace" onclick="switchTab('marketplace'); toggleMobileMenu(false)" class="nav-btn-mobile w-full text-left px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-3">
+        <i class="fa-solid fa-store w-4"></i> Khám phá Gian hàng
+      </button>
+      <button data-nav="sell" onclick="switchTab('sell'); toggleMobileMenu(false)" class="nav-btn-mobile w-full text-left px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-3">
+        <i class="fa-solid fa-wand-magic-sparkles w-4"></i> Đăng bán AI
+      </button>
+      <button data-nav="wardrobe" onclick="switchTab('wardrobe'); toggleMobileMenu(false)" class="nav-btn-mobile w-full text-left px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-3">
+        <i class="fa-solid fa-shirt w-4"></i> Tủ đồ & Phối đồ AI
+      </button>
+      <button data-nav="orders" onclick="switchTab('orders'); toggleMobileMenu(false)" class="nav-btn-mobile w-full text-left px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-3">
+        <i class="fa-solid fa-rotate w-4"></i> Đơn đã mua / Ký gửi lại
+      </button>
+      <button data-nav="points" onclick="switchTab('points'); toggleMobileMenu(false)" class="nav-btn-mobile w-full text-left px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-3">
+        <i class="fa-solid fa-leaf w-4"></i> Điểm Xanh & Đóng góp
+      </button>
+      <div id="mobile-auth-actions" class="pt-2 mt-2 border-t border-slate-100 flex items-center gap-2">
+        <!-- Populated via renderHeaderAuth() -->
+      </div>
+    </div>
+  </header>
+
+  <!-- ==================== MAIN CONTENT AREA ==================== -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+
+    <!-- =========================================================
+         TAB 1: KHÁM PHÁ GIAN HÀNG (MARKETPLACE)
+    ========================================================== -->
+    <section id="view-marketplace" class="tab-view space-y-8 animate-fade-up">
+      <!-- Editorial Hero Banner -->
+      <div class="relative overflow-hidden rounded-3xl bg-brand-beige border border-stone-200/80 p-6 sm:p-10">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+          <div class="lg:col-span-7 space-y-4">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/90 border border-emerald-200 text-emerald-700 text-xs font-semibold shadow-sm">
+              <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              Hệ sinh thái Thời trang Tuần hoàn AI
+            </div>
+            <h1 class="text-2xl sm:text-4xl font-extrabold text-gray-900 leading-tight tracking-tight">
+              Mặc đẹp bền vững — Kéo dài <span class="text-emerald-600">vòng đời</span> từng trang phục
+            </h1>
+            <p class="text-sm sm:text-base text-gray-600 max-w-2xl leading-relaxed">
+              Mỗi sản phẩm đều được AI kiểm định chất lượng, định giá minh bạch và tự động lưu vào tủ đồ số của bạn để dễ dàng phối đồ hoặc ký gửi lại chỉ với 1 chạm.
+            </p>
+            <div class="flex flex-wrap items-center gap-3 pt-1">
+              <button onclick="switchTab('sell')" class="px-5 py-3 rounded-xl bg-gray-900 hover:bg-gray-800 text-white text-sm font-semibold shadow-sm transition flex items-center gap-2">
+                <i class="fa-solid fa-camera text-emerald-400"></i> Đăng bán & Định giá AI
+              </button>
+              <button onclick="switchTab('orders')" class="px-5 py-3 rounded-xl bg-white hover:bg-stone-50 text-gray-900 border border-stone-300 text-sm font-semibold transition flex items-center gap-2">
+                <i class="fa-solid fa-rotate text-emerald-600"></i> Ký gửi lại đồ đã mua
+              </button>
+            </div>
+          </div>
+
+          <!-- Quick Impact Cards -->
+          <div class="lg:col-span-5 grid grid-cols-2 gap-3 sm:gap-4">
+            <div class="bg-white/90 backdrop-blur p-4 sm:p-5 rounded-2xl border border-stone-200/70 shadow-sm">
+              <div class="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center mb-3">
+                <i class="fa-solid fa-shield-check"></i>
+              </div>
+              <p class="text-xl sm:text-2xl font-extrabold text-gray-900">100%</p>
+              <p class="text-xs text-gray-600 mt-0.5">Kiểm định độ mới & nguồn gốc vòng đời bằng AI</p>
+            </div>
+            <div class="bg-white/90 backdrop-blur p-4 sm:p-5 rounded-2xl border border-stone-200/70 shadow-sm">
+              <div class="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center mb-3">
+                <i class="fa-solid fa-seedling"></i>
+              </div>
+              <p class="text-xl sm:text-2xl font-extrabold text-gray-900">-68% CO₂</p>
+              <p class="text-xs text-gray-600 mt-0.5">Giảm phát thải so với sản xuất thời trang mới</p>
+            </div>
+            <div class="col-span-2 bg-emerald-600 text-white p-4 sm:p-5 rounded-2xl shadow-sm flex items-center justify-between gap-4">
+              <div>
+                <p class="text-xs uppercase tracking-wider text-emerald-100 font-semibold">Ưu đãi thành viên Xanh</p>
+                <p class="text-sm sm:text-base font-bold mt-0.5">Tích Điểm Xanh mỗi lần mua & bán lại — Đổi voucher hoặc góp quỹ trồng rừng</p>
+              </div>
+              <button onclick="switchTab('points')" class="shrink-0 px-3.5 py-2 rounded-xl bg-white text-emerald-800 hover:bg-emerald-50 text-xs font-bold transition">
+                Khám phá
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filter & Search Bar -->
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
+        <!-- Category Pills -->
+        <div class="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 md:pb-0">
+          <button onclick="setCategoryFilter('all')" class="cat-pill active px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition">Tất cả</button>
+          <button onclick="setCategoryFilter('Áo')" class="cat-pill px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition">Áo</button>
+          <button onclick="setCategoryFilter('Quần')" class="cat-pill px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition">Quần</button>
+          <button onclick="setCategoryFilter('Váy')" class="cat-pill px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition">Váy</button>
+          <button onclick="setCategoryFilter('Áo khoác')" class="cat-pill px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition">Áo khoác</button>
+        </div>
+
+        <!-- Circular Filter Toggle + Search -->
+        <div class="flex flex-wrap sm:flex-nowrap items-center gap-3">
+          <label class="inline-flex items-center gap-2 cursor-pointer select-none bg-emerald-50/80 border border-emerald-200 px-3 py-2 rounded-xl">
+            <input type="checkbox" id="filter-circular-only" onchange="renderMarketplace()" class="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4">
+            <span class="text-xs font-semibold text-emerald-800 whitespace-nowrap">
+              <i class="fa-solid fa-certificate text-emerald-600 mr-1"></i>Chỉ hiện Tuần hoàn Vòng 2+
+            </span>
+          </label>
+
+          <div class="relative flex-1 sm:w-60">
+            <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+            <input type="text" id="marketplace-search" oninput="renderMarketplace()" placeholder="Tìm tên áo, chất liệu..." class="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none focus:border-emerald-500 bg-slate-50 focus:bg-white transition" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Product Grid -->
+      <div>
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg sm:text-xl font-bold text-gray-900">Sản phẩm đã kiểm định AI <span id="marketplace-count" class="text-sm font-normal text-gray-500">(8 sản phẩm)</span></h2>
+        </div>
+        <div id="marketplace-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 sm:gap-6">
+          <!-- Populated dynamically via JS -->
+        </div>
+      </div>
+    </section>
+
+    <!-- =========================================================
+         TAB 2: ĐĂNG BÁN THÔNG MINH VỚI AI (AI VISUAL LISTING)
+    ========================================================== -->
+    <section id="view-sell" class="tab-view hidden space-y-6 animate-fade-up">
+      <div class="max-w-4xl mx-auto">
+        <div class="mb-6">
+          <span class="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
+            <i class="fa-solid fa-wand-magic-sparkles"></i> AI Vision & Auto-Pricing
+          </span>
+          <h1 class="text-2xl sm:text-3xl font-extrabold text-gray-900 mt-2">Đăng bán thông minh chỉ với 1 bức ảnh</h1>
+          <p class="text-sm text-gray-600 mt-1">Tải ảnh trang phục lên — AI sẽ tự động trích xuất thông tin, chấm điểm độ mới và đề xuất mức giá bán lại tối ưu.</p>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <!-- Left: Image Uploader & AI Scanner -->
+          <div class="lg:col-span-5 space-y-4">
+            <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+              <div id="sell-dropzone" class="relative aspect-[4/5] rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 flex flex-col items-center justify-center text-center p-5 overflow-hidden transition hover:border-emerald-400">
+                <!-- Placeholder State -->
+                <div id="sell-upload-placeholder" class="space-y-3">
+                  <div class="w-14 h-14 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto text-xl">
+                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                  </div>
+                  <div>
+                    <p class="text-sm font-bold text-gray-900">Tải ảnh trang phục của bạn</p>
+                    <p class="text-xs text-gray-500 mt-1">Hỗ trợ JPG, PNG rõ nét dưới ánh sáng tự nhiên</p>
+                  </div>
+                  <label class="inline-block cursor-pointer px-4 py-2.5 rounded-xl bg-gray-900 hover:bg-gray-800 text-white text-xs font-semibold transition">
+                    Chọn ảnh từ thiết bị
+                    <input type="file" id="sell-file-input" accept="image/*" class="hidden" onchange="handleSellFileUpload(event)" />
+                  </label>
+                </div>
+
+                <!-- Image Preview + Scanning Overlay -->
+                <img id="sell-preview-img" src="" alt="Preview" class="hidden w-full h-full object-cover rounded-xl" />
+                <div id="sell-scan-overlay" class="hidden absolute inset-0 bg-gray-900/40 backdrop-blur-[1px] flex flex-col justify-between p-4">
+                  <div class="ai-scan-line"></div>
+                  <div class="bg-gray-900/85 text-white text-xs px-3 py-2 rounded-xl flex items-center gap-2 self-start">
+                    <i class="fa-solid fa-spinner fa-spin text-emerald-400"></i>
+                    <span id="sell-scan-status">AI đang quét sợi vải & form dáng...</span>
+                  </div>
+                  <div class="bg-white/95 text-gray-900 text-[11px] font-medium px-3 py-2 rounded-xl shadow">
+                    Đang phân tích 42 điểm kiểm định chất lượng...
+                  </div>
+                </div>
+              </div>
+
+              <!-- Quick Demo Sample Presets -->
+              <div class="pt-1">
+                <p class="text-xs font-semibold text-gray-500 mb-2">Hoặc chọn nhanh ảnh mẫu để thử AI quét ngay:</p>
+                <div class="grid grid-cols-3 gap-2">
+                  <button type="button" onclick="triggerSampleAIScan(0)" class="group text-left p-1.5 rounded-xl border border-slate-200 hover:border-emerald-500 bg-slate-50 hover:bg-emerald-50/40 transition">
+                    <img src="https://images.unsplash.com/photo-1596755094514-f87e34085b2c?auto=format&fit=crop&w=300&q=80" onerror="this.src='https://placehold.co/300x350/F5F2EB/059669?text=Ao+So+Mi'" class="w-full h-14 object-cover rounded-lg mb-1" alt="Mẫu 1">
+                    <span class="block text-[11px] font-semibold text-gray-800 truncate">Sơ mi Oxford</span>
+                  </button>
+                  <button type="button" onclick="triggerSampleAIScan(1)" class="group text-left p-1.5 rounded-xl border border-slate-200 hover:border-emerald-500 bg-slate-50 hover:bg-emerald-50/40 transition">
+                    <img src="https://images.unsplash.com/photo-1591047139829-d91aecb6caea?auto=format&fit=crop&w=300&q=80" onerror="this.src='https://placehold.co/300x350/F5F2EB/059669?text=Ao+Khoac'" class="w-full h-14 object-cover rounded-lg mb-1" alt="Mẫu 2">
+                    <span class="block text-[11px] font-semibold text-gray-800 truncate">Jacket Kaki</span>
+                  </button>
+                  <button type="button" onclick="triggerSampleAIScan(2)" class="group text-left p-1.5 rounded-xl border border-slate-200 hover:border-emerald-500 bg-slate-50 hover:bg-emerald-50/40 transition">
+                    <img src="https://images.unsplash.com/photo-1572804013309-59a88b7e92f1?auto=format&fit=crop&w=300&q=80" onerror="this.src='https://placehold.co/300x350/F5F2EB/059669?text=Vay+Midi'" class="w-full h-14 object-cover rounded-lg mb-1" alt="Mẫu 3">
+                    <span class="block text-[11px] font-semibold text-gray-800 truncate">Váy Hoa Midi</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: AI Extracted Metadata & Auto-Pricing Form -->
+          <div class="lg:col-span-7">
+            <form id="sell-form" onsubmit="submitNewListing(event)" class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-5">
+              <div class="flex items-center justify-between border-b border-slate-100 pb-4">
+                <div>
+                  <h2 class="text-lg font-bold text-gray-900">Kết quả trích xuất & Định giá AI</h2>
+                  <p class="text-xs text-gray-500">Tự động điền từ hình ảnh — Bạn có thể tinh chỉnh trước khi đăng</p>
+                </div>
+                <span id="sell-ai-badge" class="px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-semibold">
+                  Chờ tải ảnh
+                </span>
+              </div>
+
+              <!-- AI Condition & Price Highlight Box -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div class="p-4 rounded-2xl bg-emerald-50/80 border border-emerald-200">
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-emerald-800">Độ mới AI nhận diện</span>
+                    <i class="fa-solid fa-sparkles text-emerald-600 text-xs"></i>
+                  </div>
+                  <div class="flex items-baseline gap-2 mt-1">
+                    <span id="sell-condition-score" class="text-2xl font-extrabold text-emerald-700">--%</span>
+                    <span id="sell-condition-label" class="text-xs font-semibold text-emerald-800">Chưa phân tích</span>
+                  </div>
+                  <p id="sell-condition-note" class="text-[11px] text-emerald-700/90 mt-1.5 leading-relaxed">
+                    Tải ảnh để AI đánh giá độ bền sợi vải, cổ áo và đường may.
+                  </p>
+                </div>
+
+                <div class="p-4 rounded-2xl bg-brand-beige border border-stone-200">
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-gray-700">Định giá đề xuất bởi AI</span>
+                    <span class="text-[11px] font-bold text-emerald-700 bg-white px-2 py-0.5 rounded-full">+120 Điểm Xanh</span>
+                  </div>
+                  <div class="mt-1.5 flex items-center gap-2">
+                    <input type="number" id="sell-price" required min="50000" step="10000" placeholder="350000" class="w-full text-xl font-extrabold text-gray-900 bg-white border border-stone-300 rounded-xl px-3 py-1.5 focus:outline-none focus:border-emerald-600" />
+                    <span class="text-sm font-bold text-gray-600">đ</span>
+                  </div>
+                  <p id="sell-original-price-hint" class="text-[11px] text-gray-500 mt-1.5">
+                    Giá gốc tham chiếu thị trường: --
+                  </p>
+                </div>
+              </div>
+
+              <!-- Extracted Product Attributes -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div class="sm:col-span-2">
+                  <label class="block text-xs font-semibold text-gray-700 mb-1">Tên sản phẩm (AI gợi ý)</label>
+                  <input type="text" id="sell-title" required placeholder="VD: Áo Sơ Mi Oxford Trắng Form Rộng" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-emerald-500" />
+                </div>
+
+                <div>
+                  <label class="block text-xs font-semibold text-gray-700 mb-1">Danh mục</label>
+                  <select id="sell-category" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:border-emerald-500">
+                    <option value="Áo">Áo</option>
+                    <option value="Quần">Quần</option>
+                    <option value="Váy">Váy</option>
+                    <option value="Áo khoác">Áo khoác</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label class="block text-xs font-semibold text-gray-700 mb-1">Kích cỡ (Size)</label>
+                  <select id="sell-size" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:border-emerald-500">
+                    <option value="S">Size S</option>
+                    <option value="M" selected>Size M</option>
+                    <option value="L">Size L</option>
+                    <option value="FreeSize">FreeSize</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label class="block text-xs font-semibold text-gray-700 mb-1">Màu sắc chủ đạo</label>
+                  <input type="text" id="sell-color" required placeholder="VD: Trắng Ngà / Xanh Navy" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-emerald-500" />
+                </div>
+
+                <div>
+                  <label class="block text-xs font-semibold text-gray-700 mb-1">Chất liệu dự đoán</label>
+                  <input type="text" id="sell-material" required placeholder="VD: 100% Cotton Hữu Cơ" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-emerald-500" />
+                </div>
+              </div>
+
+              <div class="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-100">
+                <p class="text-xs text-gray-500">
+                  <i class="fa-solid fa-leaf text-emerald-600 mr-1"></i>Bạn sẽ nhận ngay <strong>+120 Điểm Xanh</strong> khi đăng bán thành công.
+                </p>
+                <button type="submit" class="w-full sm:w-auto px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold shadow-sm transition flex items-center justify-center gap-2">
+                  <i class="fa-solid fa-check"></i> Xác nhận & Đăng bán ngay
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =========================================================
+         TAB 3: TỦ ĐỒ CÁ NHÂN & GỢI Ý PHỐI ĐỒ AI STYLIST
+    ========================================================== -->
+    <section id="view-wardrobe" class="tab-view hidden space-y-8 animate-fade-up">
+      <!-- Header -->
+      <div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <span class="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
+            <i class="fa-solid fa-sparkles"></i> AI Digital Wardrobe & Stylist
+          </span>
+          <h1 class="text-2xl sm:text-3xl font-extrabold text-gray-900 mt-2">Tủ đồ thông minh & Gợi ý phối đồ AI</h1>
+          <p class="text-sm text-gray-600 mt-1">Tự động lưu trữ mọi trang phục bạn đã mua và kết hợp cùng xu hướng thời trang hiện hành để tránh mua sắm trùng lặp.</p>
+        </div>
+        <div class="flex items-center gap-2 bg-white px-4 py-2.5 rounded-2xl border border-slate-200 shadow-sm">
+          <i class="fa-solid fa-shirt text-emerald-600"></i>
+          <span class="text-xs text-gray-600">Đang lưu trữ:</span>
+          <span id="wardrobe-total-count" class="text-sm font-extrabold text-gray-900">3 món đồ</span>
+        </div>
+      </div>
+
+      <!-- Part 1: My Digital Wardrobe -->
+      <div class="bg-white p-5 sm:p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <h2 class="text-lg font-bold text-gray-900 flex items-center gap-2">
+            <span>Tủ đồ cá nhân của tôi</span>
+            <span class="text-xs font-medium text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full">Tự động đồng bộ khi mua</span>
+          </h2>
+          <div class="flex items-center gap-1.5">
+            <button onclick="filterWardrobe('all')" class="wardrobe-filter active px-3 py-1.5 rounded-xl text-xs font-semibold transition">Tất cả</button>
+            <button onclick="filterWardrobe('Áo')" class="wardrobe-filter px-3 py-1.5 rounded-xl text-xs font-semibold transition">Áo</button>
+            <button onclick="filterWardrobe('Quần')" class="wardrobe-filter px-3 py-1.5 rounded-xl text-xs font-semibold transition">Quần</button>
+            <button onclick="filterWardrobe('Áo khoác')" class="wardrobe-filter px-3 py-1.5 rounded-xl text-xs font-semibold transition">Áo khoác</button>
+          </div>
+        </div>
+
+        <div id="wardrobe-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <!-- Populated dynamically via JS -->
+        </div>
+      </div>
+
+      <!-- Part 2: AI Stylist Outfit Recommendations -->
+      <div id="ai-stylist-section" class="bg-brand-beige/70 p-5 sm:p-7 rounded-3xl border border-stone-200 space-y-5">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div>
+            <div class="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800 bg-white px-3 py-1 rounded-full border border-emerald-200 mb-2">
+              <i class="fa-solid fa-wand-magic-sparkles text-emerald-600"></i> AI Stylist Mix & Match
+            </div>
+            <h2 class="text-xl font-extrabold text-gray-900">Gợi ý phối đồ từ Tủ đồ của bạn + Xu hướng hiện nay</h2>
+            <p id="stylist-anchor-label" class="text-xs sm:text-sm text-gray-600 mt-0.5">
+              AI đang kết hợp các món có sẵn trong tủ đồ với sản phẩm tuyển chọn trên sàn RE:LOOP
+            </p>
+          </div>
+
+          <!-- Style Trend Filter -->
+          <div class="flex flex-wrap items-center gap-2">
+            <button onclick="setStylistTrend('all')" class="trend-pill active px-3.5 py-2 rounded-xl text-xs font-semibold transition">Tất cả xu hướng</button>
+            <button onclick="setStylistTrend('Minimalist Thanh Lịch')" class="trend-pill px-3.5 py-2 rounded-xl text-xs font-semibold transition">Minimalist Thanh Lịch</button>
+            <button onclick="setStylistTrend('Công Sở Hiện Đại')" class="trend-pill px-3.5 py-2 rounded-xl text-xs font-semibold transition">Công Sở Hiện Đại</button>
+            <button onclick="setStylistTrend('Dạo Phố Cuối Tuần')" class="trend-pill px-3.5 py-2 rounded-xl text-xs font-semibold transition">Dạo Phố Cuối Tuần</button>
+          </div>
+        </div>
+
+        <div id="stylist-outfits-grid" class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <!-- Populated dynamically via JS -->
+        </div>
+      </div>
+    </section>
+
+    <!-- =========================================================
+         TAB 4: ĐƠN HÀNG ĐÃ MUA & KÝ GỬI LẠI 1 CHẠM
+    ========================================================== -->
+    <section id="view-orders" class="tab-view hidden space-y-6 animate-fade-up">
+      <div class="max-w-5xl mx-auto space-y-6">
+        <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <span class="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
+              <i class="fa-solid fa-rotate"></i> Circular Loop 1-Click
+            </span>
+            <h1 class="text-2xl font-extrabold text-gray-900 mt-2">Đơn hàng đã mua & Ký gửi lại 1 chạm</h1>
+            <p class="text-sm text-gray-600 mt-1">
+              Đã mặc xong? Chỉ cần ấn <strong>“Ký gửi lại”</strong> và chụp 1–2 ảnh hiện tại — AI tự đồng bộ toàn bộ thông tin gốc và định giá vòng đời tiếp theo.
+            </p>
+          </div>
+          <div class="bg-emerald-50 border border-emerald-200 px-4 py-3 rounded-2xl shrink-0">
+            <p class="text-xs font-semibold text-emerald-800">Thưởng Ký gửi Tuần hoàn</p>
+            <p class="text-lg font-extrabold text-emerald-700">+150 Điểm Xanh / món</p>
+          </div>
+        </div>
+
+        <div id="purchased-orders-list" class="space-y-4">
+          <!-- Populated dynamically via JS -->
+        </div>
+      </div>
+    </section>
+
+    <!-- =========================================================
+         TAB 5: HỆ THỐNG TÍCH ĐIỂM XANH & ĐÓNG GÓP MÔI TRƯỜNG
+    ========================================================== -->
+    <section id="view-points" class="tab-view hidden space-y-8 animate-fade-up">
+      <!-- Top Green Points & Impact Overview -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <!-- Balance Card -->
+        <div class="lg:col-span-5 bg-gradient-to-br from-emerald-700 via-emerald-600 to-teal-600 text-white p-6 sm:p-8 rounded-3xl shadow-md flex flex-col justify-between space-y-6">
+          <div class="flex items-start justify-between">
+            <div>
+              <span class="text-xs uppercase tracking-wider font-semibold text-emerald-100">Số dư khả dụng</span>
+              <div class="flex items-baseline gap-2 mt-1">
+                <span id="points-main-balance" class="text-4xl sm:text-5xl font-extrabold">450</span>
+                <span class="text-base font-semibold text-emerald-100">Điểm Xanh</span>
+              </div>
+            </div>
+            <button onclick="openCertificateModal()" class="px-3.5 py-2 rounded-xl bg-white/15 hover:bg-white/25 backdrop-blur text-xs font-bold border border-white/25 transition flex items-center gap-1.5">
+              <i class="fa-solid fa-award text-amber-300"></i> Chứng nhận Xanh
+            </button>
+          </div>
+
+          <div class="bg-black/15 rounded-2xl p-4 space-y-2 text-xs text-emerald-50">
+            <p class="font-semibold text-white"><i class="fa-solid fa-circle-info mr-1.5"></i>Cách tích lũy Điểm Xanh tự động:</p>
+            <ul class="space-y-1 pl-5 list-disc">
+              <li>Mua sản phẩm tuần hoàn: <strong>+60 đến +100 Điểm Xanh</strong></li>
+              <li>Đăng bán hoặc Ký gửi lại 1 chạm: <strong>+120 đến +150 Điểm Xanh</strong></li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Environmental Impact Stats -->
+        <div class="lg:col-span-7 bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between space-y-5">
+          <div>
+            <h2 class="text-lg font-bold text-gray-900">Tác động Môi trường cá nhân của bạn</h2>
+            <p class="text-xs text-gray-500 mt-0.5">Được AI tính toán dựa trên số sản phẩm tuần hoàn bạn đã mua và tái ký gửi</p>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200/70">
+              <div class="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center mb-2.5">
+                <i class="fa-solid fa-cloud"></i>
+              </div>
+              <p id="impact-co2" class="text-2xl font-extrabold text-gray-900">18.5 kg</p>
+              <p class="text-xs text-gray-600 mt-0.5">Khí thải CO₂ được cắt giảm</p>
+            </div>
+            <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200/70">
+              <div class="w-9 h-9 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center mb-2.5">
+                <i class="fa-solid fa-droplet"></i>
+              </div>
+              <p id="impact-water" class="text-2xl font-extrabold text-gray-900">4,200 L</p>
+              <p class="text-xs text-gray-600 mt-0.5">Nước sạch trồng bông tiết kiệm</p>
+            </div>
+            <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200/70">
+              <div class="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center mb-2.5">
+                <i class="fa-solid fa-hand-holding-heart"></i>
+              </div>
+              <p id="impact-donated-vnd" class="text-2xl font-extrabold text-emerald-700">50.000đ</p>
+              <p class="text-xs text-gray-600 mt-0.5">Hiện kim đã góp quỹ Xanh</p>
+            </div>
+          </div>
+
+          <!-- Active Vouchers Strip -->
+          <div class="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+            <span class="text-xs font-semibold text-gray-700">Mã giảm giá đã đổi sẵn sàng dùng:</span>
+            <div id="user-vouchers-badges" class="flex flex-wrap gap-2">
+              <span class="text-xs text-gray-400 italic">Chưa có mã — Đổi ngay bên dưới</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Two Redemption Pathways -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Option 1: Redeem for Shopping Discount Vouchers -->
+        <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center text-lg">
+              <i class="fa-solid fa-ticket"></i>
+            </div>
+            <div>
+              <h3 class="text-lg font-bold text-gray-900">Lựa chọn 1: Đổi ưu đãi mua sắm</h3>
+              <p class="text-xs text-gray-500">Áp dụng giảm giá trực tiếp cho đơn hàng kế tiếp</p>
+            </div>
+          </div>
+
+          <div class="space-y-3 pt-1">
+            <div class="p-4 rounded-2xl border border-slate-200 hover:border-emerald-400 transition flex items-center justify-between gap-3">
+              <div>
+                <span class="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full">100 Điểm Xanh</span>
+                <p class="text-base font-extrabold text-gray-900 mt-1">Voucher Giảm 20.000đ</p>
+                <p class="text-xs text-gray-500">Áp dụng cho mọi đơn hàng từ 150.000đ</p>
+              </div>
+              <button onclick="redeemVoucher(100, 20000, 'GREEN20K')" class="px-4 py-2.5 rounded-xl bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold shrink-0 transition">
+                Đổi ngay
+              </button>
+            </div>
+
+            <div class="p-4 rounded-2xl border border-slate-200 hover:border-emerald-400 transition flex items-center justify-between gap-3">
+              <div>
+                <span class="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full">250 Điểm Xanh</span>
+                <p class="text-base font-extrabold text-gray-900 mt-1">Voucher Giảm 60.000đ</p>
+                <p class="text-xs text-gray-500">Áp dụng cho mọi đơn hàng từ 300.000đ</p>
+              </div>
+              <button onclick="redeemVoucher(250, 60000, 'GREEN60K')" class="px-4 py-2.5 rounded-xl bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold shrink-0 transition">
+                Đổi ngay
+              </button>
+            </div>
+
+            <div class="p-4 rounded-2xl border border-slate-200 hover:border-emerald-400 transition flex items-center justify-between gap-3">
+              <div>
+                <span class="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full">400 Điểm Xanh</span>
+                <p class="text-base font-extrabold text-gray-900 mt-1">Voucher Giảm 110.000đ</p>
+                <p class="text-xs text-gray-500">Áp dụng cho mọi đơn hàng tuần hoàn</p>
+              </div>
+              <button onclick="redeemVoucher(400, 110000, 'GREEN110K')" class="px-4 py-2.5 rounded-xl bg-gray-900 hover:bg-gray-800 text-white text-xs font-bold shrink-0 transition">
+                Đổi ngay
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Option 2: Convert Points to Cash Donations for Green Causes -->
+        <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-lg">
+              <i class="fa-solid fa-earth-asia"></i>
+            </div>
+            <div>
+              <h3 class="text-lg font-bold text-gray-900">Lựa chọn 2: Quy đổi hiện kim góp quỹ “Xanh”</h3>
+              <p class="text-xs text-gray-500">100 Điểm Xanh = 25.000đ hiện kim tài trợ trực tiếp dự án môi trường</p>
+            </div>
+          </div>
+
+          <div id="charity-projects-list" class="space-y-3 pt-1">
+            <!-- Populated dynamically via JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Points Ledger -->
+      <div class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-3">
+        <h3 class="text-base font-bold text-gray-900">Lịch sử tích & sử dụng Điểm Xanh</h3>
+        <div id="points-history-list" class="divide-y divide-slate-100 text-sm">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ==================== FOOTER ==================== -->
+  <footer class="bg-white border-t border-slate-200 mt-12">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-gray-500">
+      <div class="flex items-center gap-2">
+        <span class="font-display font-extrabold text-base text-gray-900">RE:<span class="text-emerald-600">LOOP</span></span>
+        <span>• Nền tảng Thời trang Tuần hoàn & Kiểm định AI</span>
+      </div>
+      <div class="flex flex-wrap items-center gap-4">
+        <span>Kiểm định AI minh bạch</span>
+        <span>•</span>
+        <span>Ký gửi 1 chạm</span>
+        <span>•</span>
+        <span>Tích điểm Sống Xanh</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ==================== MODAL 1: CHI TIẾT SẢN PHẨM ==================== -->
+  <div id="product-detail-modal" class="hidden fixed inset-0 z-50 bg-gray-900/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white rounded-3xl max-w-3xl w-full overflow-hidden shadow-2xl border border-slate-200 animate-fade-up my-auto">
+      <div id="product-detail-content">
+        <!-- Populated dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL 2: KÝ GỬI LẠI 1 CHẠM (RE-CONSIGNMENT) ==================== -->
+  <div id="reconsign-modal" class="hidden fixed inset-0 z-50 bg-gray-900/55 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white rounded-3xl max-w-2xl w-full overflow-hidden shadow-2xl border border-slate-200 animate-fade-up my-auto">
+      <div class="px-6 py-4 bg-brand-beige border-b border-stone-200 flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <span class="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center text-sm">
+            <i class="fa-solid fa-rotate"></i>
+          </span>
+          <div>
+            <h3 class="text-base font-extrabold text-gray-900">Ký gửi lại 1 chạm — Hệ tuần hoàn AI</h3>
+            <p class="text-xs text-gray-600">Đồng bộ sẵn dữ liệu gốc, chỉ cần 1–2 ảnh tình trạng hiện tại</p>
+          </div>
+        </div>
+        <button onclick="closeModal('reconsign-modal')" class="w-8 h-8 rounded-full bg-white hover:bg-stone-100 text-gray-600 flex items-center justify-center">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div id="reconsign-modal-body" class="p-6 space-y-5">
+        <!-- Populated dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL 3: CHỨNG NHẬN SỐNG XANH ==================== -->
+  <div id="certificate-modal" class="hidden fixed inset-0 z-50 bg-gray-900/55 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl border-2 border-emerald-500 animate-fade-up">
+      <div class="bg-gradient-to-br from-emerald-700 to-teal-600 p-6 text-center text-white relative">
+        <button onclick="closeModal('certificate-modal')" class="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/15 hover:bg-white/25 text-white flex items-center justify-center">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+        <div class="w-16 h-16 rounded-full bg-white/20 border-2 border-amber-300 flex items-center justify-center mx-auto text-3xl text-amber-300 mb-3">
+          <i class="fa-solid fa-award"></i>
+        </div>
+        <p class="text-xs uppercase tracking-widest text-emerald-100 font-bold">Chứng Nhận Sống Xanh</p>
+        <h3 id="cert-user-name" class="text-xl font-extrabold mt-1">Đại Sứ Thời Trang Tuần Hoàn</h3>
+      </div>
+      <div class="p-6 text-center space-y-4">
+        <p class="text-xs text-gray-500">Chứng nhận thành viên tích cực của cộng đồng RE:LOOP đã đóng góp vào việc giảm rác thải dệt may và gây quỹ bảo vệ môi trường.</p>
+        <div class="bg-brand-beige rounded-2xl p-4 space-y-1.5">
+          <p class="text-xs text-gray-500">Tổng hiện kim đã quy đổi đóng góp quỹ Xanh</p>
+          <p id="cert-donated-amount" class="text-2xl font-extrabold text-emerald-700">50.000đ</p>
+          <p id="cert-co2-amount" class="text-xs font-semibold text-gray-700">Giảm thải 18.5 kg CO₂ • Tiết kiệm 4,200L nước</p>
+        </div>
+        <button onclick="closeModal('certificate-modal')" class="w-full py-2.5 rounded-xl bg-gray-900 text-white text-xs font-bold">
+          Đóng chứng nhận
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL 4: TẠO TÀI KHOẢN & ĐĂNG NHẬP ==================== -->
+  <div id="auth-modal" class="hidden fixed inset-0 z-50 bg-gray-900/55 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl border border-slate-200 animate-fade-up my-auto">
+      <!-- Top Brand Header -->
+      <div class="px-6 py-5 bg-brand-beige border-b border-stone-200 flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-2xs">
+            <i class="fa-solid fa-leaf"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-extrabold text-gray-900">Thành viên RE:<span class="text-emerald-600">LOOP</span></h3>
+            <p class="text-[11px] text-gray-600">Đồng bộ Tủ đồ AI & Tích Điểm Xanh</p>
+          </div>
+        </div>
+        <button onclick="closeModal('auth-modal')" class="w-8 h-8 rounded-full bg-white hover:bg-stone-100 text-gray-600 flex items-center justify-center transition">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- Mode Switch Tabs -->
+      <div class="px-6 pt-5">
+        <div class="grid grid-cols-2 gap-1.5 bg-slate-100 p-1 rounded-2xl">
+          <button type="button" id="auth-tab-login" onclick="switchAuthMode('login')" class="py-2 rounded-xl text-xs font-bold transition bg-white text-gray-900 shadow-2xs">
+            Đăng nhập
+          </button>
+          <button type="button" id="auth-tab-register" onclick="switchAuthMode('register')" class="py-2 rounded-xl text-xs font-bold transition text-gray-600 hover:text-gray-900">
+            Tạo tài khoản
+          </button>
+        </div>
+      </div>
+
+      <!-- Inline Error Alert -->
+      <div id="auth-error-box" class="hidden mx-6 mt-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium flex items-center gap-2">
+        <i class="fa-solid fa-circle-exclamation shrink-0"></i>
+        <span id="auth-error-text"></span>
+      </div>
+
+      <!-- LOGIN FORM -->
+      <form id="auth-login-form" onsubmit="handleLoginSubmit(event)" class="p-6 space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Email đăng nhập</label>
+          <div class="relative">
+            <i class="fa-solid fa-envelope absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+            <input type="email" id="login-email" required placeholder="ban@example.com" class="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-emerald-500" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Mật khẩu</label>
+          <div class="relative">
+            <i class="fa-solid fa-lock absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+            <input type="password" id="login-password" required placeholder="Nhập mật khẩu..." class="w-full pl-9 pr-10 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-emerald-500" />
+            <button type="button" onclick="togglePasswordVisibility('login-password', this)" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs">
+              <i class="fa-solid fa-eye"></i>
+            </button>
+          </div>
+        </div>
+
+        <button type="submit" class="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold shadow-sm transition">
+          Đăng nhập ngay
+        </button>
+
+        <div class="relative py-1">
+          <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-slate-200"></div></div>
+          <div class="relative flex justify-center text-[11px]"><span class="bg-white px-2.5 text-gray-400">Hoặc trải nghiệm nhanh</span></div>
+        </div>
+
+        <button type="button" onclick="loginAsDemoUser()" class="w-full py-2.5 px-4 rounded-xl bg-brand-beige hover:bg-brand-beigeDark text-gray-900 border border-stone-300 text-xs font-bold transition flex items-center justify-center gap-2">
+          <i class="fa-solid fa-sparkles text-emerald-600"></i> Dùng tài khoản mẫu (Minh Anh • 450 ĐX)
+        </button>
+      </form>
+
+      <!-- REGISTER FORM -->
+      <form id="auth-register-form" onsubmit="handleRegisterSubmit(event)" class="hidden p-6 space-y-3.5">
+        <div class="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-800 font-semibold flex items-center gap-2">
+          <i class="fa-solid fa-gift text-emerald-600 text-sm"></i>
+          <span>Tặng ngay <strong>+100 Điểm Xanh</strong> chào mừng thành viên mới!</span>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Họ và tên <span class="text-rose-500">*</span></label>
+          <input type="text" id="reg-name" required placeholder="VD: Nguyễn Minh Anh" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-emerald-500" />
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Email <span class="text-rose-500">*</span></label>
+          <input type="email" id="reg-email" required placeholder="minhanh@example.com" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-emerald-500" />
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-gray-700 mb-1">Mật khẩu <span class="text-rose-500">*</span></label>
+            <input type="password" id="reg-password" required minlength="6" placeholder="Tối thiểu 6 ký tự" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-emerald-500" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-700 mb-1">Xác nhận mật khẩu <span class="text-rose-500">*</span></label>
+            <input type="password" id="reg-confirm" required minlength="6" placeholder="Nhập lại mật khẩu" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-emerald-500" />
+          </div>
+        </div>
+
+        <!-- Optional Body Measurements for AI Size Advice -->
+        <div class="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
+          <p class="text-[11px] font-bold text-gray-700 flex items-center gap-1.5">
+            <i class="fa-solid fa-ruler-vertical text-emerald-600"></i> Số đo cá nhân (Tùy chọn — Giúp AI tư vấn size)
+          </p>
+          <div class="grid grid-cols-2 gap-2.5">
+            <div>
+              <input type="number" id="reg-height" min="130" max="210" placeholder="Chiều cao (cm) VD: 165" class="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs focus:outline-none focus:border-emerald-500" />
+            </div>
+            <div>
+              <input type="number" id="reg-weight" min="35" max="150" placeholder="Cân nặng (kg) VD: 55" class="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs focus:outline-none focus:border-emerald-500" />
+            </div>
+          </div>
+        </div>
+
+        <button type="submit" class="w-full py-3 rounded-xl bg-gray-900 hover:bg-emerald-600 text-white text-sm font-bold shadow-sm transition">
+          Hoàn tất tạo tài khoản
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==================== SLIDE-OVER CART DRAWER ==================== -->
+  <div id="cart-drawer" class="hidden fixed inset-0 z-50 bg-gray-900/50 backdrop-blur-xs flex justify-end">
+    <div class="bg-white w-full max-w-md h-full flex flex-col justify-between shadow-2xl animate-fade-up">
+      <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <i class="fa-solid fa-bag-shopping text-emerald-600"></i>
+          <h3 class="text-base font-extrabold text-gray-900">Giỏ hàng tuần hoàn</h3>
+        </div>
+        <button onclick="toggleCartDrawer(false)" class="w-8 h-8 rounded-full hover:bg-slate-100 text-gray-600 flex items-center justify-center">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- Cart Items -->
+      <div id="cart-items-container" class="flex-1 overflow-y-auto p-6 space-y-4">
+        <!-- Populated dynamically -->
+      </div>
+
+      <!-- Cart Footer & Voucher Apply -->
+      <div class="p-6 bg-slate-50 border-t border-slate-200 space-y-4">
+        <!-- Voucher selector -->
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">Áp dụng Voucher Điểm Xanh:</label>
+          <select id="cart-voucher-select" onchange="renderCart()" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-semibold text-gray-800 focus:outline-none focus:border-emerald-600">
+            <option value="0">Không áp dụng mã giảm giá</option>
+          </select>
+        </div>
+
+        <div class="space-y-1.5 text-sm">
+          <div class="flex justify-between text-gray-600">
+            <span>Tạm tính</span>
+            <span id="cart-subtotal">0đ</span>
+          </div>
+          <div class="flex justify-between text-emerald-700 font-medium">
+            <span>Giảm giá Điểm Xanh</span>
+            <span id="cart-discount">-0đ</span>
+          </div>
+          <div class="flex justify-between text-base font-extrabold text-gray-900 pt-2 border-t border-slate-200">
+            <span>Tổng thanh toán</span>
+            <span id="cart-total">0đ</span>
+          </div>
+        </div>
+
+        <button onclick="checkoutCart()" class="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold shadow-sm transition flex items-center justify-center gap-2">
+          <i class="fa-solid fa-lock"></i> Thanh toán & Lưu vào Tủ đồ AI
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== FLOATING AI CHATBOT ASSISTANT ==================== -->
+  <div class="fixed bottom-5 right-5 z-40 flex flex-col items-end">
+    <!-- Chat Window -->
+    <div id="ai-chat-window" class="hidden mb-3 w-[340px] sm:w-[380px] bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col animate-fade-up">
+      <!-- Header -->
+      <div class="bg-gray-900 text-white px-4 py-3.5 flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center text-sm">
+            <i class="fa-solid fa-robot"></i>
+          </div>
+          <div>
+            <h4 class="text-sm font-bold leading-tight">Trợ lý AI RE:LOOP</h4>
+            <p class="text-[11px] text-emerald-400 flex items-center gap-1">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Tư vấn size, chất liệu & kiểm định
+            </p>
+          </div>
+        </div>
+        <button onclick="toggleChatbot(false)" class="text-gray-400 hover:text-white p-1">
+          <i class="fa-solid fa-chevron-down"></i>
+        </button>
+      </div>
+
+      <!-- Active Product Context Pill -->
+      <div id="chat-context-bar" class="bg-emerald-50 border-b border-emerald-100 px-4 py-2 text-[11px] text-emerald-800 flex items-center justify-between">
+        <span>Đang tư vấn: <strong id="chat-context-product">Áo Sơ Mi Linen Trắng Ngà</strong></span>
+      </div>
+
+      <!-- Messages Body -->
+      <div id="chat-messages" class="p-4 h-64 overflow-y-auto space-y-3 bg-slate-50/70 text-xs">
+        <div class="flex items-start gap-2">
+          <div class="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0 text-[10px] mt-0.5">
+            <i class="fa-solid fa-robot"></i>
+          </div>
+          <div class="bg-white border border-slate-200 rounded-2xl rounded-tl-none px-3.5 py-2.5 text-gray-800 shadow-2xs leading-relaxed">
+            Xin chào! Mình là Trợ lý AI của <strong>RE:LOOP</strong>. Bạn cần mình tư vấn số đo vừa vặn, độ mới thực tế hay quy trình kiểm định tuần hoàn của sản phẩm nào ạ?
+          </div>
+        </div>
+      </div>
+
+      <!-- Typical Suggested Questions -->
+      <div class="px-3.5 py-2.5 bg-white border-t border-slate-100 space-y-1.5">
+        <p class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Câu hỏi gợi ý nhanh:</p>
+        <div class="flex flex-wrap gap-1.5">
+          <button onclick="askSuggestedQuestion('Áo này cao 1m65, nặng 55kg mặc vừa không?')" class="text-left text-[11px] bg-slate-100 hover:bg-emerald-50 hover:text-emerald-800 text-gray-700 px-2.5 py-1.5 rounded-xl border border-slate-200/80 transition">
+            Cao 1m65, 55kg mặc vừa không?
+          </button>
+          <button onclick="askSuggestedQuestion('Tình trạng thực tế và chất liệu vải của sản phẩm thế nào?')" class="text-left text-[11px] bg-slate-100 hover:bg-emerald-50 hover:text-emerald-800 text-gray-700 px-2.5 py-1.5 rounded-xl border border-slate-200/80 transition">
+            Tình trạng & chất liệu vải?
+          </button>
+          <button onclick="askSuggestedQuestion('Quy trình kiểm định đồ tuần hoàn của shop ra sao?')" class="text-left text-[11px] bg-slate-100 hover:bg-emerald-50 hover:text-emerald-800 text-gray-700 px-2.5 py-1.5 rounded-xl border border-slate-200/80 transition">
+            Quy trình kiểm định tuần hoàn?
+          </button>
+          <button onclick="askSuggestedQuestion('Chính sách đổi trả và tích điểm xanh khi mua hàng?')" class="text-left text-[11px] bg-slate-100 hover:bg-emerald-50 hover:text-emerald-800 text-gray-700 px-2.5 py-1.5 rounded-xl border border-slate-200/80 transition">
+            Đổi trả & tích Điểm Xanh?
+          </button>
+        </div>
+      </div>
+
+      <!-- Custom Question Input -->
+      <form onsubmit="handleCustomChatSubmit(event)" class="p-3 bg-white border-t border-slate-200 flex items-center gap-2">
+        <input type="text" id="chat-custom-input" placeholder="Nhập câu hỏi của bạn..." class="flex-1 px-3 py-2 rounded-xl bg-slate-100 text-xs focus:outline-none focus:bg-white focus:ring-1 focus:ring-emerald-500" />
+        <button type="submit" class="w-8 h-8 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center shrink-0 transition">
+          <i class="fa-solid fa-paper-plane text-xs"></i>
+        </button>
+      </form>
+    </div>
+
+    <!-- Floating Toggle Button -->
+    <button onclick="toggleChatbot()" class="group flex items-center gap-2.5 bg-gray-900 hover:bg-gray-800 text-white px-4 py-3 rounded-full shadow-xl border border-gray-700 transition">
+      <span class="relative flex h-2.5 w-2.5">
+        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+        <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+      </span>
+      <span class="text-xs sm:text-sm font-bold">Hỏi Trợ lý AI</span>
+      <i class="fa-solid fa-comment-dots text-emerald-400 text-base"></i>
+    </button>
+  </div>
+
+  <!-- ==================== TOAST NOTIFICATION CONTAINER ==================== -->
+  <div id="toast-container" class="fixed top-20 right-4 z-50 space-y-2 pointer-events-none max-w-sm w-full"></div>
+
+  <!-- ==================== JAVASCRIPT APPLICATION LOGIC ==================== -->
+  <script>
+    // ---------------------------------------------------------
+    // 1. INITIAL STATE & RICH MOCK DATA
+    // ---------------------------------------------------------
+    const demoWardrobeTemplate = [
+      {
+        id: 'w-1',
+        title: 'Áo Sơ Mi Kẻ Sọc Xanh Nhạt',
+        category: 'Áo',
+        size: 'M',
+        color: 'Xanh Sọc Trắng',
+        material: '100% Cotton Poplin',
+        cycle: 1,
+        purchasedDate: '12/10/2026',
+        reconsigned: false,
+        originalPrice: 650000,
+        paidPrice: 280000,
+        image: 'https://images.unsplash.com/photo-1596755094514-f87e34085b2c?auto=format&fit=crop&w=600&q=80'
+      },
+      {
+        id: 'w-2',
+        title: 'Quần Culottes Đen Tối Giản',
+        category: 'Quần',
+        size: 'M',
+        color: 'Đen Tuyền',
+        material: 'Tencel Tuyết Mưa',
+        cycle: 2,
+        purchasedDate: '28/09/2026',
+        reconsigned: false,
+        originalPrice: 720000,
+        paidPrice: 310000,
+        image: 'https://images.unsplash.com/photo-1509631179647-0177331693ae?auto=format&fit=crop&w=600&q=80'
+      },
+      {
+        id: 'w-3',
+        title: 'Áo Khoác Trench Ngắn Màu Be',
+        category: 'Áo khoác',
+        size: 'M',
+        color: 'Be Cổ Điển',
+        material: 'Kaki Cotton Chống Nhăn',
+        cycle: 1,
+        purchasedDate: '05/09/2026',
+        reconsigned: false,
+        originalPrice: 1150000,
+        paidPrice: 460000,
+        image: 'https://images.unsplash.com/photo-1544022613-e87ca75a784a?auto=format&fit=crop&w=600&q=80'
+      }
+    ];
+
+    const state = {
+      activeTab: 'marketplace',
+      categoryFilter: 'all',
+      wardrobeFilter: 'all',
+      stylistTrend: 'all',
+      stylistAnchorId: 'w-1',
+      // Authentication & Accounts Store (In-Memory)
+      currentUser: null,
+      accounts: [
+        {
+          id: 'u-demo',
+          name: 'Nguyễn Minh Anh',
+          email: 'minhanh@reloop.vn',
+          password: '123456',
+          height: 165,
+          weight: 55,
+          greenPoints: 450,
+          co2Saved: 18.5,
+          waterSaved: 4200,
+          donatedVnd: 50000,
+          vouchers: [],
+          pointsHistory: [
+            { id: 1, title: 'Ký gửi lại Áo Blazer Len Mỏng', delta: '+150', type: 'earn', date: 'Hôm qua' },
+            { id: 2, title: 'Mua Áo Sơ Mi Linen Trắng Ngà', delta: '+80', type: 'earn', date: '3 ngày trước' },
+            { id: 3, title: 'Quy đổi góp Quỹ Trồng Rừng Việt Nam', delta: '-200', type: 'spend', date: '1 tuần trước' }
+          ],
+          wardrobe: JSON.parse(JSON.stringify(demoWardrobeTemplate))
+        }
+      ],
+      greenPoints: 450,
+      co2Saved: 18.5,
+      waterSaved: 4200,
+      donatedVnd: 50000,
+      activeChatProduct: null,
+      vouchers: [], // { code, amount, used }
+      pointsHistory: [
+        { id: 1, title: 'Ký gửi lại Áo Blazer Len Mỏng', delta: '+150', type: 'earn', date: 'Hôm qua' },
+        { id: 2, title: 'Mua Áo Sơ Mi Linen Trắng Ngà', delta: '+80', type: 'earn', date: '3 ngày trước' },
+        { id: 3, title: 'Quy đổi góp Quỹ Trồng Rừng Việt Nam', delta: '-200', type: 'spend', date: '1 tuần trước' },
+      ],
+      charityProjects: [
+        {
+          id: 'c-forest',
+          name: 'Quỹ Trồng Rừng Việt Nam',
+          desc: 'Phục hồi rừng đầu nguồn & hấp thụ carbon bền vững.',
+          raisedVnd: 18500000,
+          goalVnd: 25000000,
+          icon: 'fa-tree',
+          color: 'emerald'
+        },
+        {
+          id: 'c-textile',
+          name: 'Thu Gom & Tái Chế Rác Thải Dệt May',
+          desc: 'Xử lý sợi vải cũ thành vật liệu cách nhiệt & túi tái chế.',
+          raisedVnd: 12400000,
+          goalVnd: 20000000,
+          icon: 'fa-recycle',
+          color: 'teal'
+        },
+        {
+          id: 'c-ocean',
+          name: 'Làm Sạch Đại Dương & Bờ Biển',
+          desc: 'Thu gom vi nhựa và rác thải ven biển miền Trung.',
+          raisedVnd: 9200000,
+          goalVnd: 15000000,
+          icon: 'fa-water',
+          color: 'sky'
+        }
+      ],
+      // Marketplace Products (Includes Cycle 1 & Verified Circular Cycle 2+ items)
+      products: [
+        {
+          id: 'p-1',
+          title: 'Áo Sơ Mi Linen Trắng Ngà Minimalist',
+          category: 'Áo',
+          size: 'M',
+          color: 'Trắng Ngà',
+          material: '100% Linen Tự Nhiên',
+          condition: 95,
+          conditionLabel: 'Như mới',
+          aiNote: 'Sợi linen đanh mịn, cúc vỏ trai nguyên bản, không ố vàng hay sờn cổ.',
+          price: 290000,
+          originalPrice: 680000,
+          cycle: 2, // Circular verified from previous loop!
+          pointsReward: 70,
+          trend: 'Minimalist Thanh Lịch',
+          fitAdvice: 'Form suông nhẹ chuẩn Châu Á: cao 1m60–1m68, nặng 50–58kg mặc vừa đẹp, thả tà hoặc sơ vin đều thanh lịch.',
+          image: 'https://images.unsplash.com/photo-1598033129183-c4f50c736f10?auto=format&fit=crop&w=700&q=85'
+        },
+        {
+          id: 'p-2',
+          title: 'Quần Tây Ống Suông Beige Cạp Cao',
+          category: 'Quần',
+          size: 'M',
+          color: 'Beige Tự Nhiên',
+          material: 'Cotton Twill Cao Cấp',
+          condition: 94,
+          conditionLabel: 'Rất tốt',
+          aiNote: 'Ly quần sắc nét, khóa kéo YKK mượt mà, gấu quần không sờn gót.',
+          price: 340000,
+          originalPrice: 790000,
+          cycle: 2,
+          pointsReward: 80,
+          trend: 'Công Sở Hiện Đại',
+          fitAdvice: 'Vòng eo 68–73cm, chiều cao 1m60–1m70 mặc tôn dáng chân dài chuẩn mẫu.',
+          image: 'https://images.unsplash.com/photo-1594633312681-425c7b97ccd1?auto=format&fit=crop&w=700&q=85'
+        },
+        {
+          id: 'p-3',
+          title: 'Áo Blazer Dáng Suông Xám Khói',
+          category: 'Áo khoác',
+          size: 'L',
+          color: 'Xám Khói',
+          material: 'Wool Blend Thoáng Khí',
+          condition: 97,
+          conditionLabel: 'Như mới',
+          aiNote: 'Đệm vai giữ form chuẩn, lớp lót lụa bên trong nguyên vẹn 100%.',
+          price: 490000,
+          originalPrice: 1250000,
+          cycle: 1,
+          pointsReward: 100,
+          trend: 'Công Sở Hiện Đại',
+          fitAdvice: 'Dáng oversize nhẹ, cao 1m62–1m74 nặng 52–64kg khoác ngoài cực sang.',
+          image: 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?auto=format&fit=crop&w=700&q=85'
+        },
+        {
+          id: 'p-4',
+          title: 'Váy Midi Xếp Ly Xanh Olive',
+          category: 'Váy',
+          size: 'S',
+          color: 'Xanh Olive',
+          material: 'Tencel Mềm Mịn',
+          condition: 92,
+          conditionLabel: 'Rất tốt',
+          aiNote: 'Nếp xếp ly đều đẹp, chất vải rũ tự nhiên, không xước sợi.',
+          price: 310000,
+          originalPrice: 720000,
+          cycle: 3,
+          pointsReward: 75,
+          trend: 'Minimalist Thanh Lịch',
+          fitAdvice: 'Cạp chun co giãn nhẹ sau lưng, phù hợp 1m55–1m66, nặng 45–54kg.',
+          image: 'https://images.unsplash.com/photo-1583496661160-fb5886a0aaaa?auto=format&fit=crop&w=700&q=85'
+        },
+        {
+          id: 'p-5',
+          title: 'Áo Thun Cotton Hữu Cơ Đen Cổ Tròn',
+          category: 'Áo',
+          size: 'M',
+          color: 'Đen Than',
+          material: '100% Organic Cotton 250gsm',
+          condition: 96,
+          conditionLabel: 'Như mới',
+          aiNote: 'Màu đen sâu bền màu, bo cổ dày dặn không bai dão.',
+          price: 180000,
+          originalPrice: 420000,
+          cycle: 1,
+          pointsReward: 60,
+          trend: 'Dạo Phố Cuối Tuần',
+          fitAdvice: 'Unisex regular fit: cao 1m60–1m72, nặng 50–62kg mặc vừa vặn thoải mái.',
+          image: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=700&q=85'
+        },
+        {
+          id: 'p-6',
+          title: 'Quần Jeans Ống Đứng Xanh Cổ Điển',
+          category: 'Quần',
+          size: 'M',
+          color: 'Xanh Denim Cổ Điển',
+          material: '100% Cotton Denim Tái Chế',
+          condition: 91,
+          conditionLabel: 'Rất tốt',
+          aiNote: 'Chất denim đứng form, đường chỉ nổi chắc chắn, wash màu tự nhiên.',
+          price: 360000,
+          originalPrice: 850000,
+          cycle: 2,
+          pointsReward: 85,
+          trend: 'Dạo Phố Cuối Tuần',
+          fitAdvice: 'Size 28–29 tương đương M, cao 1m60–1m70 nặng 50–57kg mặc rất tôn dáng.',
+          image: 'https://images.unsplash.com/photo-1541099649105-f69ad21f3246?auto=format&fit=crop&w=700&q=85'
+        },
+        {
+          id: 'p-7',
+          title: 'Áo Cardigan Len Mỏng Kem Sữa',
+          category: 'Áo khoác',
+          size: 'FreeSize',
+          color: 'Kem Sữa',
+          material: 'Cotton Knit Mềm Nhẹ',
+          condition: 95,
+          conditionLabel: 'Như mới',
+          aiNote: 'Bề mặt len mịn mướt, không xù lông, khuy cài đồng bộ.',
+          price: 270000,
+          originalPrice: 640000,
+          cycle: 2,
+          pointsReward: 65,
+          trend: 'Minimalist Thanh Lịch',
+          fitAdvice: 'Dáng FreeSize dưới 62kg mặc đều xinh, dễ khoác ngoài áo hai dây hoặc sơ mi.',
+          image: 'https://images.unsplash.com/photo-1434389677669-e08b4cac3105?auto=format&fit=crop&w=700&q=85'
+        },
+        {
+          id: 'p-8',
+          title: 'Váy Suông Linen Phối Túi Hộp',
+          category: 'Váy',
+          size: 'M',
+          color: 'Nâu Cát',
+          material: 'Linen Pha Cotton',
+          condition: 93,
+          conditionLabel: 'Rất tốt',
+          aiNote: 'Đường may túi sắc sảo, chất vải mát nhẹ thấm hút mồ hôi tốt.',
+          price: 320000,
+          originalPrice: 750000,
+          cycle: 1,
+          pointsReward: 75,
+          trend: 'Dạo Phố Cuối Tuần',
+          fitAdvice: 'Form suông giấu dáng tốt, 1m58–1m68 nặng 48–58kg mặc thoải mái.',
+          image: 'https://images.unsplash.com/photo-1595777457583-95e059d581b8?auto=format&fit=crop&w=700&q=85'
+        }
+      ],
+
+      // User's Digital Wardrobe (Automatically grows when user purchases!)
+      wardrobe: JSON.parse(JSON.stringify(demoWardrobeTemplate)),
+
+      // Cart starts with 1 item so user can immediately test checkout or add more
+      cart: ['p-2']
+    };
+
+    // Sample presets for AI Visual Listing
+    const aiSellSamples = [
+      {
+        title: 'Áo Sơ Mi Oxford Trắng Form Rộng',
+        category: 'Áo',
+        size: 'M',
+        color: 'Trắng Tinh Khiết',
+        material: '100% Cotton Oxford Dệt Mịn',
+        condition: 96,
+        conditionLabel: 'Như mới',
+        conditionNote: 'Cổ áo & cổ tay phẳng phiu, không sờn chỉ, độ trắng đạt 98% so với nguyên bản.',
+        price: 310000,
+        originalPrice: 690000,
+        image: 'https://images.unsplash.com/photo-1596755094514-f87e34085b2c?auto=format&fit=crop&w=700&q=85'
+      },
+      {
+        title: 'Áo Khoác Jacket Kaki Túi Hộp',
+        category: 'Áo khoác',
+        size: 'L',
+        color: 'Xanh Rêu Nhạt',
+        material: 'Cotton Canvas Bền Bỉ',
+        condition: 91,
+        conditionLabel: 'Rất tốt',
+        conditionNote: 'Khóa kéo kim loại sáng bóng, bề mặt vải giữ màu tốt, không rách hay bạc vai.',
+        price: 420000,
+        originalPrice: 980000,
+        image: 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?auto=format&fit=crop&w=700&q=85'
+      },
+      {
+        title: 'Váy Midi Hoa Nhí Cổ Vuông Vintage',
+        category: 'Váy',
+        size: 'S',
+        color: 'Kem Hoa Nhí',
+        material: 'Voan Lụa Mềm Mại',
+        condition: 94,
+        conditionLabel: 'Như mới',
+        conditionNote: 'Họa tiết sắc nét, đường bo chun lưng đàn hồi tốt, lớp lót nguyên vẹn.',
+        price: 295000,
+        originalPrice: 660000,
+        image: 'https://images.unsplash.com/photo-1572804013309-59a88b7e92f1?auto=format&fit=crop&w=700&q=85'
+      }
+    ];
+
+    let currentSellImage = '';
+    let currentSellOriginalPrice = 650000;
+    let currentSellCondition = 95;
+    let currentSellConditionLabel = 'Như mới';
+    let currentSellConditionNote = 'Bề mặt vải mịn đẹp, đường may chắc chắn.';
+
+    // ---------------------------------------------------------
+    // 2. UTILITY FUNCTIONS
+    // ---------------------------------------------------------
+    function formatVND(amount) {
+      return Number(amount).toLocaleString('vi-VN') + 'đ';
+    }
+
+    function showToast(title, message, type = 'success') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      const isSuccess = type === 'success';
+      toast.className = `pointer-events-auto bg-white border ${isSuccess ? 'border-emerald-200' : 'border-amber-200'} shadow-xl rounded-2xl p-4 flex items-start gap-3 animate-fade-up`;
+      toast.innerHTML = `
+        <div class="w-8 h-8 rounded-xl ${isSuccess ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'} flex items-center justify-center shrink-0 mt-0.5">
+          <i class="fa-solid ${isSuccess ? 'fa-circle-check' : 'fa-circle-info'}"></i>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-xs font-extrabold text-gray-900">${title}</p>
+          <p class="text-xs text-gray-600 mt-0.5 leading-relaxed">${message}</p>
+        </div>
+      `;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(-6px)';
+        toast.style.transition = 'all 0.25s ease';
+        setTimeout(() => toast.remove(), 260);
+      }, 3600);
+    }
+
+    function updateHeaderAndStats() {
+      // Sync current user record if logged in
+      if (state.currentUser) {
+        state.currentUser.greenPoints = state.greenPoints;
+        state.currentUser.co2Saved = state.co2Saved;
+        state.currentUser.waterSaved = state.waterSaved;
+        state.currentUser.donatedVnd = state.donatedVnd;
+        state.currentUser.vouchers = state.vouchers;
+        state.currentUser.pointsHistory = state.pointsHistory;
+        state.currentUser.wardrobe = state.wardrobe;
+      }
+
+      document.getElementById('header-points-display').textContent = state.greenPoints;
+      document.getElementById('header-cart-count').textContent = state.cart.length;
+      document.getElementById('points-main-balance').textContent = state.greenPoints;
+      document.getElementById('impact-co2').textContent = state.co2Saved.toFixed(1) + ' kg';
+      document.getElementById('impact-water').textContent = state.waterSaved.toLocaleString('vi-VN') + ' L';
+      document.getElementById('impact-donated-vnd').textContent = formatVND(state.donatedVnd);
+      document.getElementById('cert-user-name').textContent = state.currentUser ? state.currentUser.name : 'Đại Sứ Thời Trang Tuần Hoàn';
+      document.getElementById('cert-donated-amount').textContent = formatVND(state.donatedVnd);
+      document.getElementById('cert-co2-amount').textContent = `Giảm thải ${state.co2Saved.toFixed(1)} kg CO₂ • Tiết kiệm ${state.waterSaved.toLocaleString('vi-VN')}L nước`;
+      document.getElementById('wardrobe-total-count').textContent = `${state.wardrobe.length} món đồ`;
+    }
+
+    // ---------------------------------------------------------
+    // 2B. AUTHENTICATION (ACCOUNT CREATION, LOGIN & PROFILE)
+    // ---------------------------------------------------------
+    function openAuthModal(mode = 'login') {
+      document.getElementById('auth-error-box').classList.add('hidden');
+      switchAuthMode(mode);
+      document.getElementById('auth-modal').classList.remove('hidden');
+    }
+
+    function switchAuthMode(mode) {
+      const loginForm = document.getElementById('auth-login-form');
+      const regForm = document.getElementById('auth-register-form');
+      const tabLogin = document.getElementById('auth-tab-login');
+      const tabReg = document.getElementById('auth-tab-register');
+      document.getElementById('auth-error-box').classList.add('hidden');
+
+      if (mode === 'login') {
+        loginForm.classList.remove('hidden');
+        regForm.classList.add('hidden');
+        tabLogin.className = 'py-2 rounded-xl text-xs font-bold transition bg-white text-gray-900 shadow-2xs';
+        tabReg.className = 'py-2 rounded-xl text-xs font-bold transition text-gray-600 hover:text-gray-900';
+      } else {
+        loginForm.classList.add('hidden');
+        regForm.classList.remove('hidden');
+        tabReg.className = 'py-2 rounded-xl text-xs font-bold transition bg-white text-gray-900 shadow-2xs';
+        tabLogin.className = 'py-2 rounded-xl text-xs font-bold transition text-gray-600 hover:text-gray-900';
+      }
+    }
+
+    function showAuthError(msg) {
+      const box = document.getElementById('auth-error-box');
+      document.getElementById('auth-error-text').textContent = msg;
+      box.classList.remove('hidden');
+    }
+
+    function togglePasswordVisibility(inputId, btn) {
+      const input = document.getElementById(inputId);
+      const icon = btn.querySelector('i');
+      if (input.type === 'password') {
+        input.type = 'text';
+        icon.className = 'fa-solid fa-eye-slash';
+      } else {
+        input.type = 'password';
+        icon.className = 'fa-solid fa-eye';
+      }
+    }
+
+    function applyUserSession(user) {
+      state.currentUser = user;
+      state.greenPoints = user.greenPoints;
+      state.co2Saved = user.co2Saved;
+      state.waterSaved = user.waterSaved;
+      state.donatedVnd = user.donatedVnd;
+      state.vouchers = user.vouchers;
+      state.pointsHistory = user.pointsHistory;
+      state.wardrobe = user.wardrobe;
+      state.stylistAnchorId = user.wardrobe.length > 0 ? user.wardrobe[0].id : null;
+
+      renderHeaderAuth();
+      updateHeaderAndStats();
+      if (state.activeTab === 'wardrobe') { renderWardrobe(); renderStylistOutfits(); }
+      if (state.activeTab === 'orders') renderPurchasedOrders();
+      if (state.activeTab === 'points') renderPointsTab();
+    }
+
+    function handleLoginSubmit(event) {
+      event.preventDefault();
+      const email = document.getElementById('login-email').value.trim().toLowerCase();
+      const password = document.getElementById('login-password').value;
+
+      const found = state.accounts.find(acc => acc.email.toLowerCase() === email && acc.password === password);
+      if (!found) {
+        showAuthError('Email hoặc mật khẩu chưa chính xác. Bạn có thể tạo tài khoản mới hoặc dùng tài khoản mẫu.');
+        return;
+      }
+
+      applyUserSession(found);
+      closeModal('auth-modal');
+      showToast(`Chào mừng trở lại, ${found.name}!`, `Bạn hiện có ${found.greenPoints} Điểm Xanh và ${found.wardrobe.length} món đồ trong tủ.`);
+    }
+
+    function loginAsDemoUser() {
+      const demo = state.accounts.find(acc => acc.id === 'u-demo');
+      if (!demo) return;
+      applyUserSession(demo);
+      closeModal('auth-modal');
+      showToast(`Đã đăng nhập: ${demo.name}`, 'Tài khoản mẫu đã đồng bộ sẵn 450 Điểm Xanh và Tủ đồ tuần hoàn.');
+    }
+
+    function handleRegisterSubmit(event) {
+      event.preventDefault();
+      const name = document.getElementById('reg-name').value.trim();
+      const email = document.getElementById('reg-email').value.trim().toLowerCase();
+      const password = document.getElementById('reg-password').value;
+      const confirm = document.getElementById('reg-confirm').value;
+      const height = parseInt(document.getElementById('reg-height').value, 10) || null;
+      const weight = parseInt(document.getElementById('reg-weight').value, 10) || null;
+
+      if (password !== confirm) {
+        showAuthError('Mật khẩu xác nhận chưa trùng khớp. Vui lòng kiểm tra lại.');
+        return;
+      }
+
+      if (state.accounts.some(acc => acc.email.toLowerCase() === email)) {
+        showAuthError('Email này đã được đăng ký. Vui lòng chuyển sang tab Đăng nhập.');
+        return;
+      }
+
+      const newUser = {
+        id: 'u-' + Date.now(),
+        name,
+        email,
+        password,
+        height,
+        weight,
+        greenPoints: 100,
+        co2Saved: 0,
+        waterSaved: 0,
+        donatedVnd: 0,
+        vouchers: [],
+        pointsHistory: [
+          { id: Date.now(), title: 'Quà chào mừng thành viên Sống Xanh mới', delta: '+100', type: 'earn', date: 'Vừa xong' }
+        ],
+        wardrobe: []
+      };
+
+      state.accounts.push(newUser);
+      applyUserSession(newUser);
+      closeModal('auth-modal');
+      document.getElementById('auth-register-form').reset();
+      showToast(`Tạo tài khoản thành công! (+100 Điểm Xanh)`, `Xin chào ${name}, hành trình thời trang tuần hoàn của bạn đã bắt đầu.`);
+    }
+
+    function logoutUser() {
+      const prevName = state.currentUser ? state.currentUser.name : '';
+      state.currentUser = null;
+      renderHeaderAuth();
+      updateHeaderAndStats();
+      showToast('Đã đăng xuất', `Hẹn gặp lại ${prevName} tại RE:LOOP!`, 'info');
+    }
+
+    function toggleUserDropdown() {
+      const menu = document.getElementById('user-profile-dropdown');
+      if (menu) menu.classList.toggle('hidden');
+    }
+
+    function renderHeaderAuth() {
+      const desktopArea = document.getElementById('header-auth-area');
+      const mobileArea = document.getElementById('mobile-auth-actions');
+
+      if (!state.currentUser) {
+        desktopArea.innerHTML = `
+          <button onclick="openAuthModal('login')" class="px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold text-gray-700 hover:bg-slate-100 transition">
+            Đăng nhập
+          </button>
+          <button onclick="openAuthModal('register')" class="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gray-900 hover:bg-emerald-600 text-white text-xs sm:text-sm font-bold shadow-2xs transition">
+            Tạo tài khoản
+          </button>
+        `;
+        mobileArea.innerHTML = `
+          <button onclick="openAuthModal('login'); toggleMobileMenu(false)" class="flex-1 py-2.5 rounded-xl border border-slate-300 text-xs font-bold text-gray-800">
+            Đăng nhập
+          </button>
+          <button onclick="openAuthModal('register'); toggleMobileMenu(false)" class="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-bold">
+            Tạo tài khoản
+          </button>
+        `;
+        return;
+      }
+
+      const initials = state.currentUser.name
+        .split(' ')
+        .map(w => w[0])
+        .slice(-2)
+        .join('')
+        .toUpperCase();
+
+      const bodyTag = (state.currentUser.height && state.currentUser.weight)
+        ? `${state.currentUser.height}cm • ${state.currentUser.weight}kg`
+        : 'Thành viên Sống Xanh';
+
+      desktopArea.innerHTML = `
+        <button id="user-menu-trigger" onclick="toggleUserDropdown()" class="flex items-center gap-2 pl-1.5 pr-3 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200/80 border border-slate-200 transition">
+          <span class="w-7 h-7 rounded-full bg-emerald-600 text-white text-xs font-extrabold flex items-center justify-center">
+            ${initials}
+          </span>
+          <span class="hidden md:inline text-xs font-bold text-gray-900 max-w-[110px] truncate">${state.currentUser.name}</span>
+          <i class="fa-solid fa-chevron-down text-[10px] text-gray-500"></i>
+        </button>
+
+        <!-- Dropdown Menu -->
+        <div id="user-profile-dropdown" class="hidden absolute right-0 top-12 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 animate-fade-up">
+          <div class="px-4 py-2.5 border-b border-slate-100">
+            <p class="text-xs font-extrabold text-gray-900 truncate">${state.currentUser.name}</p>
+            <p class="text-[11px] text-gray-500 truncate">${state.currentUser.email}</p>
+            <span class="inline-block mt-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold">
+              ${bodyTag}
+            </span>
+          </div>
+          <div class="py-1 text-xs">
+            <button onclick="switchTab('wardrobe'); toggleUserDropdown()" class="w-full text-left px-4 py-2 hover:bg-slate-50 text-gray-700 font-semibold flex items-center gap-2.5">
+              <i class="fa-solid fa-shirt text-emerald-600 w-4"></i> Tủ đồ cá nhân (${state.wardrobe.length})
+            </button>
+            <button onclick="switchTab('orders'); toggleUserDropdown()" class="w-full text-left px-4 py-2 hover:bg-slate-50 text-gray-700 font-semibold flex items-center gap-2.5">
+              <i class="fa-solid fa-rotate text-emerald-600 w-4"></i> Ký gửi lại 1 chạm
+            </button>
+            <button onclick="openCertificateModal(); toggleUserDropdown()" class="w-full text-left px-4 py-2 hover:bg-slate-50 text-gray-700 font-semibold flex items-center gap-2.5">
+              <i class="fa-solid fa-award text-amber-500 w-4"></i> Chứng nhận Sống Xanh
+            </button>
+          </div>
+          <div class="pt-1 border-t border-slate-100">
+            <button onclick="logoutUser()" class="w-full text-left px-4 py-2 hover:bg-rose-50 text-rose-600 text-xs font-bold flex items-center gap-2.5">
+              <i class="fa-solid fa-right-from-bracket w-4"></i> Đăng xuất
+            </button>
+          </div>
+        </div>
+      `;
+
+      mobileArea.innerHTML = `
+        <div class="w-full flex items-center justify-between px-2 py-1">
+          <div class="flex items-center gap-2.5">
+            <span class="w-8 h-8 rounded-full bg-emerald-600 text-white text-xs font-extrabold flex items-center justify-center">${initials}</span>
+            <div>
+              <p class="text-xs font-bold text-gray-900">${state.currentUser.name}</p>
+              <p class="text-[11px] text-gray-500">${state.currentUser.email}</p>
+            </div>
+          </div>
+          <button onclick="logoutUser(); toggleMobileMenu(false)" class="px-3 py-1.5 rounded-xl bg-rose-50 text-rose-600 text-xs font-bold">
+            Đăng xuất
+          </button>
+        </div>
+      `;
+    }
+
+    // ---------------------------------------------------------
+    // 3. TAB NAVIGATION
+    // ---------------------------------------------------------
+    function switchTab(tabName) {
+      state.activeTab = tabName;
+      document.querySelectorAll('.tab-view').forEach(el => el.classList.add('hidden'));
+      const target = document.getElementById(`view-${tabName}`);
+      if (target) target.classList.remove('hidden');
+
+      // Update Desktop & Mobile Nav active styles
+      document.querySelectorAll('.nav-btn').forEach(btn => {
+        if (btn.dataset.nav === tabName) {
+          btn.classList.add('bg-white', 'text-emerald-700', 'shadow-xs');
+          btn.classList.remove('text-gray-600', 'hover:text-gray-900');
+        } else {
+          btn.classList.remove('bg-white', 'text-emerald-700', 'shadow-xs');
+          btn.classList.add('text-gray-600', 'hover:text-gray-900');
+        }
+      });
+
+      document.querySelectorAll('.nav-btn-mobile').forEach(btn => {
+        if (btn.dataset.nav === tabName) {
+          btn.classList.add('bg-emerald-50', 'text-emerald-700');
+          btn.classList.remove('text-gray-700');
+        } else {
+          btn.classList.remove('bg-emerald-50', 'text-emerald-700');
+          btn.classList.add('text-gray-700');
+        }
+      });
+
+      if (tabName === 'marketplace') renderMarketplace();
+      if (tabName === 'wardrobe') { renderWardrobe(); renderStylistOutfits(); }
+      if (tabName === 'orders') renderPurchasedOrders();
+      if (tabName === 'points') renderPointsTab();
+
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function toggleMobileMenu(forceState) {
+      const drawer = document.getElementById('mobile-nav-drawer');
+      if (typeof forceState === 'boolean') {
+        drawer.classList.toggle('hidden', !forceState);
+      } else {
+        drawer.classList.toggle('hidden');
+      }
+    }
+
+    // ---------------------------------------------------------
+    // 4. MARKETPLACE RENDERING & PRODUCT DETAILS
+    // ---------------------------------------------------------
+    function setCategoryFilter(cat) {
+      state.categoryFilter = cat;
+      document.querySelectorAll('.cat-pill').forEach(btn => {
+        const isMatch = (cat === 'all' && btn.textContent.trim() === 'Tất cả') || btn.textContent.trim() === cat;
+        btn.className = isMatch
+          ? 'cat-pill active px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition bg-gray-900 text-white'
+          : 'cat-pill px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap transition bg-slate-100 hover:bg-slate-200 text-gray-700';
+      });
+      renderMarketplace();
+    }
+
+    function renderMarketplace() {
+      const grid = document.getElementById('marketplace-grid');
+      const onlyCircular = document.getElementById('filter-circular-only').checked;
+      const query = document.getElementById('marketplace-search').value.trim().toLowerCase();
+
+      const filtered = state.products.filter(p => {
+        const matchCat = state.categoryFilter === 'all' || p.category === state.categoryFilter;
+        const matchCirc = !onlyCircular || p.cycle >= 2;
+        const matchQuery = !query || p.title.toLowerCase().includes(query) || p.material.toLowerCase().includes(query) || p.color.toLowerCase().includes(query);
+        return matchCat && matchCirc && matchQuery;
+      });
+
+      document.getElementById('marketplace-count').textContent = `(${filtered.length} sản phẩm)`;
+
+      if (filtered.length === 0) {
+        grid.innerHTML = `
+          <div class="col-span-full bg-white rounded-3xl border border-slate-200 p-10 text-center space-y-2">
+            <i class="fa-solid fa-shirt text-3xl text-slate-300"></i>
+            <p class="text-sm font-bold text-gray-800">Không tìm thấy sản phẩm phù hợp</p>
+            <p class="text-xs text-gray-500">Thử đổi bộ lọc danh mục hoặc từ khóa tìm kiếm nhé.</p>
+          </div>
+        `;
+        return;
+      }
+
+      grid.innerHTML = filtered.map(p => {
+        const discountPct = Math.round((1 - p.price / p.originalPrice) * 100);
+        const isCircularLoop = p.cycle >= 2;
+        return `
+          <article class="group bg-white rounded-3xl border border-slate-200/90 overflow-hidden shadow-2xs hover:shadow-md transition flex flex-col justify-between">
+            <div>
+              <!-- Image Container -->
+              <div onclick="openProductDetail('${p.id}')" class="relative aspect-[4/5] bg-brand-beige overflow-hidden cursor-pointer">
+                <img src="${p.image}" alt="${p.title}" onerror="this.onerror=null; this.src='https://placehold.co/600x750/F5F2EB/059669?text=${encodeURIComponent(p.category)}';" class="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
+                
+                <!-- Top Badges -->
+                <div class="absolute top-3 left-3 right-3 flex items-start justify-between gap-1.5">
+                  <span class="px-2.5 py-1 rounded-full bg-white/95 backdrop-blur text-gray-900 text-[11px] font-bold shadow-2xs">
+                    Mới ${p.condition}%
+                  </span>
+                  ${isCircularLoop ? `
+                    <span class="px-2.5 py-1 rounded-full bg-emerald-600 text-white text-[11px] font-bold shadow-2xs flex items-center gap-1">
+                      <i class="fa-solid fa-rotate text-[9px]"></i> Vòng #${p.cycle}
+                    </span>
+                  ` : `
+                    <span class="px-2.5 py-1 rounded-full bg-gray-900/80 text-white text-[11px] font-semibold">
+                      Vòng #1
+                    </span>
+                  `}
+                </div>
+
+                <!-- Circular Verified Ribbon if cycle >= 2 -->
+                ${isCircularLoop ? `
+                  <div class="absolute bottom-2.5 left-2.5 right-2.5 bg-emerald-950/85 backdrop-blur-xs text-emerald-100 px-3 py-1.5 rounded-xl text-[10px] font-semibold flex items-center gap-1.5 border border-emerald-500/40">
+                    <i class="fa-solid fa-circle-check text-emerald-400 shrink-0"></i>
+                    <span class="truncate">Hệ tuần hoàn • Đã kiểm định vòng trước</span>
+                  </div>
+                ` : ''}
+              </div>
+
+              <!-- Info Body -->
+              <div class="p-4 space-y-2">
+                <div class="flex items-center justify-between text-[11px] text-gray-500">
+                  <span>${p.category} • Size ${p.size}</span>
+                  <span class="text-emerald-700 font-semibold">+${p.pointsReward} Điểm Xanh</span>
+                </div>
+                <h3 onclick="openProductDetail('${p.id}')" class="font-bold text-sm text-gray-900 line-clamp-2 cursor-pointer hover:text-emerald-700 transition">
+                  ${p.title}
+                </h3>
+                <p class="text-[11px] text-gray-500 truncate">${p.material} • ${p.color}</p>
+              </div>
+            </div>
+
+            <!-- Price & Quick Actions -->
+            <div class="px-4 pb-4 pt-1 flex items-center justify-between gap-2">
+              <div>
+                <div class="flex items-baseline gap-1.5">
+                  <span class="text-base font-extrabold text-gray-900">${formatVND(p.price)}</span>
+                  <span class="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">-${discountPct}%</span>
+                </div>
+                <span class="text-[11px] text-gray-400 line-through">${formatVND(p.originalPrice)}</span>
+              </div>
+
+              <div class="flex items-center gap-1.5">
+                <button onclick="openProductChat('${p.id}')" title="Hỏi AI về áo này" class="w-9 h-9 rounded-xl bg-slate-100 hover:bg-emerald-50 text-gray-700 hover:text-emerald-700 flex items-center justify-center transition">
+                  <i class="fa-solid fa-robot text-xs"></i>
+                </button>
+                <button onclick="addToCart('${p.id}')" title="Thêm vào giỏ" class="px-3.5 h-9 rounded-xl bg-gray-900 hover:bg-emerald-600 text-white text-xs font-bold transition flex items-center gap-1.5">
+                  <i class="fa-solid fa-plus text-[10px]"></i> Giỏ
+                </button>
+              </div>
+            </div>
+          </article>
+        `;
+      }).join('');
+    }
+
+    function openProductDetail(productId) {
+      const p = state.products.find(item => item.id === productId);
+      if (!p) return;
+
+      const isCircularLoop = p.cycle >= 2;
+      const content = document.getElementById('product-detail-content');
+      content.innerHTML = `
+        <div class="grid grid-cols-1 md:grid-cols-12">
+          <div class="md:col-span-5 bg-brand-beige relative aspect-[4/5] md:aspect-auto">
+            <img src="${p.image}" alt="${p.title}" onerror="this.onerror=null; this.src='https://placehold.co/600x750/F5F2EB/059669?text=${encodeURIComponent(p.category)}';" class="w-full h-full object-cover" />
+            <span class="absolute top-4 left-4 px-3 py-1 rounded-full bg-white/95 text-xs font-extrabold text-gray-900 shadow">
+              Độ mới AI: ${p.condition}% (${p.conditionLabel})
+            </span>
+          </div>
+
+          <div class="md:col-span-7 p-6 sm:p-7 flex flex-col justify-between space-y-5">
+            <div class="space-y-4">
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <span class="text-xs font-bold text-emerald-700 uppercase tracking-wider">${p.category} • Vòng đời thứ ${p.cycle}</span>
+                  <h2 class="text-xl sm:text-2xl font-extrabold text-gray-900 mt-1">${p.title}</h2>
+                </div>
+                <button onclick="closeModal('product-detail-modal')" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-gray-600 flex items-center justify-center shrink-0">
+                  <i class="fa-solid fa-xmark"></i>
+                </button>
+              </div>
+
+              <!-- Mandatory Circular Authenticity Callout for Cycle 2+ -->
+              ${isCircularLoop ? `
+                <div class="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-300 flex items-start gap-3">
+                  <div class="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 mt-0.5">
+                    <i class="fa-solid fa-shield-check"></i>
+                  </div>
+                  <div>
+                    <p class="text-xs sm:text-sm font-extrabold text-emerald-900">
+                      “Sản phẩm chính hãng thuộc hệ tuần hoàn, đã được kiểm định từ vòng trước”
+                    </p>
+                    <p class="text-[11px] text-emerald-700 mt-0.5">
+                      Dữ liệu chất liệu & nguồn gốc được đồng bộ nguyên bản qua ${p.cycle} vòng đời sử dụng.
+                    </p>
+                  </div>
+                </div>
+              ` : `
+                <div class="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-gray-600 flex items-center gap-2">
+                  <i class="fa-solid fa-circle-check text-emerald-600"></i>
+                  <span>Sản phẩm vòng đời đầu tiên — Đã qua kiểm định hình ảnh AI RE:LOOP.</span>
+                </div>
+              `}
+
+              <!-- Price -->
+              <div class="flex items-baseline gap-3">
+                <span class="text-2xl font-extrabold text-gray-900">${formatVND(p.price)}</span>
+                <span class="text-sm text-gray-400 line-through">${formatVND(p.originalPrice)}</span>
+                <span class="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full">+${p.pointsReward} Điểm Xanh</span>
+              </div>
+
+              <!-- Specs Grid -->
+              <div class="grid grid-cols-2 gap-2.5 text-xs">
+                <div class="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                  <span class="text-gray-400 block">Kích cỡ</span>
+                  <strong class="text-gray-900">Size ${p.size}</strong>
+                </div>
+                <div class="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                  <span class="text-gray-400 block">Màu sắc</span>
+                  <strong class="text-gray-900">${p.color}</strong>
+                </div>
+                <div class="col-span-2 p-3 rounded-xl bg-slate-50 border border-slate-100">
+                  <span class="text-gray-400 block">Chất liệu</span>
+                  <strong class="text-gray-900">${p.material}</strong>
+                </div>
+              </div>
+
+              <!-- AI Inspection Note -->
+              <div class="p-3.5 rounded-2xl bg-brand-beige/80 border border-stone-200 text-xs space-y-1">
+                <p class="font-bold text-gray-900"><i class="fa-solid fa-wand-magic-sparkles text-emerald-600 mr-1.5"></i>Báo cáo kiểm định AI:</p>
+                <p class="text-gray-700 leading-relaxed">${p.aiNote}</p>
+              </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex flex-col sm:flex-row gap-2.5 pt-2">
+              <button onclick="closeModal('product-detail-modal'); openProductChat('${p.id}')" class="px-4 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-gray-900 text-xs font-bold transition flex items-center justify-center gap-2">
+                <i class="fa-solid fa-robot text-emerald-600"></i> Hỏi AI tư vấn size
+              </button>
+              <button onclick="addToCart('${p.id}'); closeModal('product-detail-modal')" class="flex-1 px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold shadow-sm transition flex items-center justify-center gap-2">
+                <i class="fa-solid fa-bag-shopping"></i> Thêm vào giỏ hàng
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+      document.getElementById('product-detail-modal').classList.remove('hidden');
+    }
+
+    function closeModal(modalId) {
+      document.getElementById(modalId).classList.add('hidden');
+    }
+
+    // ---------------------------------------------------------
+    // 5. AI VISUAL LISTING & AUTO-PRICING (TAB 2)
+    // ---------------------------------------------------------
+    function handleSellFileUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const randomPreset = aiSellSamples[Math.floor(Math.random() * aiSellSamples.length)];
+        runAIScanSimulation(e.target.result, {
+          ...randomPreset,
+          title: file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ') || randomPreset.title
+        });
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function triggerSampleAIScan(index) {
+      const sample = aiSellSamples[index];
+      runAIScanSimulation(sample.image, sample);
+    }
+
+    function runAIScanSimulation(imageSrc, extractedData) {
+      currentSellImage = imageSrc;
+      const placeholder = document.getElementById('sell-upload-placeholder');
+      const previewImg = document.getElementById('sell-preview-img');
+      const overlay = document.getElementById('sell-scan-overlay');
+      const statusText = document.getElementById('sell-scan-status');
+      const badge = document.getElementById('sell-ai-badge');
+
+      placeholder.classList.add('hidden');
+      previewImg.src = imageSrc;
+      previewImg.classList.remove('hidden');
+      overlay.classList.remove('hidden');
+
+      badge.className = 'px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-bold';
+      badge.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> AI đang phân tích...';
+
+      const steps = [
+        'AI đang nhận diện form dáng & danh mục...',
+        'Đang phân tích cấu trúc sợi vải & màu sắc...',
+        'Đánh giá độ mới & định giá thị trường...'
+      ];
+      let stepIdx = 0;
+      statusText.textContent = steps[0];
+
+      const interval = setInterval(() => {
+        stepIdx++;
+        if (stepIdx < steps.length) {
+          statusText.textContent = steps[stepIdx];
+        }
+      }, 550);
+
+      setTimeout(() => {
+        clearInterval(interval);
+        overlay.classList.add('hidden');
+
+        // Fill AI extracted values into the form
+        document.getElementById('sell-title').value = extractedData.title;
+        document.getElementById('sell-category').value = extractedData.category;
+        document.getElementById('sell-size').value = extractedData.size;
+        document.getElementById('sell-color').value = extractedData.color;
+        document.getElementById('sell-material').value = extractedData.material;
+        document.getElementById('sell-price').value = extractedData.price;
+
+        currentSellOriginalPrice = extractedData.originalPrice;
+        currentSellCondition = extractedData.condition;
+        currentSellConditionLabel = extractedData.conditionLabel;
+        currentSellConditionNote = extractedData.conditionNote;
+
+        document.getElementById('sell-condition-score').textContent = `${extractedData.condition}%`;
+        document.getElementById('sell-condition-label').textContent = extractedData.conditionLabel;
+        document.getElementById('sell-condition-note').textContent = extractedData.conditionNote;
+        document.getElementById('sell-original-price-hint').textContent = `Giá gốc tham chiếu thị trường: ${formatVND(extractedData.originalPrice)}`;
+
+        badge.className = 'px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold';
+        badge.innerHTML = '<i class="fa-solid fa-check mr-1"></i> Đã trích xuất tự động';
+
+        showToast('AI hoàn tất phân tích!', `Độ mới ${extractedData.condition}% • Đề xuất giá ${formatVND(extractedData.price)}`);
+      }, 1700);
+    }
+
+    function submitNewListing(event) {
+      event.preventDefault();
+      if (!state.currentUser) {
+        showToast('Yêu cầu đăng nhập', 'Vui lòng đăng nhập hoặc tạo tài khoản để đăng bán và nhận Điểm Xanh.', 'info');
+        openAuthModal('login');
+        return;
+      }
+      const title = document.getElementById('sell-title').value.trim();
+      const category = document.getElementById('sell-category').value;
+      const size = document.getElementById('sell-size').value;
+      const color = document.getElementById('sell-color').value.trim();
+      const material = document.getElementById('sell-material').value.trim();
+      const price = parseInt(document.getElementById('sell-price').value, 10) || 300000;
+
+      const imageToUse = currentSellImage || aiSellSamples[0].image;
+
+      const newProduct = {
+        id: 'p-' + Date.now(),
+        title,
+        category,
+        size,
+        color,
+        material,
+        condition: currentSellCondition,
+        conditionLabel: currentSellConditionLabel,
+        aiNote: currentSellConditionNote,
+        price,
+        originalPrice: Math.max(currentSellOriginalPrice, Math.round(price * 2.1)),
+        cycle: 1,
+        pointsReward: 75,
+        trend: 'Minimalist Thanh Lịch',
+        fitAdvice: `Kích cỡ ${size} tiêu chuẩn, phù hợp người mặc size ${size} thông thường.`,
+        image: imageToUse
+      };
+
+      state.products.unshift(newProduct);
+      state.greenPoints += 120;
+      state.co2Saved += 4.2;
+      state.waterSaved += 950;
+      state.pointsHistory.unshift({
+        id: Date.now(),
+        title: `Đăng bán AI: ${title}`,
+        delta: '+120',
+        type: 'earn',
+        date: 'Vừa xong'
+      });
+
+      updateHeaderAndStats();
+      showToast('Đăng bán thành công! (+120 Điểm Xanh)', `Sản phẩm "${title}" đã lên kệ gian hàng tuần hoàn.`);
+      switchTab('marketplace');
+    }
+
+    // ---------------------------------------------------------
+    // 6. DIGITAL WARDROBE & AI STYLIST (TAB 3)
+    // ---------------------------------------------------------
+    function filterWardrobe(cat) {
+      state.wardrobeFilter = cat;
+      document.querySelectorAll('.wardrobe-filter').forEach(btn => {
+        const active = (cat === 'all' && btn.textContent.trim() === 'Tất cả') || btn.textContent.trim() === cat;
+        btn.className = active
+          ? 'wardrobe-filter active px-3 py-1.5 rounded-xl text-xs font-semibold transition bg-gray-900 text-white'
+          : 'wardrobe-filter px-3 py-1.5 rounded-xl text-xs font-semibold transition bg-slate-100 hover:bg-slate-200 text-gray-700';
+      });
+      renderWardrobe();
+    }
+
+    function renderWardrobe() {
+      const grid = document.getElementById('wardrobe-grid');
+      const items = state.wardrobe.filter(w => state.wardrobeFilter === 'all' || w.category === state.wardrobeFilter);
+
+      if (items.length === 0) {
+        grid.innerHTML = `<p class="col-span-full text-xs text-gray-500 py-6 text-center">Chưa có sản phẩm thuộc nhóm này trong tủ đồ của bạn.</p>`;
+        return;
+      }
+
+      grid.innerHTML = items.map(item => `
+        <div class="p-3.5 rounded-2xl border border-slate-200/90 bg-slate-50/60 flex gap-3.5 items-center">
+          <img src="${item.image}" alt="${item.title}" onerror="this.onerror=null; this.src='https://placehold.co/200x240/F5F2EB/059669?text=${encodeURIComponent(item.category)}';" class="w-20 h-24 rounded-xl object-cover bg-brand-beige shrink-0" />
+          <div class="flex-1 min-w-0 space-y-1.5">
+            <div class="flex items-center gap-1.5">
+              <span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">Vòng #${item.cycle}</span>
+              <span class="text-[11px] text-gray-500">Size ${item.size}</span>
+            </div>
+            <h4 class="text-xs sm:text-sm font-bold text-gray-900 truncate">${item.title}</h4>
+            <p class="text-[11px] text-gray-500 truncate">${item.material}</p>
+            <div class="flex flex-wrap gap-1.5 pt-1">
+              <button onclick="selectAnchorForStylist('${item.id}')" class="px-2.5 py-1 rounded-lg bg-white hover:bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold transition">
+                <i class="fa-solid fa-wand-magic-sparkles mr-1"></i>Phối đồ
+              </button>
+              ${item.reconsigned ? `
+                <span class="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 text-[11px] font-semibold">Đã ký gửi lại</span>
+              ` : `
+                <button onclick="openReconsignModal('${item.id}')" class="px-2.5 py-1 rounded-lg bg-gray-900 hover:bg-gray-800 text-white text-[11px] font-semibold transition">
+                  Ký gửi lại
+                </button>
+              `}
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function setStylistTrend(trend) {
+      state.stylistTrend = trend;
+      document.querySelectorAll('.trend-pill').forEach(btn => {
+        const active = (trend === 'all' && btn.textContent.trim() === 'Tất cả xu hướng') || btn.textContent.trim() === trend;
+        btn.className = active
+          ? 'trend-pill active px-3.5 py-2 rounded-xl text-xs font-semibold transition bg-emerald-600 text-white'
+          : 'trend-pill px-3.5 py-2 rounded-xl text-xs font-semibold transition bg-white hover:bg-stone-100 text-gray-700 border border-stone-200';
+      });
+      renderStylistOutfits();
+    }
+
+    function selectAnchorForStylist(wardrobeId) {
+      state.stylistAnchorId = wardrobeId;
+      renderStylistOutfits();
+      document.getElementById('ai-stylist-section').scrollIntoView({ behavior: 'smooth' });
+      showToast('AI Stylist đã cập nhật', 'Đã tạo set đồ mới xoay quanh món đồ bạn chọn trong tủ.');
+    }
+
+    function renderStylistOutfits() {
+      const container = document.getElementById('stylist-outfits-grid');
+      if (state.wardrobe.length === 0) {
+        container.innerHTML = `<p class="text-xs text-gray-600">Hãy mua ít nhất 1 sản phẩm để AI bắt đầu gợi ý phối đồ từ tủ đồ của bạn.</p>`;
+        return;
+      }
+
+      const anchorItem = state.wardrobe.find(w => w.id === state.stylistAnchorId) || state.wardrobe[0];
+      document.getElementById('stylist-anchor-label').innerHTML = `
+        Đang phối cùng món có sẵn: <strong class="text-gray-900">${anchorItem.title}</strong> (trong tủ đồ của bạn)
+      `;
+
+      // Pair the anchor wardrobe item with complementary marketplace items
+      const complementaryCandidates = state.products.filter(p => p.category !== anchorItem.category);
+      const outfits = complementaryCandidates.slice(0, 4).map((marketItem, idx) => {
+        const trends = ['Minimalist Thanh Lịch', 'Công Sở Hiện Đại', 'Dạo Phố Cuối Tuần'];
+        const assignedTrend = marketItem.trend || trends[idx % trends.length];
+        return {
+          id: `outfit-${idx}`,
+          trend: assignedTrend,
+          wardrobeItem: anchorItem,
+          marketItem: marketItem,
+          stylistReason: `Sự kết hợp giữa <strong>${anchorItem.title}</strong> (${anchorItem.color}) có sẵn trong tủ đồ của bạn cùng <strong>${marketItem.title}</strong> (${marketItem.material}) tạo tổng thể cân đối, hợp xu hướng ${assignedTrend}.`
+        };
+      }).filter(o => state.stylistTrend === 'all' || o.trend === state.stylistTrend);
+
+      if (outfits.length === 0) {
+        container.innerHTML = `<div class="col-span-full bg-white/80 p-6 rounded-2xl text-center text-xs text-gray-600">Chưa có set phối đồ nào thuộc phong cách này. Hãy chọn "Tất cả xu hướng" để xem thêm gợi ý từ AI!</div>`;
+        return;
+      }
+
+      container.innerHTML = outfits.map(outfit => `
+        <div class="bg-white rounded-3xl p-5 border border-stone-200/90 shadow-xs flex flex-col justify-between space-y-4">
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="px-3 py-1 rounded-full bg-brand-beige text-gray-800 text-[11px] font-bold">
+                Xu hướng: ${outfit.trend}
+              </span>
+              <span class="text-[11px] font-semibold text-emerald-700">
+                <i class="fa-solid fa-leaf mr-1"></i>Tiết kiệm 1 món mới
+              </span>
+            </div>
+
+            <!-- Visual Side-by-Side Combo -->
+            <div class="grid grid-cols-2 gap-3 items-stretch">
+              <!-- Item 1: Already in User's Wardrobe -->
+              <div class="p-2.5 rounded-2xl bg-emerald-50/70 border border-emerald-200 flex flex-col justify-between">
+                <div class="relative aspect-square rounded-xl overflow-hidden bg-white mb-2">
+                  <img src="${outfit.wardrobeItem.image}" onerror="this.onerror=null; this.src='https://placehold.co/300x300/ECFDF5/059669?text=Tu+Do';" class="w-full h-full object-cover" alt="${outfit.wardrobeItem.title}" />
+                  <span class="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-md bg-emerald-600 text-white text-[10px] font-bold">
+                    Có sẵn trong tủ
+                  </span>
+                </div>
+                <div>
+                  <p class="text-xs font-bold text-gray-900 line-clamp-1">${outfit.wardrobeItem.title}</p>
+                  <p class="text-[11px] text-emerald-800 font-semibold mt-0.5">0đ (Đồ của bạn)</p>
+                </div>
+              </div>
+
+              <!-- Item 2: Suggested Missing Piece from Marketplace -->
+              <div class="p-2.5 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col justify-between">
+                <div class="relative aspect-square rounded-xl overflow-hidden bg-white mb-2">
+                  <img src="${outfit.marketItem.image}" onerror="this.onerror=null; this.src='https://placehold.co/300x300/F5F2EB/059669?text=Goi+Y';" class="w-full h-full object-cover" alt="${outfit.marketItem.title}" />
+                  <span class="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-md bg-gray-900 text-white text-[10px] font-bold">
+                    Gợi ý trên sàn
+                  </span>
+                </div>
+                <div>
+                  <p class="text-xs font-bold text-gray-900 line-clamp-1">${outfit.marketItem.title}</p>
+                  <p class="text-[11px] text-gray-900 font-extrabold mt-0.5">${formatVND(outfit.marketItem.price)} <span class="font-normal text-gray-500">• Mới ${outfit.marketItem.condition}%</span></p>
+                </div>
+              </div>
+            </div>
+
+            <p class="text-xs text-gray-600 leading-relaxed bg-slate-50 p-3 rounded-xl">
+              <i class="fa-solid fa-sparkles text-emerald-600 mr-1"></i>${outfit.stylistReason}
+            </p>
+          </div>
+
+          <button onclick="addToCart('${outfit.marketItem.id}')" class="w-full py-2.5 px-4 rounded-xl bg-gray-900 hover:bg-emerald-600 text-white text-xs font-bold transition flex items-center justify-center gap-2">
+            <i class="fa-solid fa-bag-shopping"></i> Thêm món còn thiếu vào giỏ (${formatVND(outfit.marketItem.price)})
+          </button>
+        </div>
+      `).join('');
+    }
+
+    // ---------------------------------------------------------
+    // 7. PURCHASED ORDERS & 1-CLICK RE-CONSIGNMENT (TAB 4)
+    // ---------------------------------------------------------
+    let activeReconsignItemId = null;
+    let reconsignPhotoUploaded = false;
+    let reconsignNewImage = '';
+
+    function renderPurchasedOrders() {
+      const container = document.getElementById('purchased-orders-list');
+      container.innerHTML = state.wardrobe.map(item => `
+        <div class="bg-white p-5 rounded-3xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div class="flex items-center gap-4">
+            <img src="${item.image}" alt="${item.title}" onerror="this.onerror=null; this.src='https://placehold.co/200x240/F5F2EB/059669?text=${encodeURIComponent(item.category)}';" class="w-20 h-24 rounded-2xl object-cover bg-brand-beige shrink-0" />
+            <div class="space-y-1">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold">
+                  Đã mua ngày ${item.purchasedDate}
+                </span>
+                <span class="px-2.5 py-0.5 rounded-full bg-slate-100 text-gray-700 text-[11px] font-semibold">
+                  Vòng đời #${item.cycle}
+                </span>
+              </div>
+              <h3 class="text-base font-extrabold text-gray-900">${item.title}</h3>
+              <p class="text-xs text-gray-500">${item.category} • Màu: ${item.color} • Chất liệu: ${item.material} • Size ${item.size}</p>
+              <p class="text-xs font-semibold text-gray-700">Giá đã mua: ${formatVND(item.paidPrice)}</p>
+            </div>
+          </div>
+
+          <div class="flex sm:flex-col items-center sm:items-end justify-between gap-2 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+            ${item.reconsigned ? `
+              <span class="px-4 py-2 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold flex items-center gap-1.5">
+                <i class="fa-solid fa-circle-check text-emerald-600"></i> Đang ký gửi trên sàn (Vòng #${item.cycle + 1})
+              </span>
+            ` : `
+              <button onclick="openReconsignModal('${item.id}')" class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold shadow-sm transition flex items-center gap-2">
+                <i class="fa-solid fa-rotate"></i> Ký gửi lại
+              </button>
+              <span class="text-[11px] text-gray-400">Không cần nhập lại thông tin</span>
+            `}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function openReconsignModal(wardrobeItemId) {
+      if (!state.currentUser) {
+        showToast('Yêu cầu đăng nhập', 'Vui lòng đăng nhập để sử dụng tính năng Ký gửi lại 1 chạm.', 'info');
+        openAuthModal('login');
+        return;
+      }
+      const item = state.wardrobe.find(w => w.id === wardrobeItemId);
+      if (!item) return;
+
+      activeReconsignItemId = wardrobeItemId;
+      reconsignPhotoUploaded = false;
+      reconsignNewImage = item.image;
+
+      const nextCycle = item.cycle + 1;
+      const estimatedCondition = Math.max(84, 95 - nextCycle * 3);
+      const suggestedResalePrice = Math.round((item.paidPrice * 0.78) / 10000) * 10000;
+
+      const body = document.getElementById('reconsign-modal-body');
+      body.innerHTML = `
+        <!-- Auto-Synced Metadata from Previous Seller -->
+        <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-extrabold text-gray-900 flex items-center gap-1.5">
+              <i class="fa-solid fa-link text-emerald-600"></i> Dữ liệu gốc đã đồng bộ tự động
+            </span>
+            <span class="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full">
+              Không cần nhập lại
+            </span>
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+            <div class="bg-white p-2.5 rounded-xl border border-slate-100">
+              <span class="text-gray-400 block text-[10px]">Tên sản phẩm</span>
+              <strong class="text-gray-800 line-clamp-1">${item.title}</strong>
+            </div>
+            <div class="bg-white p-2.5 rounded-xl border border-slate-100">
+              <span class="text-gray-400 block text-[10px]">Loại / Size</span>
+              <strong class="text-gray-800">${item.category} • ${item.size}</strong>
+            </div>
+            <div class="bg-white p-2.5 rounded-xl border border-slate-100">
+              <span class="text-gray-400 block text-[10px]">Màu sắc</span>
+              <strong class="text-gray-800">${item.color}</strong>
+            </div>
+            <div class="bg-white p-2.5 rounded-xl border border-slate-100">
+              <span class="text-gray-400 block text-[10px]">Chất liệu</span>
+              <strong class="text-gray-800 line-clamp-1">${item.material}</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 2: Upload 1-2 Current Photos -->
+        <div class="space-y-2">
+          <label class="block text-xs font-bold text-gray-900">
+            Bước duy nhất: Cung cấp 1–2 ảnh tình trạng hiện tại của áo <span class="text-rose-500">*</span>
+          </label>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label class="cursor-pointer p-4 rounded-2xl border-2 border-dashed border-slate-300 hover:border-emerald-500 bg-slate-50 flex flex-col items-center justify-center text-center gap-1.5 transition">
+              <i class="fa-solid fa-camera text-emerald-600 text-lg"></i>
+              <span class="text-xs font-bold text-gray-800">Tải lên 1–2 ảnh thực tế</span>
+              <span class="text-[11px] text-gray-500">Chụp mặt trước & tem/cổ áo</span>
+              <input type="file" accept="image/*" multiple class="hidden" onchange="handleReconsignPhotoSelect(event, ${estimatedCondition}, ${suggestedResalePrice})" />
+            </label>
+
+            <button type="button" onclick="simulateReconsignPhoto(${estimatedCondition}, ${suggestedResalePrice})" class="p-4 rounded-2xl border border-emerald-200 bg-emerald-50/70 hover:bg-emerald-100/70 flex flex-col items-center justify-center text-center gap-1.5 transition">
+              <i class="fa-solid fa-wand-magic-sparkles text-emerald-700 text-lg"></i>
+              <span class="text-xs font-bold text-emerald-900">Dùng ảnh chụp nhanh (Demo)</span>
+              <span class="text-[11px] text-emerald-700">Mô phỏng tải 2 ảnh hiện tại để AI chấm điểm</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- AI Lifecycle Re-valuation Result Box -->
+        <div id="reconsign-ai-result" class="hidden p-4 rounded-2xl bg-emerald-50 border border-emerald-300 space-y-3 animate-fade-up">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-extrabold text-emerald-900">
+              <i class="fa-solid fa-robot mr-1.5"></i>AI Định giá theo Tình trạng & Số vòng đời
+            </span>
+            <span class="px-2.5 py-0.5 rounded-full bg-emerald-600 text-white text-[11px] font-bold">
+              Vòng đời thứ ${nextCycle}
+            </span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div class="bg-white p-3 rounded-xl">
+              <span class="text-[11px] text-gray-500 block">Độ mới hiện tại</span>
+              <strong class="text-lg font-extrabold text-emerald-700">${estimatedCondition}% (Rất tốt)</strong>
+            </div>
+            <div class="bg-white p-3 rounded-xl">
+              <span class="text-[11px] text-gray-500 block">Giá ký gửi AI đề xuất</span>
+              <strong class="text-lg font-extrabold text-gray-900">${formatVND(suggestedResalePrice)}</strong>
+            </div>
+          </div>
+
+          <div class="p-3 rounded-xl bg-white/90 border border-emerald-200 text-xs text-emerald-900 font-semibold flex items-start gap-2">
+            <i class="fa-solid fa-shield-check text-emerald-600 mt-0.5"></i>
+            <span>Nhãn xác thực tự động gắn trên gian hàng: <strong>“Sản phẩm chính hãng thuộc hệ tuần hoàn, đã được kiểm định từ vòng trước”</strong></span>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
+          <button onclick="closeModal('reconsign-modal')" class="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-gray-700 text-xs font-bold">
+            Hủy
+          </button>
+          <button id="confirm-reconsign-btn" disabled onclick="confirmReconsignment(${nextCycle}, ${estimatedCondition}, ${suggestedResalePrice})" class="px-5 py-2.5 rounded-xl bg-emerald-600 disabled:bg-slate-300 disabled:cursor-not-allowed hover:bg-emerald-700 text-white text-xs font-bold transition flex items-center gap-1.5">
+            <i class="fa-solid fa-check"></i> Xác nhận Ký gửi lại (+150 ĐX)
+          </button>
+        </div>
+      `;
+
+      document.getElementById('reconsign-modal').classList.remove('hidden');
+    }
+
+    function handleReconsignPhotoSelect(event, condition, price) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        reconsignNewImage = e.target.result;
+        activateReconsignAIResult(condition, price);
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function simulateReconsignPhoto(condition, price) {
+      activateReconsignAIResult(condition, price);
+    }
+
+    function activateReconsignAIResult(condition, price) {
+      reconsignPhotoUploaded = true;
+      document.getElementById('reconsign-ai-result').classList.remove('hidden');
+      document.getElementById('confirm-reconsign-btn').disabled = false;
+      showToast('AI đã quét ảnh hiện tại', `Tính toán độ mới ${condition}% & định giá tuần hoàn ${formatVND(price)}.`);
+    }
+
+    function confirmReconsignment(nextCycle, condition, resalePrice) {
+      if (!reconsignPhotoUploaded || !activeReconsignItemId) return;
+      const item = state.wardrobe.find(w => w.id === activeReconsignItemId);
+      if (!item) return;
+
+      item.reconsigned = true;
+
+      // Publish to Marketplace with Cycle >= 2 and verified circular badge!
+      const circularProduct = {
+        id: 'p-circ-' + Date.now(),
+        title: item.title,
+        category: item.category,
+        size: item.size,
+        color: item.color,
+        material: item.material,
+        condition: condition,
+        conditionLabel: 'Rất tốt',
+        aiNote: `Đã qua kiểm định thực tế vòng đời #${nextCycle}. Chất liệu ${item.material} giữ form ổn định, đường may bền chắc.`,
+        price: resalePrice,
+        originalPrice: item.originalPrice,
+        cycle: nextCycle,
+        pointsReward: 85,
+        trend: 'Minimalist Thanh Lịch',
+        fitAdvice: `Kích cỡ ${item.size} chuẩn form như vòng trước.`,
+        image: reconsignNewImage || item.image
+      };
+
+      state.products.unshift(circularProduct);
+      state.greenPoints += 150;
+      state.co2Saved += 4.8;
+      state.waterSaved += 1100;
+      state.pointsHistory.unshift({
+        id: Date.now(),
+        title: `Ký gửi lại 1 chạm: ${item.title} (Vòng #${nextCycle})`,
+        delta: '+150',
+        type: 'earn',
+        date: 'Vừa xong'
+      });
+
+      updateHeaderAndStats();
+      closeModal('reconsign-modal');
+      renderPurchasedOrders();
+      showToast('Ký gửi tuần hoàn thành công! (+150 Điểm Xanh)', `"${item.title}" đã lên sàn với nhãn kiểm định từ vòng trước.`);
+      switchTab('marketplace');
+    }
+
+    // ---------------------------------------------------------
+    // 8. CART & CHECKOUT (AUTOMATICALLY SAVES TO DIGITAL WARDROBE)
+    // ---------------------------------------------------------
+    function toggleCartDrawer(open) {
+      const drawer = document.getElementById('cart-drawer');
+      drawer.classList.toggle('hidden', !open);
+      if (open) renderCart();
+    }
+
+    function addToCart(productId) {
+      if (state.cart.includes(productId)) {
+        showToast('Sản phẩm đã có trong giỏ', 'Mỗi món đồ tuần hoàn là phiên bản duy nhất.', 'info');
+        toggleCartDrawer(true);
+        return;
+      }
+      state.cart.push(productId);
+      updateHeaderAndStats();
+      const p = state.products.find(item => item.id === productId);
+      showToast('Đã thêm vào giỏ hàng', p ? p.title : 'Sản phẩm tuần hoàn');
+    }
+
+    function removeFromCart(productId) {
+      state.cart = state.cart.filter(id => id !== productId);
+      updateHeaderAndStats();
+      renderCart();
+    }
+
+    function renderCart() {
+      const container = document.getElementById('cart-items-container');
+      const voucherSelect = document.getElementById('cart-voucher-select');
+
+      // Populate available unused vouchers
+      const availableVouchers = state.vouchers.filter(v => !v.used);
+      const currentSelectedVal = voucherSelect.value;
+      voucherSelect.innerHTML = `<option value="0">Không áp dụng mã giảm giá</option>` +
+        availableVouchers.map(v => `<option value="${v.amount}" ${String(v.amount) === currentSelectedVal ? 'selected' : ''}>Mã ${v.code} — Giảm ${formatVND(v.amount)}</option>`).join('');
+
+      if (state.cart.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-12 space-y-2">
+            <i class="fa-solid fa-bag-shopping text-3xl text-slate-300"></i>
+            <p class="text-sm font-bold text-gray-800">Giỏ hàng đang trống</p>
+            <p class="text-xs text-gray-500">Khám phá các món đồ tuần hoàn hoặc xem gợi ý phối đồ AI nhé!</p>
+          </div>
+        `;
+        document.getElementById('cart-subtotal').textContent = '0đ';
+        document.getElementById('cart-discount').textContent = '-0đ';
+        document.getElementById('cart-total').textContent = '0đ';
+        return;
+      }
+
+      let subtotal = 0;
+      container.innerHTML = state.cart.map(id => {
+        const p = state.products.find(item => item.id === id);
+        if (!p) return '';
+        subtotal += p.price;
+        return `
+          <div class="flex gap-3.5 p-3 rounded-2xl bg-slate-50 border border-slate-200/80 items-center">
+            <img src="${p.image}" onerror="this.onerror=null; this.src='https://placehold.co/150x180/F5F2EB/059669?text=Item';" class="w-16 h-20 rounded-xl object-cover bg-brand-beige shrink-0" alt="${p.title}" />
+            <div class="flex-1 min-w-0">
+              <p class="text-xs font-bold text-gray-900 truncate">${p.title}</p>
+              <p class="text-[11px] text-gray-500">Size ${p.size} • Vòng #${p.cycle} • +${p.pointsReward} ĐX</p>
+              <p class="text-sm font-extrabold text-emerald-700 mt-1">${formatVND(p.price)}</p>
+            </div>
+            <button onclick="removeFromCart('${p.id}')" class="p-2 text-gray-400 hover:text-rose-600 transition" title="Xóa">
+              <i class="fa-solid fa-trash-can text-xs"></i>
+            </button>
+          </div>
+        `;
+      }).join('');
+
+      const discount = Math.min(subtotal, parseInt(voucherSelect.value, 10) || 0);
+      const total = Math.max(0, subtotal - discount);
+
+      document.getElementById('cart-subtotal').textContent = formatVND(subtotal);
+      document.getElementById('cart-discount').textContent = '-' + formatVND(discount);
+      document.getElementById('cart-total').textContent = formatVND(total);
+    }
+
+    function checkoutCart() {
+      if (!state.currentUser) {
+        toggleCartDrawer(false);
+        showToast('Đăng nhập để lưu vào Tủ đồ AI', 'Tạo tài khoản hoặc đăng nhập để tự động lưu trang phục vào Tủ đồ số và tích Điểm Xanh.', 'info');
+        openAuthModal('login');
+        return;
+      }
+      if (state.cart.length === 0) {
+        showToast('Giỏ hàng trống', 'Vui lòng chọn ít nhất 1 sản phẩm trước khi thanh toán.', 'info');
+        return;
+      }
+
+      const discountApplied = parseInt(document.getElementById('cart-voucher-select').value, 10) || 0;
+      if (discountApplied > 0) {
+        const usedVoucher = state.vouchers.find(v => !v.used && v.amount === discountApplied);
+        if (usedVoucher) usedVoucher.used = true;
+      }
+
+      let earnedPoints = 0;
+      const boughtTitles = [];
+
+      // Automatically add purchased items to Digital Wardrobe & remove from active marketplace stock
+      state.cart.forEach(id => {
+        const pIndex = state.products.findIndex(item => item.id === id);
+        if (pIndex !== -1) {
+          const p = state.products[pIndex];
+          earnedPoints += p.pointsReward;
+          boughtTitles.push(p.title);
+
+          state.wardrobe.unshift({
+            id: 'w-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+            title: p.title,
+            category: p.category,
+            size: p.size,
+            color: p.color,
+            material: p.material,
+            cycle: p.cycle,
+            purchasedDate: 'Hôm nay',
+            reconsigned: false,
+            originalPrice: p.originalPrice,
+            paidPrice: p.price,
+            image: p.image
+          });
+
+          state.products.splice(pIndex, 1);
+        }
+      });
+
+      state.cart = [];
+      state.greenPoints += earnedPoints;
+      state.co2Saved += boughtTitles.length * 3.6;
+      state.waterSaved += boughtTitles.length * 850;
+      state.pointsHistory.unshift({
+        id: Date.now(),
+        title: `Mua ${boughtTitles.length} sản phẩm tuần hoàn`,
+        delta: `+${earnedPoints}`,
+        type: 'earn',
+        date: 'Vừa xong'
+      });
+
+      updateHeaderAndStats();
+      toggleCartDrawer(false);
+      showToast(
+        `Thanh toán thành công! (+${earnedPoints} Điểm Xanh)`,
+        'AI đã tự động lưu sản phẩm vào "Tủ đồ của tôi" để bạn phối đồ hoặc ký gửi lại sau này.'
+      );
+      switchTab('wardrobe');
+    }
+
+    // ---------------------------------------------------------
+    // 9. GREEN POINTS REDEMPTION & CHARITY DONATIONS (TAB 5)
+    // ---------------------------------------------------------
+    function renderPointsTab() {
+      updateHeaderAndStats();
+
+      // Render active vouchers
+      const voucherContainer = document.getElementById('user-vouchers-badges');
+      const unused = state.vouchers.filter(v => !v.used);
+      if (unused.length === 0) {
+        voucherContainer.innerHTML = `<span class="text-xs text-gray-400 italic">Chưa có mã — Đổi ngay bên dưới</span>`;
+      } else {
+        voucherContainer.innerHTML = unused.map(v => `
+          <span class="px-2.5 py-1 rounded-lg bg-amber-100 text-amber-900 text-xs font-bold border border-amber-200">
+            <i class="fa-solid fa-ticket mr-1"></i>${v.code} (-${formatVND(v.amount)})
+          </span>
+        `).join('');
+      }
+
+      // Render Charity Projects
+      const charityList = document.getElementById('charity-projects-list');
+      charityList.innerHTML = state.charityProjects.map(proj => {
+        const pct = Math.min(100, Math.round((proj.raisedVnd / proj.goalVnd) * 100));
+        return `
+          <div class="p-4 rounded-2xl border border-slate-200 hover:border-emerald-400 transition space-y-2.5">
+            <div class="flex items-start justify-between gap-3">
+              <div class="flex items-start gap-2.5">
+                <div class="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5">
+                  <i class="fa-solid ${proj.icon}"></i>
+                </div>
+                <div>
+                  <h4 class="text-sm font-bold text-gray-900">${proj.name}</h4>
+                  <p class="text-xs text-gray-500">${proj.desc}</p>
+                </div>
+              </div>
+              <button onclick="donatePointsToCharity('${proj.id}', 100, 25000)" class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shrink-0 transition">
+                Góp 100 ĐX (25.000đ)
+              </button>
+            </div>
+            <div>
+              <div class="flex justify-between text-[11px] font-semibold text-gray-600 mb-1">
+                <span>Đã quyên góp: <strong class="text-emerald-700">${formatVND(proj.raisedVnd)}</strong></span>
+                <span>Mục tiêu: ${formatVND(proj.goalVnd)} (${pct}%)</span>
+              </div>
+              <div class="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
+                <div class="h-full bg-emerald-500 rounded-full transition-all duration-500" style="width: ${pct}%"></div>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      // Render Ledger
+      const historyList = document.getElementById('points-history-list');
+      historyList.innerHTML = state.pointsHistory.map(h => `
+        <div class="py-3 flex items-center justify-between gap-2">
+          <div>
+            <p class="text-xs sm:text-sm font-semibold text-gray-900">${h.title}</p>
+            <p class="text-[11px] text-gray-400">${h.date}</p>
+          </div>
+          <span class="text-xs sm:text-sm font-extrabold ${h.type === 'earn' ? 'text-emerald-600' : 'text-amber-700'}">
+            ${h.delta} ĐX
+          </span>
+        </div>
+      `).join('');
+    }
+
+    function redeemVoucher(costPoints, discountVnd, codePrefix) {
+      if (state.greenPoints < costPoints) {
+        showToast('Chưa đủ Điểm Xanh', `Bạn cần ${costPoints} Điểm Xanh để đổi ưu đãi này.`, 'info');
+        return;
+      }
+
+      state.greenPoints -= costPoints;
+      const code = `${codePrefix}-${Math.floor(100 + Math.random() * 900)}`;
+      state.vouchers.push({ code, amount: discountVnd, used: false });
+      state.pointsHistory.unshift({
+        id: Date.now(),
+        title: `Đổi Voucher giảm ${formatVND(discountVnd)} (${code})`,
+        delta: `-${costPoints}`,
+        type: 'spend',
+        date: 'Vừa xong'
+      });
+
+      renderPointsTab();
+      showToast('Đổi Voucher thành công!', `Mã ${code} (-${formatVND(discountVnd)}) đã sẵn sàng dùng trong Giỏ hàng.`);
+    }
+
+    function donatePointsToCharity(projectId, costPoints, cashVnd) {
+      if (state.greenPoints < costPoints) {
+        showToast('Chưa đủ Điểm Xanh', `Bạn cần tối thiểu ${costPoints} Điểm Xanh để quy đổi đóng góp.`, 'info');
+        return;
+      }
+
+      const proj = state.charityProjects.find(c => c.id === projectId);
+      if (!proj) return;
+
+      state.greenPoints -= costPoints;
+      state.donatedVnd += cashVnd;
+      proj.raisedVnd += cashVnd;
+      state.pointsHistory.unshift({
+        id: Date.now(),
+        title: `Quy đổi hiện kim (${formatVND(cashVnd)}) góp "${proj.name}"`,
+        delta: `-${costPoints}`,
+        type: 'spend',
+        date: 'Vừa xong'
+      });
+
+      renderPointsTab();
+      showToast('Cảm ơn tấm lòng Sống Xanh!', `Bạn đã quy đổi ${costPoints} ĐX thành ${formatVND(cashVnd)} ủng hộ ${proj.name}.`);
+    }
+
+    function openCertificateModal() {
+      updateHeaderAndStats();
+      document.getElementById('certificate-modal').classList.remove('hidden');
+    }
+
+    // ---------------------------------------------------------
+    // 10. AI CHATBOT ASSISTANT (FLOATING WIDGET)
+    // ---------------------------------------------------------
+    function toggleChatbot(forceOpen) {
+      const win = document.getElementById('ai-chat-window');
+      if (typeof forceOpen === 'boolean') {
+        win.classList.toggle('hidden', !forceOpen);
+      } else {
+        win.classList.toggle('hidden');
+      }
+      if (!state.activeChatProduct && state.products.length > 0) {
+        state.activeChatProduct = state.products[0];
+        document.getElementById('chat-context-product').textContent = state.activeChatProduct.title;
+      }
+    }
+
+    function openProductChat(productId) {
+      const p = state.products.find(item => item.id === productId);
+      if (p) {
+        state.activeChatProduct = p;
+        document.getElementById('chat-context-product').textContent = p.title;
+      }
+      toggleChatbot(true);
+      appendChatMessage('ai', `Mình đã mở thông tin của <strong>${p.title}</strong> (Size ${p.size}, độ mới ${p.condition}%). Bạn muốn hỏi gì về mẫu này ạ?`);
+    }
+
+    function appendChatMessage(sender, htmlText) {
+      const container = document.getElementById('chat-messages');
+      const div = document.createElement('div');
+      if (sender === 'user') {
+        div.className = 'flex justify-end';
+        div.innerHTML = `
+          <div class="bg-gray-900 text-white rounded-2xl rounded-tr-none px-3.5 py-2.5 max-w-[82%] shadow-2xs leading-relaxed">
+            ${htmlText}
+          </div>
+        `;
+      } else {
+        div.className = 'flex items-start gap-2';
+        div.innerHTML = `
+          <div class="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0 text-[10px] mt-0.5">
+            <i class="fa-solid fa-robot"></i>
+          </div>
+          <div class="bg-white border border-slate-200 rounded-2xl rounded-tl-none px-3.5 py-2.5 text-gray-800 max-w-[85%] shadow-2xs leading-relaxed">
+            ${htmlText}
+          </div>
+        `;
+      }
+      container.appendChild(div);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function generateAIResponse(question) {
+      const p = state.activeChatProduct || state.products[0];
+      const q = question.toLowerCase();
+
+      if (q.includes('1m65') || q.includes('55kg') || q.includes('vừa') || q.includes('size')) {
+        if (state.currentUser && state.currentUser.height && state.currentUser.weight) {
+          return `Dựa trên hồ sơ của <strong>${state.currentUser.name} (${state.currentUser.height}cm, ${state.currentUser.weight}kg)</strong>, mẫu <strong>${p.title} (Size ${p.size})</strong> rất cân đối với vóc dáng của bạn! ${p.fitAdvice}`;
+        }
+        return `Với chiều cao <strong>1m65, nặng 55kg</strong>, mẫu <strong>${p.title} (Size ${p.size})</strong> rất phù hợp với bạn! ${p.fitAdvice}`;
+      }
+      if (q.includes('tình trạng') || q.includes('chất liệu') || q.includes('vải')) {
+        return `Sản phẩm <strong>${p.title}</strong> đạt độ mới <strong>${p.condition}% (${p.conditionLabel})</strong>, chất liệu <strong>${p.material}</strong>. Báo cáo AI: <em>"${p.aiNote}"</em>`;
+      }
+      if (q.includes('kiểm định') || q.includes('tuần hoàn') || q.includes('vòng')) {
+        return `Mọi sản phẩm trên <strong>RE:LOOP</strong> đều trải qua 42 điểm quét AI về bề mặt vải, đường may và độ bền màu. Đặc biệt, các sản phẩm từ vòng đời 2 trở đi được đồng bộ dữ liệu gốc và gắn nhãn <em>“Sản phẩm chính hãng thuộc hệ tuần hoàn, đã được kiểm định từ vòng trước”</em>.`;
+      }
+      if (q.includes('đổi trả') || q.includes('điểm xanh') || q.includes('tích điểm')) {
+        return `Bạn được kiểm tra hàng khi nhận và hỗ trợ đổi trả trong <strong>7 ngày</strong> nếu không đúng mô tả AI. Khi mua mẫu này bạn nhận ngay <strong>+${p.pointsReward} Điểm Xanh</strong> để đổi voucher giảm giá hoặc quy đổi hiện kim góp quỹ bảo vệ môi trường!`;
+      }
+      return `Cảm ơn bạn! Với <strong>${p.title}</strong> (giá ${formatVND(p.price)}, độ mới ${p.condition}%), sản phẩm đã sẵn sàng giao nhanh và tự động lưu vào <strong>Tủ đồ AI</strong> của bạn sau khi mua để bạn dễ dàng phối đồ hoặc ký gửi lại sau này.`;
+    }
+
+    function askSuggestedQuestion(question) {
+      appendChatMessage('user', question);
+      setTimeout(() => {
+        appendChatMessage('ai', generateAIResponse(question));
+      }, 420);
+    }
+
+    function handleCustomChatSubmit(event) {
+      event.preventDefault();
+      const input = document.getElementById('chat-custom-input');
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = '';
+      appendChatMessage('user', text);
+      setTimeout(() => {
+        appendChatMessage('ai', generateAIResponse(text));
+      }, 450);
+    }
+
+    // ---------------------------------------------------------
+    // 11. INITIALIZATION ON PAGE LOAD
+    // ---------------------------------------------------------
+    window.addEventListener('DOMContentLoaded', () => {
+      renderHeaderAuth();
+      updateHeaderAndStats();
+      setCategoryFilter('all');
+      switchTab('marketplace');
+
+      // Close user profile dropdown when clicking outside
+      document.addEventListener('click', (e) => {
+        const dropdown = document.getElementById('user-profile-dropdown');
+        const trigger = document.getElementById('user-menu-trigger');
+        if (dropdown && !dropdown.classList.contains('hidden') && !dropdown.contains(e.target) && (!trigger || !trigger.contains(e.target))) {
+          dropdown.classList.add('hidden');
+        }
+      });
+    });
+  </script>
+</body>
+</html>
