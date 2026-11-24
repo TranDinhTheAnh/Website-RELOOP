@@ -880,10 +880,33 @@ async def ai_analyze_garment(
         with urllib.request.urlopen(request, timeout=30) as response:
             gemini_response = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as error:
-        logger.error("Gemini garment analysis failed with HTTP %s.", error.code)
+        try:
+            error_body = json.loads(error.read(4096).decode("utf-8", errors="replace"))
+            provider_error = error_body.get("error", {})
+            provider_status = str(provider_error.get("status", ""))
+            provider_message = str(provider_error.get("message", ""))
+        except (json.JSONDecodeError, AttributeError, TypeError):
+            provider_status = ""
+            provider_message = ""
+        if GEMINI_API_KEY:
+            provider_message = provider_message.replace(GEMINI_API_KEY, "[redacted]")
+        provider_message = provider_message[:300]
+        logger.error(
+            "Gemini garment analysis failed with HTTP %s (%s): %s",
+            error.code,
+            provider_status or "unknown status",
+            provider_message or "no provider message",
+        )
+        detail = f"Gemini API trả lỗi HTTP {error.code}"
+        if provider_status:
+            detail += f" ({provider_status})"
+        if provider_message:
+            detail += f": {provider_message}"
+        else:
+            detail += ". Hãy kiểm tra API key, quyền truy cập và quota."
         raise HTTPException(
             status_code=502,
-            detail="Dịch vụ AI từ chối phân tích ảnh. Hãy kiểm tra API key/quota rồi thử lại.",
+            detail=detail,
         ) from error
     except (urllib.error.URLError, TimeoutError) as error:
         logger.error("Could not reach Gemini for garment analysis: %s", error)
