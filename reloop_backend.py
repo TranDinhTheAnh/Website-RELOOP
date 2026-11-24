@@ -17,6 +17,9 @@ import random
 import hashlib
 import secrets
 import sqlite3
+import html
+import logging
+import urllib.error
 import urllib.request
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
@@ -33,6 +36,51 @@ from pydantic import BaseModel, Field
 DB_PATH = os.getenv("RELOOP_DB_PATH", "reloop_circular.db")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")  # Tùy chọn: gắn API key thật nếu có
 CIRCULAR_BADGE_TEXT = "Sản phẩm chính hãng thuộc hệ tuần hoàn, đã được kiểm định từ vòng trước"
+logger = logging.getLogger(__name__)
+
+
+def send_welcome_email(name: str, email: str) -> tuple[bool, Optional[str]]:
+    api_key = os.getenv("RESEND_API_KEY", "").strip()
+    from_email = os.getenv("RESEND_FROM_EMAIL", "").strip()
+    if not api_key or not from_email:
+        logger.warning("Welcome email not sent because Resend is not configured.")
+        return False, "Chưa cấu hình Resend để gửi email chào mừng."
+
+    safe_name = html.escape(name)
+    email_payload = {
+        "from": from_email,
+        "to": [email],
+        "subject": "Chào mừng bạn đến với RE:LOOP",
+        "html": (
+            f"<p>Xin chào {safe_name},</p>"
+            "<p>Tài khoản RE:LOOP của bạn đã được tạo thành công.</p>"
+            "<p>Cảm ơn bạn đã tham gia thời trang tuần hoàn cùng chúng tôi!</p>"
+        ),
+        "text": (
+            f"Xin chào {name},\n\n"
+            "Tài khoản RE:LOOP của bạn đã được tạo thành công.\n"
+            "Cảm ơn bạn đã tham gia thời trang tuần hoàn cùng chúng tôi!"
+        ),
+    }
+    request = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=json.dumps(email_payload).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=10):
+            return True, None
+    except urllib.error.HTTPError as error:
+        logger.error("Resend rejected welcome email with HTTP %s.", error.code)
+        return False, "Không gửi được email chào mừng. Kiểm tra cấu hình Resend và địa chỉ gửi đã xác minh."
+    except (urllib.error.URLError, TimeoutError) as error:
+        logger.error("Could not reach Resend to send welcome email: %s", error)
+        return False, "Không kết nối được dịch vụ gửi email Resend."
 
 app = FastAPI(
     title="RE:LOOP Circular Fashion AI API",
@@ -553,10 +601,13 @@ def register_user(payload: RegisterRequest):
         expires_at = (datetime.utcnow() + timedelta(days=7)).isoformat()
         cursor.execute("INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)", (token, user_id, expires_at))
 
+    email_sent, email_notice = send_welcome_email(payload.name.strip(), email_clean)
     return {
         "message": "Tạo tài khoản thành công! Tặng ngay +100 Điểm Xanh.",
         "access_token": token,
         "token_type": "bearer",
+        "email_sent": email_sent,
+        "email_notice": email_notice,
         "user": {
             "id": user_id,
             "name": payload.name.strip(),
