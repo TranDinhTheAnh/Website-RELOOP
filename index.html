@@ -2398,6 +2398,7 @@
                   condition_percent:
                     item.condition_percent ?? item.condition_score ?? 95,
                   cycle: item.cycle,
+                  reconsigned: item.reconsigned,
                   purchased_at: item.purchased_at,
                   image_url: item.image_url,
                 }));
@@ -3595,6 +3596,21 @@
         reader.readAsDataURL(file);
       }
 
+      function readImageAsDataUrl(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            if (typeof reader.result !== "string") {
+              reject(new Error("Không thể đọc ảnh đã chọn."));
+              return;
+            }
+            resolve(reader.result);
+          };
+          reader.onerror = () => reject(new Error("Không thể đọc ảnh đã chọn."));
+          reader.readAsDataURL(file);
+        });
+      }
+
       function simulateReconsignPhoto() {
         if (!state.reconsignTargetItem) return;
         const img1 = document.getElementById("rc-preview-1");
@@ -3611,46 +3627,22 @@
         if (!item) return;
 
         const nextCycle = (item.cycle || 1) + 1;
-        const newCond = Math.max(82, (item.condition_percent || 95) - 3);
-        const newPrice =
-          Math.round(((item.price || 240000) * 0.82) / 5000) * 5000;
-
         try {
-          const fd = new FormData();
-          if (state.pendingReconsignFile) {
-            fd.append("file", state.pendingReconsignFile);
-          } else {
-            fd.append(
-              "file",
-              new Blob(["reconsign"], { type: "image/jpeg" }),
-              "reconsign.jpg",
-            );
-          }
+          const currentPhoto = state.pendingReconsignFile
+            ? await readImageAsDataUrl(state.pendingReconsignFile)
+            : item.image_url;
           await apiFetch(`/api/wardrobe/${item.id}/reconsign`, {
             method: "POST",
-            body: fd,
+            body: JSON.stringify({ current_photos: [currentPhoto] }),
           });
-        } catch {}
+          await syncFromBackend(false);
+        } catch (err) {
+          showToast(`Ký gửi lại thất bại: ${err.message}`, "error");
+          return;
+        }
 
-        const circularProduct = {
-          id: `prod-loop-${Date.now()}`,
-          name: item.name,
-          category: item.category,
-          color: item.color,
-          material: item.material,
-          size: item.size || "M",
-          original_price: item.original_price || Math.round(item.price * 2.1),
-          price: newPrice,
-          condition_percent: newCond,
-          cycle: nextCycle,
-          image_url: item.image_url,
-          condition_note:
-            "Sản phẩm chính hãng thuộc hệ tuần hoàn, đã được kiểm định từ vòng trước. Chất vải giữ form tốt.",
-        };
-
-        state.products.unshift(circularProduct);
-        addGreenPoints(150);
         closeReconsignModal();
+        state.pendingReconsignFile = null;
         refreshAllUI();
         switchTab("store");
         showToast(
