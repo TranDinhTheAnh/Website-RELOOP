@@ -4,7 +4,7 @@ RE:LOOP — BACKEND API NỀN TẢNG THỜI TRANG TUẦN HOÀN TÍCH HỢP AI
 Tech Stack: Python 3.10+, FastAPI, SQLite3 (Zero-config DB), Pydantic v2
 Chạy server:
     pip install fastapi uvicorn python-multipart
-    Cấu hình KIMI_API_KEY trong biến môi trường để bật phân tích ảnh AI.
+    Cấu hình VILAO_API_KEY trong biến môi trường để bật phân tích ảnh AI.
     python reloop_backend.py
 Tài liệu API tương tác (Swagger UI): http://localhost:8000/docs
 =============================================================================
@@ -37,12 +37,15 @@ from pydantic import BaseModel, Field
 
 DB_PATH = os.getenv("RELOOP_DB_PATH", "reloop_circular.db")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
-KIMI_API_KEY = os.getenv("KIMI_API_KEY", "").strip()
-KIMI_API_BASE_URL = (
-    os.getenv("KIMI_API_BASE_URL", "").strip().rstrip("/")
-    or "https://api.moonshot.ai/v1"
+VILAO_API_KEY = (
+    os.getenv("VILAO_API_KEY", "").strip()
+    or os.getenv("KIMI_API_KEY", "").strip()
 )
-KIMI_MODEL = os.getenv("KIMI_MODEL", "").strip() or "kimi-k3.1-pro"
+VILAO_API_BASE_URL = (
+    os.getenv("VILAO_API_BASE_URL", "").strip().rstrip("/")
+    or "https://api.vilao.ai/v1"
+)
+KIMI_MODEL = os.getenv("KIMI_MODEL", "").strip() or "stal/kimi-2.7"
 MAX_GARMENT_IMAGE_BYTES = 10 * 1024 * 1024
 CIRCULAR_BADGE_TEXT = "Sản phẩm chính hãng thuộc hệ tuần hoàn, đã được kiểm định từ vòng trước"
 logger = logging.getLogger(__name__)
@@ -824,11 +827,11 @@ def get_product_detail(product_id: str):
 async def ai_analyze_garment(
     image: Optional[UploadFile] = File(None),
 ):
-    """Analyze the uploaded garment image with Kimi Vision."""
-    if not KIMI_API_KEY:
+    """Analyze the uploaded garment image with Kimi Vision through Vilao AI."""
+    if not VILAO_API_KEY:
         raise HTTPException(
             status_code=503,
-            detail="AI chưa được cấu hình. Hãy thêm KIMI_API_KEY vào biến môi trường backend.",
+            detail="AI chưa được cấu hình. Hãy thêm VILAO_API_KEY vào biến môi trường backend.",
         )
     if not image:
         raise HTTPException(status_code=400, detail="Vui lòng tải ảnh quần áo lên.")
@@ -878,11 +881,11 @@ async def ai_analyze_garment(
         "response_format": {"type": "json_object"},
     }).encode("utf-8")
     request = urllib.request.Request(
-        f"{KIMI_API_BASE_URL}/chat/completions",
+        f"{VILAO_API_BASE_URL}/chat/completions",
         data=request_body,
         headers={
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {KIMI_API_KEY}",
+            "Authorization": f"Bearer {VILAO_API_KEY}",
         },
     )
 
@@ -903,28 +906,28 @@ async def ai_analyze_garment(
         except (json.JSONDecodeError, AttributeError, TypeError):
             provider_status = ""
             provider_message = ""
-        if KIMI_API_KEY:
-            provider_message = provider_message.replace(KIMI_API_KEY, "[redacted]")
+        if VILAO_API_KEY:
+            provider_message = provider_message.replace(VILAO_API_KEY, "[redacted]")
         provider_message = provider_message[:300]
         logger.error(
-            "Kimi garment analysis failed with HTTP %s (%s): %s",
+            "Vilao AI garment analysis failed with HTTP %s (%s): %s",
             error.code,
             provider_status or "unknown status",
             provider_message or "no provider message",
         )
-        detail = f"Kimi API trả lỗi HTTP {error.code}"
+        detail = f"Vilao AI trả lỗi HTTP {error.code}"
         if provider_status:
             detail += f" ({provider_status})"
         if provider_message:
             detail += f": {provider_message}"
         else:
-            detail += ". Hãy kiểm tra API key Kimi, model, quyền truy cập và quota."
+            detail += ". Hãy kiểm tra API key Vilao, subscription model và quota."
         raise HTTPException(
             status_code=502,
             detail=detail,
         ) from error
     except (urllib.error.URLError, TimeoutError) as error:
-        logger.error("Could not reach Kimi for garment analysis: %s", error)
+        logger.error("Could not reach Vilao AI for garment analysis: %s", error)
         raise HTTPException(
             status_code=502,
             detail="Không kết nối được dịch vụ AI. Vui lòng thử lại sau.",
