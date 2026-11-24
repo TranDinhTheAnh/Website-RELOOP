@@ -3661,72 +3661,88 @@
           .join("");
       }
 
-      function generateAIOutfits(notify = false, focusWardrobeId = null) {
+      async function generateAIOutfits(notify = false, focusWardrobeId = null) {
         const vibe = document.getElementById("stylist-vibe").value;
         const grid = document.getElementById("ai-outfits-grid");
-        if (state.wardrobe.length === 0 || state.products.length === 0) return;
+        if (state.wardrobe.length === 0) {
+          grid.innerHTML = `<p class="col-span-full text-center text-sm text-ink-500">Tủ đồ đang trống, chưa thể tạo gợi ý phối đồ.</p>`;
+          return;
+        }
+        if (!state.token) {
+          grid.innerHTML = `<p class="col-span-full text-center text-sm text-ink-500">Đăng nhập để dùng AI Stylist.</p>`;
+          return;
+        }
 
-        const base1 = focusWardrobeId
-          ? state.wardrobe.find((x) => x.id === focusWardrobeId) ||
-            state.wardrobe[0]
-          : state.wardrobe[0];
-        const base2 = state.wardrobe[1] || state.wardrobe[0];
+        grid.innerHTML = `<p class="col-span-full text-center text-sm text-ink-500">AI Stylist đang tìm cách phối phù hợp...</p>`;
+        const query = new URLSearchParams({ trend: vibe });
+        if (focusWardrobeId) query.set("anchor_item_id", focusWardrobeId);
 
-        const match1 =
-          state.products.find((p) => p.category !== base1.category) ||
-          state.products[0];
-        const match2 =
-          state.products.find(
-            (p) => p.category !== base2.category && p.id !== match1.id,
-          ) || state.products[1];
+        try {
+          const result = await apiFetch(`/api/ai/stylist?${query.toString()}`);
+          const outfits = Array.isArray(result.outfits) ? result.outfits : [];
+          if (outfits.length === 0) {
+            grid.innerHTML = `<p class="col-span-full text-center text-sm text-ink-500">${escapeHtml(result.message || "Chưa tìm được món phù hợp để phối.")}</p>`;
+            return;
+          }
 
-        const outfits = [
-          {
-            title: `Set #1: ${vibe} Tinh Tế`,
-            owned: base1,
-            storeItem: match1,
-            tip: `Kết hợp ${base1.name} trong tủ đồ với ${match1.name} giúp cân bằng bảng màu trung tính và tiết kiệm 40% chi phí mua sắm.`,
-          },
-          {
-            title: `Set #2: ${vibe} Năng Động`,
-            owned: base2,
-            storeItem: match2,
-            tip: `Phom dáng của ${base2.name} tôn lên chất liệu ${match2.material}, phù hợp cả đi làm lẫn dạo phố.`,
-          },
-        ];
+          grid.innerHTML = outfits
+            .map((outfit, index) => {
+              const owned = outfit.owned_item || {};
+              const storeItem = outfit.recommended_market_item || {};
+              const ownedName = owned.name || owned.title || "Trang phục trong tủ";
+              const storeName =
+                storeItem.name || storeItem.title || "Trang phục đề xuất";
+              const price = Number(outfit.missing_item_price ?? storeItem.price);
+              return `
+                <div class="bg-white rounded-3xl border border-sand-200 p-5 space-y-4 shadow-2xs">
+                  <div class="flex items-center justify-between">
+                    <h4 class="font-bold text-base text-ink-900">Set #${index + 1}: ${escapeHtml(outfit.style_trend || vibe)}</h4>
+                    <span class="text-[11px] font-semibold text-eco-700 bg-eco-50 px-2.5 py-1 rounded-full">Kimi AI Stylist</span>
+                  </div>
+                  <div class="grid grid-cols-2 gap-3">
+                    <div class="rounded-2xl bg-sand-50 p-3 border border-sand-200 space-y-2">
+                      <span class="inline-block px-2 py-0.5 rounded-md bg-ink-900 text-white text-[10px] font-bold">✓ Có sẵn trong Tủ đồ</span>
+                      <img src="${escapeHtml(owned.image_url || "")}" alt="${escapeHtml(ownedName)}" class="w-full h-32 object-cover rounded-xl" />
+                      <p class="text-xs font-bold text-ink-900 line-clamp-1">${escapeHtml(ownedName)}</p>
+                    </div>
+                    <div class="rounded-2xl bg-eco-50/40 p-3 border border-eco-200 space-y-2">
+                      <span class="inline-block px-2 py-0.5 rounded-md bg-eco-600 text-white text-[10px] font-bold">+ Đang bán trên sàn</span>
+                      <img src="${escapeHtml(storeItem.image_url || "")}" alt="${escapeHtml(storeName)}" class="w-full h-32 object-cover rounded-xl" />
+                      <p class="text-xs font-bold text-ink-900 line-clamp-1">${escapeHtml(storeName)}</p>
+                      <p class="text-xs font-bold text-eco-700">${formatVND(price)}</p>
+                    </div>
+                  </div>
+                  <p class="text-xs text-ink-600 leading-relaxed">💡 <strong>Gợi ý AI:</strong> ${escapeHtml(outfit.stylist_tip || "")}</p>
+                  <button type="button" data-ai-outfit-product="${escapeHtml(storeItem.id || "")}" class="w-full py-2.5 rounded-xl bg-ink-900 hover:bg-eco-600 text-white text-xs font-semibold transition">
+                    + Thêm món còn thiếu vào giỏ (${formatVND(price)})
+                  </button>
+                </div>
+              `;
+            })
+            .join("");
 
-        grid.innerHTML = outfits
-          .map(
-            (set) => `
-        <div class="bg-white rounded-3xl border border-sand-200 p-5 space-y-4 shadow-2xs">
-          <div class="flex items-center justify-between">
-            <h4 class="font-bold text-base text-ink-900">${set.title}</h4>
-            <span class="text-[11px] font-semibold text-eco-700 bg-eco-50 px-2.5 py-1 rounded-full">AI Match 98%</span>
-          </div>
-          <div class="grid grid-cols-2 gap-3">
-            <div class="rounded-2xl bg-sand-50 p-3 border border-sand-200 space-y-2">
-              <span class="inline-block px-2 py-0.5 rounded-md bg-ink-900 text-white text-[10px] font-bold">✓ Có sẵn trong Tủ đồ</span>
-              <img src="${set.owned.image_url}" class="w-full h-32 object-cover rounded-xl" />
-              <p class="text-xs font-bold text-ink-900 line-clamp-1">${set.owned.name}</p>
-            </div>
-            <div class="rounded-2xl bg-eco-50/40 p-3 border border-eco-200 space-y-2">
-              <span class="inline-block px-2 py-0.5 rounded-md bg-eco-600 text-white text-[10px] font-bold">+ Đang bán trên sàn</span>
-              <img src="${set.storeItem.image_url}" class="w-full h-32 object-cover rounded-xl" />
-              <p class="text-xs font-bold text-ink-900 line-clamp-1">${set.storeItem.name}</p>
-              <p class="text-xs font-bold text-eco-700">${formatVND(set.storeItem.price)}</p>
-            </div>
-          </div>
-          <p class="text-xs text-ink-600 leading-relaxed">💡 <strong>Gợi ý AI:</strong> ${set.tip}</p>
-          <button onclick="addToCart('${set.storeItem.id}')" class="w-full py-2.5 rounded-xl bg-ink-900 hover:bg-eco-600 text-white text-xs font-semibold transition">
-            + Thêm món còn thiếu vào giỏ (${formatVND(set.storeItem.price)})
-          </button>
-        </div>
-      `,
-          )
-          .join("");
+          grid.querySelectorAll("[data-ai-outfit-product]").forEach((button) => {
+            button.addEventListener("click", () => {
+              const productId = button.dataset.aiOutfitProduct;
+              if (!state.products.some((product) => product.id === productId)) {
+                showToast("Sản phẩm gợi ý không còn trên gian hàng. Hãy làm mới gợi ý.", "warning");
+                return;
+              }
+              addToCart(productId);
+            });
+          });
 
-        if (notify)
-          showToast("AI Stylist đã cập nhật gợi ý phối đồ mới!", "info");
+          if (notify)
+            showToast("Kimi AI Stylist đã cập nhật gợi ý phối đồ!", "info");
+        } catch (err) {
+          grid.innerHTML = `<p class="col-span-full text-center text-sm text-rose-600">${escapeHtml(err.message || "Không thể tạo gợi ý phối đồ.")}</p>`;
+          if (notify) {
+            showToast(
+              err.message || "Không thể tạo gợi ý phối đồ. Vui lòng thử lại.",
+              "warning",
+            );
+          }
+        }
       }
 
       // =========================================================
