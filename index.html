@@ -1919,6 +1919,7 @@
         ],
         activeContextProductId: null,
         chatHistory: [],
+        activeStylistWardrobeId: null,
         reconsignTargetItem: null,
         pendingSellImageUrl:
           "https://images.unsplash.com/photo-1596755094514-f87e34085b2c?auto=format&fit=crop&w=600&q=80",
@@ -3682,7 +3683,12 @@
       function generateAIOutfits(notify = false, focusWardrobeId = null) {
         const vibe = document.getElementById("stylist-vibe").value;
         const grid = document.getElementById("ai-outfits-grid");
-        if (state.wardrobe.length === 0 || state.products.length === 0) return;
+        if (state.wardrobe.length === 0 || state.products.length === 0) {
+          if (state.wardrobe.length === 0) {
+            state.activeStylistWardrobeId = null;
+          }
+          return;
+        }
 
         const styleProfiles = {
           "Minimalist Thanh Lịch": {
@@ -3744,11 +3750,16 @@
           return categoryScore;
         };
 
-        const base1 = focusWardrobeId
-          ? state.wardrobe.find((x) => x.id === focusWardrobeId) ||
-            state.wardrobe[0]
-          : state.wardrobe[0];
-        const base2 = state.wardrobe[1] || state.wardrobe[0];
+        if (focusWardrobeId) {
+          state.activeStylistWardrobeId = focusWardrobeId;
+        }
+        const anchorItem =
+          state.wardrobe.find(
+            (item) => item.id === state.activeStylistWardrobeId,
+          ) || state.wardrobe[0];
+        state.activeStylistWardrobeId = anchorItem.id;
+        const base1 = anchorItem;
+        const base2 = anchorItem;
         const usedProductIds = new Set();
         const chooseProduct = (ownedItem) => {
           const complementary = state.products.filter(
