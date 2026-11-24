@@ -1996,6 +1996,7 @@
           {
             name: "Áo Sơ Mi Linen Cổ Đức Tự Nhiên",
             cat: "Áo",
+            trend: "Minimalist Thanh Lịch",
             color: "Trắng kem",
             mat: "100% Linen hữu cơ",
             orig: 580000,
@@ -2007,6 +2008,7 @@
           {
             name: "Áo Thun Cotton Hữu Cơ Đen Cổ Tròn",
             cat: "Áo",
+            trend: "Dạo Phố Cuối Tuần",
             color: "Đen than",
             mat: "100% Organic Cotton",
             orig: 420000,
@@ -2018,6 +2020,7 @@
           {
             name: "Áo Len Tăm Mỏng Cổ Tròn Minimalist",
             cat: "Áo",
+            trend: "Minimalist Thanh Lịch",
             color: "Nâu yến mạch",
             mat: "Sợi tre Bamboo",
             orig: 490000,
@@ -2029,6 +2032,7 @@
           {
             name: "Quần Jeans Ống Đứng Vintage Wash",
             cat: "Quần",
+            trend: "Dạo Phố Cuối Tuần",
             color: "Xanh chàm nhạt",
             mat: "100% Cotton Denim",
             orig: 720000,
@@ -2040,6 +2044,7 @@
           {
             name: "Quần Tây Ống Suông Cạp Cao",
             cat: "Quần",
+            trend: "Công Sở Hiện Đại",
             color: "Đen tuyền",
             mat: "Wool pha Viscose",
             orig: 680000,
@@ -2051,6 +2056,7 @@
           {
             name: "Quần Culottes Đen Dáng Suông",
             cat: "Quần",
+            trend: "Minimalist Thanh Lịch",
             color: "Đen tuyền",
             mat: "Tencel tuyết mưa",
             orig: 720000,
@@ -2062,6 +2068,7 @@
           {
             name: "Váy Midi Lụa Satin Xếp Ly Mềm",
             cat: "Váy",
+            trend: "Minimalist Thanh Lịch",
             color: "Xanh bơ nhạt",
             mat: "Lụa Tencel sinh học",
             orig: 840000,
@@ -2073,6 +2080,7 @@
           {
             name: "Váy Midi Xếp Ly Xanh Olive",
             cat: "Váy",
+            trend: "Minimalist Thanh Lịch",
             color: "Xanh Olive",
             mat: "Tencel mềm mịn",
             orig: 720000,
@@ -2084,6 +2092,7 @@
           {
             name: "Váy Sơ Mi Cổ Bẻ Hoa Nhí",
             cat: "Váy",
+            trend: "Dạo Phố Cuối Tuần",
             color: "Kem hoa nhí",
             mat: "Cotton voan",
             orig: 660000,
@@ -2095,6 +2104,7 @@
           {
             name: "Blazer Dáng Suông Vải Đũi Nhật",
             cat: "Áo khoác",
+            trend: "Công Sở Hiện Đại",
             color: "Be cát",
             mat: "Linen pha Cotton",
             orig: 950000,
@@ -2106,6 +2116,7 @@
           {
             name: "Áo Khoác Da Lộn Dáng Ngắn",
             cat: "Áo khoác",
+            trend: "Dạo Phố Cuối Tuần",
             color: "Nâu cognac",
             mat: "Da thuần chay tái chế",
             orig: 1150000,
@@ -2117,6 +2128,7 @@
           {
             name: "Áo Khoác Trench Ngắn Màu Be",
             cat: "Áo khoác",
+            trend: "Công Sở Hiện Đại",
             color: "Be cổ điển",
             mat: "Kaki cotton chống nhăn",
             orig: 1150000,
@@ -2128,6 +2140,7 @@
           {
             name: "Set Áo Ghi Lê & Túi Tote Canvas",
             cat: "Set & Phụ kiện",
+            trend: "Dạo Phố Cuối Tuần",
             color: "Kem mộc",
             mat: "Canvas hữu cơ",
             orig: 650000,
@@ -2139,6 +2152,7 @@
           {
             name: "Set Áo Croptop & Chân Váy Trắng",
             cat: "Set & Phụ kiện",
+            trend: "Dạo Phố Cuối Tuần",
             color: "Trắng kem",
             mat: "Cotton linen",
             orig: 690000,
@@ -2150,6 +2164,7 @@
           {
             name: "Set Đồ Lười Kẻ Caro & Túi Vải",
             cat: "Set & Phụ kiện",
+            trend: "Dạo Phố Cuối Tuần",
             color: "Be xanh",
             mat: "Cotton kẻ caro",
             orig: 620000,
@@ -2167,6 +2182,7 @@
             id: `prod-${i + 1}`,
             name: variantNum > 1 ? `${t.name} #${variantNum}` : t.name,
             category: t.cat,
+            trend: t.trend,
             color: t.color,
             material: t.mat,
             size: ["S", "M", "L", "FreeSize"][i % 4],
@@ -2298,6 +2314,7 @@
             id: p.id || `api-p-${idx}`,
             name: p.name || p.title || "Trang phục tuần hoàn",
             category: p.category || "Áo",
+            trend: p.trend || p.style_trend || "",
             color: p.color || "Tự nhiên",
             material: p.material || "Cotton hữu cơ",
             size: p.size || "M",
@@ -3667,32 +3684,106 @@
         const grid = document.getElementById("ai-outfits-grid");
         if (state.wardrobe.length === 0 || state.products.length === 0) return;
 
+        const styleProfiles = {
+          "Minimalist Thanh Lịch": {
+            trends: ["Minimalist Thanh Lịch", "Minimalist Cuối Tuần"],
+            keywords: ["minimalist", "tối giản", "linen", "trắng ngà", "be cát"],
+            categories: ["Váy", "Quần", "Áo khoác", "Áo", "Set & Phụ kiện"],
+            note: "bảng màu gọn và phom dáng tối giản",
+          },
+          "Công Sở Hiện Đại": {
+            trends: ["Công Sở Hiện Đại", "Classic Thanh Lịch"],
+            keywords: ["công sở", "blazer", "quần tây", "quần âu", "trench"],
+            categories: ["Quần", "Áo khoác", "Áo", "Váy", "Set & Phụ kiện"],
+            note: "phom gọn gàng, phù hợp phong cách công sở",
+          },
+          "Dạo Phố Cuối Tuần": {
+            trends: [
+              "Dạo Phố Cuối Tuần",
+              "Casual Cuối Tuần",
+              "Streetwear Hiện Đại",
+            ],
+            keywords: [
+              "dạo phố",
+              "cuối tuần",
+              "casual",
+              "streetwear",
+              "jeans",
+              "denim",
+              "áo thun",
+              "đồ lười",
+            ],
+            categories: ["Set & Phụ kiện", "Quần", "Áo", "Áo khoác", "Váy"],
+            note: "cách phối thoải mái cho dịp dạo phố",
+          },
+        };
+        const style =
+          styleProfiles[vibe] || styleProfiles["Minimalist Thanh Lịch"];
+        const getStyleScore = (product) => {
+          const trend = (product.trend || "").toLocaleLowerCase("vi");
+          const details =
+            `${product.name || ""} ${product.color || ""} ${product.material || ""}`.toLocaleLowerCase(
+              "vi",
+            );
+          const matchesTrend = style.trends.some(
+            (preferredTrend) =>
+              trend === preferredTrend.toLocaleLowerCase("vi"),
+          );
+          const matchesKeywords = style.keywords.some(
+            (keyword) => trend.includes(keyword) || details.includes(keyword),
+          );
+          const categoryRank = style.categories.indexOf(product.category);
+          const categoryScore =
+            categoryRank === -1 ? 0 : style.categories.length - categoryRank;
+          if (matchesTrend) {
+            return 20 + categoryScore;
+          }
+          if (matchesKeywords) {
+            return 10 + categoryScore;
+          }
+          return categoryScore;
+        };
+
         const base1 = focusWardrobeId
           ? state.wardrobe.find((x) => x.id === focusWardrobeId) ||
             state.wardrobe[0]
           : state.wardrobe[0];
         const base2 = state.wardrobe[1] || state.wardrobe[0];
-
-        const match1 =
-          state.products.find((p) => p.category !== base1.category) ||
-          state.products[0];
-        const match2 =
-          state.products.find(
-            (p) => p.category !== base2.category && p.id !== match1.id,
-          ) || state.products[1];
+        const usedProductIds = new Set();
+        const chooseProduct = (ownedItem) => {
+          const complementary = state.products.filter(
+            (product) =>
+              product.category !== ownedItem.category &&
+              !usedProductIds.has(product.id),
+          );
+          const candidates =
+            complementary.length > 0
+              ? complementary
+              : state.products.filter(
+                  (product) => !usedProductIds.has(product.id),
+                );
+          const selected =
+            [...candidates].sort(
+              (a, b) => getStyleScore(b) - getStyleScore(a),
+            )[0] || state.products[0];
+          usedProductIds.add(selected.id);
+          return selected;
+        };
+        const match1 = chooseProduct(base1);
+        const match2 = chooseProduct(base2);
 
         const outfits = [
           {
-            title: `Set #1: ${vibe} Tinh Tế`,
+            title: `${vibe} • Set #1`,
             owned: base1,
             storeItem: match1,
-            tip: `Kết hợp ${base1.name} trong tủ đồ với ${match1.name} giúp cân bằng bảng màu trung tính và tiết kiệm 40% chi phí mua sắm.`,
+            tip: `${base1.name} (${base1.color}) phối cùng ${match1.name} (${match1.color}) tạo ${style.note}.`,
           },
           {
-            title: `Set #2: ${vibe} Năng Động`,
+            title: `${vibe} • Set #2`,
             owned: base2,
             storeItem: match2,
-            tip: `Phom dáng của ${base2.name} tôn lên chất liệu ${match2.material}, phù hợp cả đi làm lẫn dạo phố.`,
+            tip: `${base2.name} (${base2.color}) phối cùng ${match2.name} (${match2.color}) tạo ${style.note}.`,
           },
         ];
 
@@ -3702,7 +3793,7 @@
         <div class="bg-white rounded-3xl border border-sand-200 p-5 space-y-4 shadow-2xs">
           <div class="flex items-center justify-between">
             <h4 class="font-bold text-base text-ink-900">${set.title}</h4>
-            <span class="text-[11px] font-semibold text-eco-700 bg-eco-50 px-2.5 py-1 rounded-full">AI Match 98%</span>
+            <span class="text-[11px] font-semibold text-eco-700 bg-eco-50 px-2.5 py-1 rounded-full">Đề xuất theo phong cách</span>
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div class="rounded-2xl bg-sand-50 p-3 border border-sand-200 space-y-2">
@@ -3839,8 +3930,9 @@
 
         const discount =
           Number(document.getElementById("cart-voucher-select").value) || 0;
+        let checkoutResult;
         try {
-          await apiFetch("/api/orders/checkout", {
+          checkoutResult = await apiFetch("/api/orders/checkout", {
             method: "POST",
             body: JSON.stringify({
               product_ids: state.cart.map((c) => c.id),
@@ -3857,17 +3949,6 @@
           return;
         }
 
-        const today = new Date().toLocaleDateString("vi-VN");
-        state.cart.forEach((item) => {
-          const ownedEntry = {
-            ...item,
-            id: `w-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-            purchased_at: today,
-          };
-          state.wardrobe.unshift(ownedEntry);
-          state.orders.unshift(ownedEntry);
-        });
-
         if (discount > 0 && state.vouchers.length > 0) {
           state.vouchers.shift();
           updateVoucherDropdown();
@@ -3875,12 +3956,11 @@
 
         const count = state.cart.length;
         state.cart = [];
-        addGreenPoints(count * 50);
         toggleCart(false);
         refreshAllUI();
         switchTab("wardrobe");
         showToast(
-          `Thanh toán thành công ${count} món! AI đã lưu vào Tủ đồ số (+${count * 50} ĐX)`,
+          `Thanh toán thành công ${count} món! Đã lưu vào Tủ đồ số (+${checkoutResult.points_earned} ĐX)`,
           "success",
         );
       }
