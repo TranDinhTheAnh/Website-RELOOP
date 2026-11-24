@@ -1879,43 +1879,7 @@
     <!-- ========================================================= -->
     <script>
       const API_BASE = "https://website-reloop-1.onrender.com";
-      const LOCAL_LISTINGS_KEY = "reloop_local_listings";
-
-      function getLocalListings() {
-        try {
-          const listings = JSON.parse(
-            localStorage.getItem(LOCAL_LISTINGS_KEY) || "[]",
-          );
-          return Array.isArray(listings) ? listings : [];
-        } catch {
-          return [];
-        }
-      }
-
-      function saveLocalListing(product) {
-        const listings = getLocalListings();
-        const withoutDuplicate = listings.filter(
-          (item) => item.id !== product.id,
-        );
-        localStorage.setItem(
-          LOCAL_LISTINGS_KEY,
-          JSON.stringify([product, ...withoutDuplicate]),
-        );
-      }
-
-      function mergeLocalListings(products) {
-        const localListings = getLocalListings();
-        if (localListings.length === 0) return products;
-        const localIds = new Set(localListings.map((item) => item.id));
-        return [
-          ...localListings,
-          ...products.filter(
-            (product) =>
-              !localIds.has(product.id) &&
-              !localListings.some((local) => local.name === product.name),
-          ),
-        ];
-      }
+      localStorage.removeItem("reloop_local_listings");
 
       // Application State
       const state = {
@@ -2354,14 +2318,13 @@
               "Đã kiểm định chất lượng bởi hệ thống AI RE:LOOP.",
           }));
 
-          state.products = mergeLocalListings(
+          state.products =
             mapped.length >= 15
               ? mapped
               : [
                   ...mapped,
                   ...buildFallbackCatalog().slice(0, 15 - mapped.length),
-                ],
-          );
+                ];
 
           if (state.token) {
             try {
@@ -2434,9 +2397,7 @@
             "Đang chạy dữ liệu cục bộ (Server 127.0.0.1:8000 chưa phản hồi)",
           );
           if (state.products.length === 0) {
-            state.products = mergeLocalListings(buildFallbackCatalog());
-          } else {
-            state.products = mergeLocalListings(state.products);
+            state.products = buildFallbackCatalog();
           }
           if (showToastMsg)
             showToast(
@@ -3261,13 +3222,6 @@
           state.products = state.products.filter(
             (item) => item.id !== productId,
           );
-          const localListings = getLocalListings().filter(
-            (item) => item.id !== productId,
-          );
-          localStorage.setItem(
-            LOCAL_LISTINGS_KEY,
-            JSON.stringify(localListings),
-          );
           document.getElementById("product-modal").classList.add("hidden");
           refreshAllUI();
           showToast(
@@ -3531,7 +3485,6 @@
           original_price: Math.round(payload.price * 2.2),
           cycle: 1,
         };
-        saveLocalListing(newProduct);
         state.products.unshift(newProduct);
         addGreenPoints(120);
         await syncFromBackend(false);
