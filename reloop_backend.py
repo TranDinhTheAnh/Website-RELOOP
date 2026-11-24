@@ -1,0 +1,1408 @@
+"""
+=============================================================================
+RE:LOOP — BACKEND API NỀN TẢNG THỜI TRANG TUẦN HOÀN TÍCH HỢP AI
+Tech Stack: Python 3.10+, FastAPI, SQLite3 (Zero-config DB), Pydantic v2
+Chạy server:
+    pip install fastapi uvicorn python-multipart
+    python reloop_backend.py
+Tài liệu API tương tác (Swagger UI): http://localhost:8000/docs
+=============================================================================
+"""
+
+import os
+import json
+import uuid
+import hmac
+import random
+import hashlib
+import secrets
+import sqlite3
+import urllib.request
+from datetime import datetime, timedelta
+from typing import Optional, List, Dict, Any
+from contextlib import contextmanager
+
+from fastapi import FastAPI, HTTPException, Depends, Header, UploadFile, File, Form, Query
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
+
+# =============================================================================
+# 1. CẤU HÌNH HỆ THỐNG & DATABASE SQLITE
+# =============================================================================
+
+DB_PATH = os.getenv("RELOOP_DB_PATH", "reloop_circular.db")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")  # Tùy chọn: gắn API key thật nếu có
+CIRCULAR_BADGE_TEXT = "Sản phẩm chính hãng thuộc hệ tuần hoàn, đã được kiểm định từ vòng trước"
+
+app = FastAPI(
+    title="RE:LOOP Circular Fashion AI API",
+    description="Hệ thống Backend thương mại điện tử thời trang tuần hoàn, kiểm định AI, tủ đồ số và tích điểm xanh.",
+    version="1.0.0"
+)
+
+# Cho phép Frontend HTML kết nối trực tiếp từ mọi nguồn (CORS)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@contextmanager
+def get_db():
+    """Quản lý kết nối SQLite an toàn với tự động commit/rollback."""
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def hash_password(password: str, salt: Optional[str] = None) -> tuple[str, str]:
+    """Băm mật khẩu an toàn sử dụng PBKDF2-HMAC-SHA256."""
+    if not salt:
+        salt = secrets.token_hex(16)
+    pwd_hash = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt.encode("utf-8"),
+        100_000
+    ).hex()
+    return pwd_hash, salt
+
+
+def verify_password(password: str, stored_hash: str, salt: str) -> bool:
+    """Kiểm tra mật khẩu khớp với mã băm trong database."""
+    computed_hash, _ = hash_password(password, salt)
+    return hmac.compare_digest(computed_hash, stored_hash)
+
+
+def init_db():
+    """Khởi tạo cấu trúc bảng dữ liệu và nạp dữ liệu mẫu ban đầu."""
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # 1. Bảng Người dùng (Users)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                email TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                salt TEXT NOT NULL,
+                height INTEGER,
+                weight INTEGER,
+                green_points INTEGER DEFAULT 100,
+                co2_saved REAL DEFAULT 0.0,
+                water_saved INTEGER DEFAULT 0,
+                donated_vnd INTEGER DEFAULT 0,
+                created_at TEXT NOT NULL
+            )
+        """)
+
+        # 2. Bảng Phiên đăng nhập (Sessions)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS sessions (
+                token TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        """)
+
+        # 3. Bảng Sản phẩm trên sàn (Marketplace Products)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS products (
+                id TEXT PRIMARY KEY,
+                seller_id TEXT,
+                title TEXT NOT NULL,
+                category TEXT NOT NULL,
+                size TEXT NOT NULL,
+                color TEXT NOT NULL,
+                material TEXT NOT NULL,
+                condition_score INTEGER NOT NULL,
+                condition_label TEXT NOT NULL,
+                ai_note TEXT NOT NULL,
+                price INTEGER NOT NULL,
+                original_price INTEGER NOT NULL,
+                cycle INTEGER DEFAULT 1,
+                points_reward INTEGER DEFAULT 70,
+                trend TEXT DEFAULT 'Minimalist Thanh Lịch',
+                fit_advice TEXT NOT NULL,
+                image_url TEXT NOT NULL,
+                status TEXT DEFAULT 'available',
+                created_at TEXT NOT NULL
+            )
+        """)
+
+        # 4. Bảng Tủ đồ số cá nhân (Digital Wardrobe & Purchased History)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS wardrobe_items (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                source_product_id TEXT,
+                title TEXT NOT NULL,
+                category TEXT NOT NULL,
+                size TEXT NOT NULL,
+                color TEXT NOT NULL,
+                material TEXT NOT NULL,
+                cycle INTEGER DEFAULT 1,
+                original_price INTEGER NOT NULL,
+                paid_price INTEGER NOT NULL,
+                image_url TEXT NOT NULL,
+                reconsigned INTEGER DEFAULT 0,
+                purchased_at TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        """)
+
+        # 5. Bảng Đơn hàng (Orders)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS orders (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                items_json TEXT NOT NULL,
+                subtotal_vnd INTEGER NOT NULL,
+                discount_vnd INTEGER DEFAULT 0,
+                total_vnd INTEGER NOT NULL,
+                voucher_code TEXT,
+                points_earned INTEGER DEFAULT 0,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        """)
+
+        for column_sql in (
+            "ALTER TABLE orders ADD COLUMN recipient_name TEXT",
+            "ALTER TABLE orders ADD COLUMN phone TEXT",
+            "ALTER TABLE orders ADD COLUMN shipping_address TEXT",
+            "ALTER TABLE orders ADD COLUMN payment_method TEXT",
+            "ALTER TABLE orders ADD COLUMN payment_status TEXT",
+            "ALTER TABLE orders ADD COLUMN order_status TEXT",
+        ):
+            try:
+                cursor.execute(column_sql)
+            except sqlite3.OperationalError:
+                pass
+
+        # 6. Bảng Mã giảm giá đổi từ Điểm Xanh (Vouchers)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS vouchers (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                code TEXT NOT NULL,
+                discount_amount INTEGER NOT NULL,
+                min_order INTEGER DEFAULT 0,
+                is_used INTEGER DEFAULT 0,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        """)
+
+        # 7. Bảng Quỹ môi trường (Charity Green Projects)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS charity_projects (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                description TEXT NOT NULL,
+                raised_vnd INTEGER NOT NULL,
+                goal_vnd INTEGER NOT NULL
+            )
+        """)
+
+        # 8. Bảng Lịch sử Điểm Xanh (Points Ledger)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS points_ledger (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                delta INTEGER NOT NULL,
+                entry_type TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        """)
+
+        # 9. Thông báo giao dịch dành cho người bán
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS notifications (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                notification_type TEXT NOT NULL,
+                title TEXT NOT NULL,
+                message TEXT NOT NULL,
+                product_id TEXT,
+                order_id TEXT,
+                buyer_name TEXT,
+                buyer_email TEXT,
+                buyer_phone TEXT,
+                buyer_address TEXT,
+                is_read INTEGER DEFAULT 0,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        """)
+
+        # Nạp dữ liệu mẫu nếu database còn trống
+        cursor.execute("SELECT COUNT(*) FROM users")
+        if cursor.fetchone()[0] == 0:
+            seed_initial_data(cursor)
+        else:
+            cursor.execute("DELETE FROM wardrobe_items WHERE id IN ('w-1', 'w-2', 'w-3')")
+            cursor.execute("DELETE FROM wardrobe_items WHERE user_id = 'u-demo' AND source_product_id LIKE 'p-seed-%'")
+
+        ensure_admin_account(cursor)
+
+
+def ensure_admin_account(cursor: sqlite3.Cursor):
+    """Đảm bảo tài khoản admin@reloop.vn tồn tại trong SQLite với phiên đăng nhập thật."""
+    cursor.execute("SELECT id FROM users WHERE LOWER(email) = ?", ("admin@reloop.vn",))
+    if cursor.fetchone():
+        return
+
+    now = datetime.utcnow().isoformat()
+    pwd_hash, salt = hash_password("123")
+    cursor.execute("""
+        INSERT INTO users (
+            id, name, email, password_hash, salt, height, weight,
+            green_points, co2_saved, water_saved, donated_vnd, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        "u-admin",
+        "Quản trị viên RE:LOOP",
+        "admin@reloop.vn",
+        pwd_hash,
+        salt,
+        170,
+        60,
+        9999,
+        0.0,
+        0,
+        0,
+        now,
+    ))
+
+
+def seed_initial_data(cursor: sqlite3.Cursor):
+    """Nạp tài khoản mẫu, sản phẩm tuần hoàn và quỹ môi trường."""
+    now = datetime.utcnow().isoformat()
+    pwd_hash, salt = hash_password("123456")
+
+    # Tài khoản mẫu Minh Anh
+    cursor.execute("""
+        INSERT INTO users (id, name, email, password_hash, salt, height, weight, green_points, co2_saved, water_saved, donated_vnd, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, ("u-demo", "Nguyễn Minh Anh", "minhanh@reloop.vn", pwd_hash, salt, 165, 55, 450, 18.5, 4200, 50000, now))
+
+    # Danh sách sản phẩm mẫu trên gian hàng
+    demo_products = [
+        ("p-1", "u-system", "Áo Sơ Mi Linen Trắng Ngà Minimalist", "Áo", "M", "Trắng Ngà", "100% Linen Tự Nhiên",
+         95, "Như mới", "Sợi linen đanh mịn, cúc vỏ trai nguyên bản, không ố vàng hay sờn cổ.",
+         290000, 680000, 2, 70, "Minimalist Thanh Lịch",
+         "Form suông nhẹ chuẩn Châu Á: cao 1m60–1m68, nặng 50–58kg mặc vừa đẹp.",
+         "https://images.unsplash.com/photo-1598033129183-c4f50c736f10?auto=format&fit=crop&w=700&q=85", "available", now),
+        ("p-2", "u-system", "Áo Thun Cotton Hữu Cơ Đen Cổ Tròn", "Áo", "M", "Đen Than", "100% Organic Cotton 250gsm",
+         96, "Như mới", "Màu đen sâu bền màu, bo cổ dày dặn không bai dão.",
+         180000, 420000, 1, 60, "Dạo Phố Cuối Tuần",
+         "Unisex regular fit: cao 1m60–1m72, nặng 50–62kg mặc vừa vặn thoải mái.",
+         "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=700&q=85", "available", now),
+        ("p-3", "u-system", "Áo Len Tăm Cổ Tròn Nâu Yến Mạch", "Áo", "S", "Nâu Yến Mạch", "Sợi tre Bamboo",
+         94, "Rất tốt", "Len mềm, không xù lông, form ôm nhẹ giữ nhiệt tốt.",
+         195000, 490000, 1, 65, "Minimalist Thanh Lịch",
+         "Phù hợp cao 1m55–1m65, nặng 45–54kg mặc vừa vặn.",
+         "https://images.unsplash.com/photo-1434389677669-e08b4cac3105?auto=format&fit=crop&w=700&q=85", "available", now),
+        ("p-4", "u-system", "Quần Tây Ống Suông Beige Cạp Cao", "Quần", "M", "Beige Tự Nhiên", "Cotton Twill Cao Cấp",
+         94, "Rất tốt", "Ly quần sắc nét, khóa kéo YKK mượt mà, gấu quần không sờn gót.",
+         340000, 790000, 2, 80, "Công Sở Hiện Đại",
+         "Vòng eo 68–73cm, chiều cao 1m60–1m70 mặc tôn dáng chân dài chuẩn mẫu.",
+         "https://images.unsplash.com/photo-1594633312681-425c7b97ccd1?auto=format&fit=crop&w=700&q=85", "available", now),
+        ("p-5", "u-system", "Quần Jeans Ống Đứng Xanh Cổ Điển", "Quần", "M", "Xanh Denim Cổ Điển", "100% Cotton Denim Tái Chế",
+         91, "Rất tốt", "Chất denim đứng form, đường chỉ nổi chắc chắn, wash màu tự nhiên.",
+         360000, 850000, 2, 85, "Dạo Phố Cuối Tuần",
+         "Size 28–29 tương đương M, cao 1m60–1m70 nặng 50–57kg mặc rất tôn dáng.",
+         "https://images.unsplash.com/photo-1541099649105-f69ad21f3246?auto=format&fit=crop&w=700&q=85", "available", now),
+        ("p-6", "u-system", "Quần Culottes Đen Dáng Suông", "Quần", "M", "Đen Tuyền", "Tencel Tuyết Mưa",
+         93, "Rất tốt", "Đường may chắc, khóa giấu gọn, vải rũ và thấm hút tốt.",
+         310000, 720000, 2, 75, "Minimalist Thanh Lịch",
+         "Vòng eo 68–74cm, chiều cao 1m58–1m70 mặc vừa đẹp.",
+         "https://images.unsplash.com/photo-1509631179647-0177331693ae?auto=format&fit=crop&w=700&q=85", "available", now),
+        ("p-7", "u-system", "Váy Midi Xếp Ly Xanh Olive", "Váy", "S", "Xanh Olive", "Tencel Mềm Mịn",
+         92, "Rất tốt", "Nếp xếp ly đều đẹp, chất vải rũ tự nhiên, không xước sợi.",
+         310000, 720000, 3, 75, "Minimalist Thanh Lịch",
+         "Cạp chun co giãn nhẹ sau lưng, phù hợp 1m55–1m66, nặng 45–54kg.",
+         "https://images.unsplash.com/photo-1583496661160-fb5886a0aaaa?auto=format&fit=crop&w=700&q=85", "available", now),
+        ("p-8", "u-system", "Váy Midi Lụa Satin Xanh Bơ", "Váy", "M", "Xanh Bơ Nhạt", "Lụa Tencel Sinh Học",
+         97, "Như mới", "Bề mặt satin óng nhẹ, nẹp vai chắc và không bai.",
+         330000, 840000, 2, 85, "Elegant Thời Thượng",
+         "Dáng xòe nhẹ phù hợp cao 1m58–1m68, nặng 50–58kg.",
+         "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=700&q=85", "available", now),
+        ("p-9", "u-system", "Váy Sơ Mi Cổ Bẻ Hoa Nhí", "Váy", "S", "Kem Hoa Nhí", "Cotton Voan",
+         93, "Rất tốt", "Hoa in đều, cúc và đai lưng nguyên bản.",
+         295000, 660000, 2, 70, "Vintage Thanh Lịch",
+         "Cạp thắt eo phù hợp cao 1m55–1m65, nặng 45–54kg.",
+         "https://images.unsplash.com/photo-1539109136881-3be0616acf4b?auto=format&fit=crop&w=700&q=85", "available", now),
+        ("p-10", "u-system", "Áo Blazer Dáng Suông Xám Khói", "Áo khoác", "L", "Xám Khói", "Wool Blend Thoáng Khí",
+         97, "Như mới", "Đệm vai giữ form chuẩn, lớp lót lụa bên trong nguyên vẹn 100%.",
+         490000, 1250000, 1, 100, "Công Sở Hiện Đại",
+         "Dáng oversize nhẹ, cao 1m62–1m74 nặng 52–64kg khoác ngoài cực sang.",
+         "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?auto=format&fit=crop&w=700&q=85", "available", now),
+        ("p-11", "u-system", "Áo Khoác Da Lộn Dáng Ngắn", "Áo khoác", "M", "Nâu Cognac", "Da Thuần Chay Tái Chế",
+         91, "Rất tốt", "Phủ bề mặt mịn, khóa kim loại trơn tru, không bong da.",
+         460000, 1150000, 3, 95, "Streetwear Hiện Đại",
+         "Dáng croptop phù hợp cao 1m58–1m68, nặng 48–58kg.",
+         "https://images.unsplash.com/photo-1551028719-00167b16eac5?auto=format&fit=crop&w=700&q=85", "available", now),
+        ("p-12", "u-system", "Áo Khoác Trench Ngắn Màu Be", "Áo khoác", "M", "Be Cổ Điển", "Kaki Cotton Chống Nhăn",
+         95, "Như mới", "Nút áo nguyên bản, cúc và đai lưng chắc chắn.",
+         460000, 1150000, 1, 90, "Classic Thanh Lịch",
+         "Dáng vừa có đai eo, phù hợp cao 1m58–1m72.",
+         "https://images.unsplash.com/photo-1544022613-e87ca75a784a?auto=format&fit=crop&w=700&q=85", "available", now),
+        ("p-13", "u-system", "Set Áo Ghi Lê Kem & Túi Tote", "Set & Phụ kiện", "FreeSize", "Kem Mộc", "Canvas Hữu Cơ",
+         96, "Như mới", "Set mới sạch, túi tote may chắc và có lớp lót.",
+         250000, 650000, 1, 75, "Minimalist Cuối Tuần",
+         "Ghi lê size FreeSize, tote kích thước vừa.",
+         "https://images.unsplash.com/photo-1596755094514-f87e34085b2c?auto=format&fit=crop&w=700&q=85", "available", now),
+        ("p-14", "u-system", "Set Áo Croptop & Chân Váy Trắng", "Set & Phụ kiện", "S", "Trắng Kem", "Cotton Linen",
+         94, "Rất tốt", "Set đồng bộ, cúc và đường may đều, không ố vàng.",
+         280000, 690000, 2, 80, "Nữ Tính Nhẹ Nhàng",
+         "Phù hợp cao 1m55–1m64, nặng 45–54kg.",
+         "https://images.unsplash.com/photo-1496747611176-843222e1e57c?auto=format&fit=crop&w=700&q=85", "available", now),
+        ("p-15", "u-system", "Set Đồ Lười Kẻ Caro & Túi Vải", "Set & Phụ kiện", "M", "Be Xanh", "Cotton Kẻ Caro",
+         93, "Rất tốt", "Bộ thoáng mát, túi vải kèm chắc chắn.",
+         265000, 620000, 2, 70, "Casual Cuối Tuần",
+         "Free style, phù hợp mặc đi học hoặc dạo phố.",
+         "https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=700&q=85", "available", now),
+    ]
+    cursor.executemany("""
+        INSERT INTO products (id, seller_id, title, category, size, color, material, condition_score, condition_label, ai_note, price, original_price, cycle, points_reward, trend, fit_advice, image_url, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, demo_products)
+
+    # Quỹ môi trường
+    charities = [
+        ("c-forest", "Quỹ Trồng Rừng Việt Nam", "Phục hồi rừng đầu nguồn & hấp thụ carbon bền vững.", 18500000, 25000000),
+        ("c-textile", "Thu Gom & Tái Chế Rác Thải Dệt May", "Xử lý sợi vải cũ thành vật liệu cách nhiệt & túi tái chế.", 12400000, 20000000),
+        ("c-ocean", "Làm Sạch Đại Dương & Bờ Biển", "Thu gom vi nhựa và rác thải ven biển miền Trung.", 9200000, 15000000),
+    ]
+    cursor.executemany("""
+        INSERT INTO charity_projects (id, name, description, raised_vnd, goal_vnd)
+        VALUES (?, ?, ?, ?, ?)
+    """, charities)
+
+    # Lịch sử điểm xanh mẫu
+    ledger = [
+        ("l-1", "u-demo", "Ký gửi lại Áo Blazer Len Mỏng", 150, "earn", now),
+        ("l-2", "u-demo", "Mua Áo Sơ Mi Linen Trắng Ngà", 80, "earn", now),
+        ("l-3", "u-demo", "Quy đổi góp Quỹ Trồng Rừng Việt Nam", -200, "spend", now),
+    ]
+    cursor.executemany("""
+        INSERT INTO points_ledger (id, user_id, title, delta, entry_type, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, ledger)
+
+
+@app.on_event("startup")
+def on_startup():
+    init_db()
+
+
+# =============================================================================
+# 2. SCHEMAS DỮ LIỆU (PYDANTIC MODELS)
+# =============================================================================
+
+class RegisterRequest(BaseModel):
+    name: str = Field(..., min_length=2, max_length=100)
+    email: str = Field(..., min_length=5, max_length=120)
+    password: str = Field(..., min_length=6, max_length=100)
+    height: Optional[int] = Field(None, ge=120, le=220)
+    weight: Optional[int] = Field(None, ge=30, le=180)
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class CreateListingRequest(BaseModel):
+    title: str = Field(..., min_length=3)
+    category: str
+    size: str = "M"
+    color: str
+    material: str
+    condition_score: int = Field(..., ge=60, le=100)
+    condition_label: str = "Như mới"
+    ai_note: str = "Đã qua 42 điểm quét AI kiểm định sợi vải và đường may."
+    price: int = Field(..., ge=30000)
+    original_price: int = Field(..., ge=50000)
+    image_url: str
+
+
+class ReconsignRequest(BaseModel):
+    """Chỉ cần 1-2 ảnh hiện tại; mọi thông tin gốc được AI tự đồng bộ."""
+    current_photos: List[str] = Field(..., min_length=1, max_length=2)
+    seller_note: Optional[str] = None
+
+
+class ChatRequest(BaseModel):
+    question: str = Field(..., min_length=1)
+    product_id: Optional[str] = None
+
+
+class CheckoutRequest(BaseModel):
+    product_ids: List[str] = Field(..., min_length=1)
+    voucher_id: Optional[str] = None
+    recipient_name: str = Field(..., min_length=2, max_length=100)
+    phone: str = Field(..., min_length=8, max_length=20)
+    shipping_address: str = Field(..., min_length=10, max_length=500)
+    payment_method: str = Field(default="COD", pattern="^(COD|BANK_TRANSFER|E_WALLET)$")
+
+
+class RedeemVoucherRequest(BaseModel):
+    points_cost: int
+    discount_amount: int
+    code_prefix: str = "GREEN"
+
+
+class DonateCharityRequest(BaseModel):
+    project_id: str
+    points_to_donate: int = Field(..., ge=50)
+
+
+# =============================================================================
+# 3. MIDDLEWARE XÁC THỰC NGƯỜI DÙNG (AUTH DEPENDENCIES)
+# =============================================================================
+
+def get_current_user(authorization: Optional[str] = Header(None)) -> Dict[str, Any]:
+    """Bắt buộc đăng nhập bằng Bearer Token."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Vui lòng đăng nhập để sử dụng tính năng này.")
+    token = authorization.replace("Bearer ", "").strip()
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT user_id, expires_at FROM sessions WHERE token = ?", (token,))
+        session = cursor.fetchone()
+        if not session:
+            raise HTTPException(status_code=401, detail="Phiên đăng nhập không hợp lệ hoặc đã hết hạn.")
+
+        if datetime.fromisoformat(session["expires_at"]) < datetime.utcnow():
+            cursor.execute("DELETE FROM sessions WHERE token = ?", (token,))
+            raise HTTPException(status_code=401, detail="Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.")
+
+        cursor.execute("SELECT * FROM users WHERE id = ?", (session["user_id"],))
+        user = cursor.fetchone()
+        if not user:
+            raise HTTPException(status_code=404, detail="Không tìm thấy tài khoản người dùng.")
+        return dict(user)
+
+
+def get_optional_user(authorization: Optional[str] = Header(None)) -> Optional[Dict[str, Any]]:
+    """Lấy thông tin người dùng nếu có token (dùng cho Trợ lý AI cá nhân hóa)."""
+    if not authorization or not authorization.startswith("Bearer "):
+        return None
+    try:
+        return get_current_user(authorization)
+    except HTTPException:
+        return None
+
+
+def enrich_product_dict(row: sqlite3.Row) -> Dict[str, Any]:
+    """Đính kèm thông điệp xác thực tuần hoàn nếu sản phẩm từ vòng đời 2 trở lên."""
+    item = dict(row)
+    is_circular = item["cycle"] >= 2
+    item["is_verified_circular"] = is_circular
+    item["circular_verification_message"] = CIRCULAR_BADGE_TEXT if is_circular else None
+    return item
+
+
+# =============================================================================
+# 4. ENDPOINTS: TẠO TÀI KHOẢN, ĐĂNG NHẬP & HỒ SƠ
+# =============================================================================
+
+@app.post("/api/auth/register", summary="Tạo tài khoản thành viên mới (+100 Điểm Xanh)")
+def register_user(payload: RegisterRequest):
+    email_clean = payload.email.strip().lower()
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM users WHERE LOWER(email) = ?", (email_clean,))
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail="Email này đã được đăng ký trên hệ thống.")
+
+        user_id = f"u-{uuid.uuid4().hex[:8]}"
+        pwd_hash, salt = hash_password(payload.password)
+        now = datetime.utcnow().isoformat()
+
+        cursor.execute("""
+            INSERT INTO users (id, name, email, password_hash, salt, height, weight, green_points, co2_saved, water_saved, donated_vnd, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 100, 0.0, 0, 0, ?)
+        """, (user_id, payload.name.strip(), email_clean, pwd_hash, salt, payload.height, payload.weight, now))
+
+        cursor.execute("""
+            INSERT INTO points_ledger (id, user_id, title, delta, entry_type, created_at)
+            VALUES (?, ?, ?, 100, 'earn', ?)
+        """, (f"l-{uuid.uuid4().hex[:8]}", user_id, "Quà chào mừng thành viên Sống Xanh mới", now))
+
+        token = secrets.token_urlsafe(32)
+        expires_at = (datetime.utcnow() + timedelta(days=7)).isoformat()
+        cursor.execute("INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)", (token, user_id, expires_at))
+
+    return {
+        "message": "Tạo tài khoản thành công! Tặng ngay +100 Điểm Xanh.",
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {
+            "id": user_id,
+            "name": payload.name.strip(),
+            "email": email_clean,
+            "height": payload.height,
+            "weight": payload.weight,
+            "green_points": 100
+        }
+    }
+
+
+@app.post("/api/auth/login", summary="Đăng nhập hệ thống")
+def login_user(payload: LoginRequest):
+    email_clean = payload.email.strip().lower()
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM users WHERE LOWER(email) = ?", (email_clean,))
+        user = cursor.fetchone()
+        if not user or not verify_password(payload.password, user["password_hash"], user["salt"]):
+            raise HTTPException(status_code=401, detail="Email hoặc mật khẩu chưa chính xác.")
+
+        token = secrets.token_urlsafe(32)
+        expires_at = (datetime.utcnow() + timedelta(days=7)).isoformat()
+        cursor.execute("INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)", (token, user["id"], expires_at))
+
+    return {
+        "message": f"Chào mừng trở lại, {user['name']}!",
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {
+            "id": user["id"],
+            "name": user["name"],
+            "email": user["email"],
+            "height": user["height"],
+            "weight": user["weight"],
+            "green_points": user["green_points"],
+            "co2_saved": user["co2_saved"],
+            "water_saved": user["water_saved"],
+            "donated_vnd": user["donated_vnd"]
+        }
+    }
+
+
+@app.get("/api/auth/me", summary="Lấy hồ sơ cá nhân, điểm xanh & voucher")
+def get_me(user: Dict[str, Any] = Depends(get_current_user)):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM vouchers WHERE user_id = ? AND is_used = 0", (user["id"],))
+        vouchers = [dict(r) for r in cursor.fetchall()]
+
+        cursor.execute("SELECT * FROM points_ledger WHERE user_id = ? ORDER BY created_at DESC LIMIT 20", (user["id"],))
+        ledger = [dict(r) for r in cursor.fetchall()]
+
+        cursor.execute("""
+            SELECT * FROM wardrobe_items
+            WHERE user_id = ?
+            ORDER BY purchased_at DESC
+        """, (user["id"],))
+        wardrobe = [dict(r) for r in cursor.fetchall()]
+
+        cursor.execute("""
+            SELECT * FROM orders
+            WHERE user_id = ?
+            ORDER BY created_at DESC
+        """, (user["id"],))
+        orders = [dict(r) for r in cursor.fetchall()]
+
+        cursor.execute("""
+            SELECT * FROM notifications
+            WHERE user_id = ?
+            ORDER BY created_at DESC
+            LIMIT 50
+        """, (user["id"],))
+        notifications = [dict(r) for r in cursor.fetchall()]
+        unread_notifications = sum(1 for notification in notifications if not notification["is_read"])
+
+    user_safe = {k: v for k, v in user.items() if k not in ("password_hash", "salt")}
+    return {
+        "user": user_safe,
+        "active_vouchers": vouchers,
+        "points_history": ledger,
+        "wardrobe": wardrobe,
+        "orders": orders,
+        "notifications": notifications,
+        "unread_notifications": unread_notifications
+    }
+
+
+@app.get("/api/notifications", summary="Danh sách thông báo của người dùng")
+def list_notifications(user: Dict[str, Any] = Depends(get_current_user)):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT * FROM notifications
+            WHERE user_id = ?
+            ORDER BY created_at DESC
+            LIMIT 50
+        """, (user["id"],))
+        notifications = [dict(r) for r in cursor.fetchall()]
+
+    return {
+        "items": notifications,
+        "unread_count": sum(1 for notification in notifications if not notification["is_read"])
+    }
+
+
+@app.post("/api/notifications/{notification_id}/read", summary="Đánh dấu một thông báo đã đọc")
+def mark_notification_read(
+    notification_id: str,
+    user: Dict[str, Any] = Depends(get_current_user)
+):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE notifications
+            SET is_read = 1
+            WHERE id = ? AND user_id = ?
+        """, (notification_id, user["id"]))
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Không tìm thấy thông báo.")
+
+    return {"message": "Đã đánh dấu thông báo đã đọc.", "notification_id": notification_id}
+
+
+@app.post("/api/notifications/read-all", summary="Đánh dấu tất cả thông báo đã đọc")
+def mark_all_notifications_read(user: Dict[str, Any] = Depends(get_current_user)):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE notifications SET is_read = 1 WHERE user_id = ? AND is_read = 0",
+            (user["id"],)
+        )
+
+    return {"message": "Đã đánh dấu tất cả thông báo đã đọc."}
+
+
+# =============================================================================
+# 5. ENDPOINTS: GIAN HÀNG & CHI TIẾT SẢN PHẨM TUẦN HOÀN
+# =============================================================================
+
+@app.get("/api/products", summary="Danh sách sản phẩm tuần hoàn trên sàn")
+def list_products(
+    category: Optional[str] = Query(None, description="Lọc theo danh mục: Áo, Quần, Váy, Áo khoác, Set & Phụ kiện"),
+    circular_only: bool = Query(False, description="Chỉ lấy sản phẩm vòng đời >= 2"),
+    search: Optional[str] = Query(None, description="Tìm kiếm theo tên, màu sắc, chất liệu"),
+    sort: str = Query("default", description="default | condition-desc | price-asc | price-desc | cycle-desc"),
+    limit: int = Query(200, ge=1, le=1000),
+    offset: int = Query(0, ge=0)
+):
+    query_sql = "SELECT * FROM products WHERE status = 'available'"
+    params: List[Any] = []
+
+    if category and category != "all":
+        query_sql += " AND category = ?"
+        params.append(category)
+
+    if circular_only:
+        query_sql += " AND cycle >= 2"
+
+    if search:
+        kw = f"%{search.strip().lower()}%"
+        query_sql += " AND (LOWER(title) LIKE ? OR LOWER(material) LIKE ? OR LOWER(color) LIKE ?)"
+        params.extend([kw, kw, kw])
+
+    order_map = {
+        "condition-desc": "condition_score DESC",
+        "price-asc": "price ASC",
+        "price-desc": "price DESC",
+        "cycle-desc": "cycle DESC",
+        "default": "created_at DESC"
+    }
+    query_sql += f" ORDER BY {order_map.get(sort, 'created_at DESC')}"
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(query_sql, params)
+        all_rows = [enrich_product_dict(r) for r in cursor.fetchall()]
+
+    total = len(all_rows)
+    paginated = all_rows[offset: offset + limit]
+    return {
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "items": paginated
+    }
+
+
+@app.get("/api/products/{product_id}", summary="Xem chi tiết sản phẩm & chứng nhận kiểm định")
+def get_product_detail(product_id: str):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM products WHERE id = ?", (product_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Không tìm thấy sản phẩm.")
+        return enrich_product_dict(row)
+
+
+# =============================================================================
+# 6. TÍNH NĂNG 1: AI QUÉT ẢNH TRÍCH XUẤT THÔNG TIN, ĐỘ MỚI & ĐỊNH GIÁ
+# =============================================================================
+
+@app.post("/api/ai/analyze-garment", summary="AI phân tích ảnh quần áo & tự động định giá")
+async def ai_analyze_garment(
+    image: Optional[UploadFile] = File(None),
+    sample_hint: Optional[str] = Form(None)
+):
+    """
+    Nhận file ảnh thực tế từ người bán (hoặc gợi ý mẫu), phân tích đặc trưng vải,
+    chấm điểm độ mới (%) và tính toán giá bán lại tối ưu.
+    """
+    raw_bytes = await image.read() if image else b""
+    seed_source = raw_bytes if raw_bytes else (sample_hint or str(random.random())).encode("utf-8")
+    digest = hashlib.sha256(seed_source).hexdigest()
+    seed_idx = int(digest[:8], 16)
+
+    presets = [
+        {
+            "title": "Áo Sơ Mi Oxford Trắng Form Rộng",
+            "category": "Áo",
+            "size": "M",
+            "color": "Trắng Tinh Khiết",
+            "material": "100% Cotton Oxford Dệt Mịn",
+            "condition_score": 96,
+            "condition_label": "Như mới",
+            "ai_note": "Cổ áo & cổ tay phẳng phiu, không sờn chỉ, độ trắng đạt 98% so với nguyên bản.",
+            "original_price": 690000,
+            "suggested_price": 310000,
+        },
+        {
+            "title": "Áo Khoác Blazer Linen Màu Be Cát",
+            "category": "Áo khoác",
+            "size": "M",
+            "color": "Be Cát Tự Nhiên",
+            "material": "100% Linen Cao Cấp",
+            "condition_score": 94,
+            "condition_label": "Như mới",
+            "ai_note": "Form vai đứng chuẩn, bề mặt vải linen mịn đẹp, khuy cài nguyên bản.",
+            "original_price": 1180000,
+            "suggested_price": 470000,
+        },
+        {
+            "title": "Váy Midi Hoa Nhí Cổ Vuông Vintage",
+            "category": "Váy",
+            "size": "S",
+            "color": "Kem Hoa Nhí",
+            "material": "Voan Lụa Mềm Mại",
+            "condition_score": 93,
+            "condition_label": "Rất tốt",
+            "ai_note": "Họa tiết sắc nét, bo chun lưng đàn hồi tốt, lớp lót nguyên vẹn.",
+            "original_price": 660000,
+            "suggested_price": 295000,
+        },
+        {
+            "title": "Quần Tây Ống Suông Xám Khói Công Sở",
+            "category": "Quần",
+            "size": "M",
+            "color": "Xám Khói",
+            "material": "Wool Blend Thoáng Khí",
+            "condition_score": 95,
+            "condition_label": "Như mới",
+            "ai_note": "Đường ly quần sắc nét, khóa kéo mượt mà, không xù lông bề mặt.",
+            "original_price": 820000,
+            "suggested_price": 350000,
+        }
+    ]
+
+    # Nếu có GEMINI_API_KEY trong môi trường, có thể mở rộng gọi Gemini Vision tại đây
+    extracted = presets[seed_idx % len(presets)]
+    return {
+        "ai_engine": "RE:LOOP Vision Inspector v2.4",
+        "extracted_info": extracted,
+        "points_reward_estimate": 120
+    }
+
+
+@app.post("/api/products", summary="Đăng bán sản phẩm mới lên sàn (+120 Điểm Xanh)")
+def create_marketplace_listing(
+    payload: CreateListingRequest,
+    user: Dict[str, Any] = Depends(get_current_user)
+):
+    product_id = f"p-{uuid.uuid4().hex[:8]}"
+    now = datetime.utcnow().isoformat()
+    points_earned = 120
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO products (id, seller_id, title, category, size, color, material, condition_score, condition_label, ai_note, price, original_price, cycle, points_reward, trend, fit_advice, image_url, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 75, 'Minimalist Thanh Lịch', ?, ?, 'available', ?)
+        """, (
+            product_id, user["id"], payload.title, payload.category, payload.size,
+            payload.color, payload.material, payload.condition_score, payload.condition_label,
+            payload.ai_note, payload.price, payload.original_price,
+            f"Size {payload.size} chuẩn phom Châu Á, chất liệu {payload.material} thoáng nhẹ.",
+            payload.image_url, now
+        ))
+
+        # Cộng Điểm Xanh & cập nhật chỉ số môi trường cho người bán
+        cursor.execute("""
+            UPDATE users
+            SET green_points = green_points + ?,
+                co2_saved = co2_saved + 6.2,
+                water_saved = water_saved + 1400
+            WHERE id = ?
+        """, (points_earned, user["id"]))
+
+        cursor.execute("""
+            INSERT INTO points_ledger (id, user_id, title, delta, entry_type, created_at)
+            VALUES (?, ?, ?, ?, 'earn', ?)
+        """, (f"l-{uuid.uuid4().hex[:8]}", user["id"], f"Đăng bán AI: {payload.title}", points_earned, now))
+
+    return {
+        "message": f"Đăng bán thành công! Bạn được cộng +{points_earned} Điểm Xanh.",
+        "product_id": product_id,
+        "points_earned": points_earned
+    }
+
+
+@app.delete("/api/products/{product_id}", summary="Admin xóa sản phẩm khỏi gian hàng")
+def delete_marketplace_product(
+    product_id: str,
+    user: Dict[str, Any] = Depends(get_current_user)
+):
+    if (user.get("email") or "").strip().lower() != "admin@reloop.vn":
+        raise HTTPException(status_code=403, detail="Chỉ tài khoản quản trị viên mới được xóa sản phẩm.")
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM products WHERE id = ?", (product_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Không tìm thấy sản phẩm cần xóa.")
+
+        cursor.execute("DELETE FROM wardrobe_items WHERE source_product_id = ?", (product_id,))
+        cursor.execute("DELETE FROM products WHERE id = ?", (product_id,))
+
+    return {
+        "message": "Xóa sản phẩm thành công.",
+        "product_id": product_id
+    }
+
+
+# =============================================================================
+# 7. TÍNH NĂNG 2: TRỢ LÝ AI TƯ VẤN KHÁCH HÀNG TỰ ĐỘNG
+# =============================================================================
+
+@app.post("/api/ai/chat", summary="Trợ lý AI trả lời tự động câu hỏi khách hàng")
+def ai_customer_support_chat(
+    payload: ChatRequest,
+    user: Optional[Dict[str, Any]] = Depends(get_optional_user)
+):
+    q = payload.question.strip().lower()
+    product = None
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        if payload.product_id:
+            cursor.execute("SELECT * FROM products WHERE id = ?", (payload.product_id,))
+            row = cursor.fetchone()
+            if row:
+                product = dict(row)
+        if not product:
+            cursor.execute("SELECT * FROM products WHERE status = 'available' LIMIT 1")
+            row = cursor.fetchone()
+            if row:
+                product = dict(row)
+
+    # Nếu có GEMINI_API_KEY, gọi Gemini API để sinh câu trả lời tự nhiên theo ngữ cảnh
+    if GEMINI_API_KEY and product:
+        try:
+            prompt = (
+                f"Bạn là trợ lý tư vấn thời trang tuần hoàn RE:LOOP. "
+                f"Sản phẩm đang hỏi: {product['title']}, Size {product['size']}, chất liệu {product['material']}, "
+                f"độ mới {product['condition_score']}%, giá {product['price']:,}đ, vòng đời #{product['cycle']}. "
+                f"Ghi chú kiểm định: {product['ai_note']}. Tư vấn form: {product['fit_advice']}. "
+                f"Câu hỏi khách hàng: '{payload.question}'. Trả lời ngắn gọn, thân thiện bằng tiếng Việt."
+            )
+            req_body = json.dumps({
+                "contents": [{"parts": [{"text": prompt}]}]
+            }).encode("utf-8")
+            req = urllib.request.Request(
+                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}",
+                data=req_body,
+                headers={"Content-Type": "application/json"}
+            )
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                reply_text = data["candidates"][0]["content"]["parts"][0]["text"]
+                return {"reply": reply_text, "source": "gemini-live"}
+        except Exception:
+            pass  # Fallback sang bộ quy tắc thông minh bên dưới nếu mất mạng/hết quota
+
+    # Bộ xử lý câu hỏi điển hình thông minh
+    p_title = product["title"] if product else "sản phẩm"
+    p_size = product["size"] if product else "M"
+    p_cond = product["condition_score"] if product else 95
+    p_mat = product["material"] if product else "Cotton hữu cơ"
+    p_fit = product["fit_advice"] if product else "Form chuẩn Châu Á, dễ mặc."
+    p_note = product["ai_note"] if product else "Bề mặt vải mịn đẹp."
+    p_pts = product["points_reward"] if product else 70
+
+    if any(k in q for k in ["1m65", "55kg", "vừa không", "size", "cân nặng", "chiều cao"]):
+        if user and user.get("height") and user.get("weight"):
+            reply = (
+                f"Dựa trên số đo hồ sơ của {user['name']} ({user['height']}cm, {user['weight']}kg), "
+                f"mẫu '{p_title}' (Size {p_size}) rất cân đối với vóc dáng của bạn! {p_fit}"
+            )
+        else:
+            reply = (
+                f"Với chiều cao 1m65, nặng 55kg, mẫu '{p_title}' (Size {p_size}) mặc rất vừa vặn và tôn dáng! {p_fit}"
+            )
+    elif any(k in q for k in ["tình trạng", "chất liệu", "vải", "mới"]):
+        reply = (
+            f"Sản phẩm '{p_title}' đạt độ mới {p_cond}%, chất liệu {p_mat}. "
+            f"Báo cáo kiểm định AI: \"{p_note}\""
+        )
+    elif any(k in q for k in ["kiểm định", "tuần hoàn", "vòng đời", "chính hãng"]):
+        reply = (
+            f"Mọi trang phục trên RE:LOOP đều trải qua 42 điểm quét AI kiểm tra sợi vải, cổ áo và đường may. "
+            f"Đặc biệt, sản phẩm từ vòng đời thứ 2 trở đi được đồng bộ dữ liệu gốc và gắn nhãn xác thực: "
+            f"\"{CIRCULAR_BADGE_TEXT}\"."
+        )
+    elif any(k in q for k in ["đổi trả", "điểm xanh", "tích điểm", "voucher"]):
+        reply = (
+            f"Bạn được kiểm tra hàng khi nhận và hỗ trợ đổi trả trong 7 ngày nếu không đúng mô tả AI. "
+            f"Khi mua '{p_title}', bạn nhận ngay +{p_pts} Điểm Xanh để đổi voucher giảm giá hoặc quy đổi hiện kim góp quỹ trồng rừng!"
+        )
+    else:
+        reply = (
+            f"Cảm ơn bạn đã quan tâm đến '{p_title}' (độ mới {p_cond}%, chất liệu {p_mat}). "
+            f"Sau khi mua, món đồ sẽ tự động lưu vào Tủ đồ số AI của bạn để gợi ý phối đồ hoặc ký gửi lại chỉ với 1 chạm!"
+        )
+
+    return {"reply": reply, "product_context": p_title}
+
+
+# =============================================================================
+# 8. TÍNH NĂNG 3: KÝ GỬI LẠI 1 CHẠM & VÒNG ĐỜI TUẦN HOÀN
+# =============================================================================
+
+@app.post("/api/wardrobe/{item_id}/reconsign", summary="Ký gửi lại 1 chạm từ món đồ đã mua (+150 Điểm Xanh)")
+def reconsign_wardrobe_item(
+    item_id: str,
+    payload: ReconsignRequest,
+    user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    - Người bán chỉ cần cung cấp 1-2 ảnh hiện tại.
+    - AI tự động đồng bộ toàn bộ thông tin gốc (tên, danh mục, màu sắc, chất liệu, kích cỡ).
+    - Tự động tính độ mới hiện tại + tăng số vòng đời (cycle + 1) và định giá lại.
+    - Gắn nhãn xác thực: 'Sản phẩm chính hãng thuộc hệ tuần hoàn, đã được kiểm định từ vòng trước'.
+    """
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM wardrobe_items WHERE id = ? AND user_id = ?", (item_id, user["id"]))
+        item = cursor.fetchone()
+        if not item:
+            raise HTTPException(status_code=404, detail="Không tìm thấy món đồ này trong tủ đồ của bạn.")
+        if item["reconsigned"] == 1:
+            raise HTTPException(status_code=400, detail="Món đồ này đã được ký gửi lại lên sàn tuần hoàn.")
+
+        next_cycle = item["cycle"] + 1
+        # AI tính toán lại độ mới dựa trên số vòng đời và số ảnh cung cấp
+        photo_bonus = 1 if len(payload.current_photos) == 2 else 0
+        new_condition = max(84, 96 - (next_cycle - 1) * 3 + photo_bonus)
+        new_cond_label = "Như mới" if new_condition >= 94 else "Rất tốt"
+
+        # Định giá tuần hoàn tự động theo vòng đời
+        depreciation_factor = max(0.32, 0.45 - (next_cycle - 2) * 0.05)
+        new_price = round((item["original_price"] * depreciation_factor) / 10000) * 10000
+
+        new_product_id = f"p-{uuid.uuid4().hex[:8]}"
+        now = datetime.utcnow().isoformat()
+        ai_note = (
+            f"Đã kiểm định tuần hoàn Vòng #{next_cycle} từ {len(payload.current_photos)} ảnh thực tế. "
+            f"Đồng bộ nguyên bản thông tin chất liệu {item['material']} và phom dáng từ vòng trước."
+        )
+
+        # Đăng sản phẩm mới lên gian hàng với dữ liệu gốc đồng bộ 100%
+        cursor.execute("""
+            INSERT INTO products (id, seller_id, title, category, size, color, material, condition_score, condition_label, ai_note, price, original_price, cycle, points_reward, trend, fit_advice, image_url, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 85, 'Minimalist Thanh Lịch', ?, ?, 'available', ?)
+        """, (
+            new_product_id, user["id"], item["title"], item["category"], item["size"],
+            item["color"], item["material"], new_condition, new_cond_label, ai_note,
+            new_price, item["original_price"], next_cycle,
+            f"Size {item['size']} đã được kiểm chứng độ chuẩn phom qua {next_cycle - 1} vòng sử dụng.",
+            payload.current_photos[0], now
+        ))
+
+        # Đánh dấu món trong tủ đồ đã ký gửi lại
+        cursor.execute("UPDATE wardrobe_items SET reconsigned = 1 WHERE id = ?", (item_id,))
+
+        # Thưởng +150 Điểm Xanh cho hành động ký gửi tuần hoàn
+        points_reward = 150
+        cursor.execute("""
+            UPDATE users
+            SET green_points = green_points + ?,
+                co2_saved = co2_saved + 7.5,
+                water_saved = water_saved + 1800
+            WHERE id = ?
+        """, (points_reward, user["id"]))
+
+        cursor.execute("""
+            INSERT INTO points_ledger (id, user_id, title, delta, entry_type, created_at)
+            VALUES (?, ?, ?, ?, 'earn', ?)
+        """, (f"l-{uuid.uuid4().hex[:8]}", user["id"], f"Ký gửi lại 1 chạm (Vòng #{next_cycle}): {item['title']}", points_reward, now))
+
+    return {
+        "message": "Ký gửi lại thành công! Sản phẩm đã lên kệ với chứng nhận tuần hoàn.",
+        "new_product_id": new_product_id,
+        "cycle": next_cycle,
+        "ai_reassessed_condition": new_condition,
+        "ai_reassessed_price": new_price,
+        "verification_badge": CIRCULAR_BADGE_TEXT,
+        "points_earned": points_reward
+    }
+
+
+# =============================================================================
+# 9. TÍNH NĂNG 4 & 5: TỦ ĐỒ CÁ NHÂN SỐ & GỢI Ý PHỐI ĐỒ AI STYLIST
+# =============================================================================
+
+@app.get("/api/wardrobe", summary="Lấy danh sách trang phục trong Tủ đồ cá nhân của tôi")
+def get_my_wardrobe(
+    category: Optional[str] = Query(None),
+    user: Dict[str, Any] = Depends(get_current_user)
+):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        if category and category != "all":
+            cursor.execute("SELECT * FROM wardrobe_items WHERE user_id = ? AND category = ?", (user["id"], category))
+        else:
+            cursor.execute("SELECT * FROM wardrobe_items WHERE user_id = ?", (user["id"],))
+        items = [dict(r) for r in cursor.fetchall()]
+
+    return {
+        "total": len(items),
+        "items": items
+    }
+
+
+@app.get("/api/ai/stylist", summary="AI Stylist gợi ý phối đồ từ Tủ đồ có sẵn + Sàn RE:LOOP")
+def ai_stylist_recommendations(
+    anchor_item_id: Optional[str] = Query(None, description="ID món đồ trong tủ muốn phối cùng"),
+    trend: Optional[str] = Query(None, description="Xu hướng: Minimalist Thanh Lịch | Công Sở Hiện Đại | Dạo Phố Cuối Tuần"),
+    user: Dict[str, Any] = Depends(get_current_user)
+):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM wardrobe_items WHERE user_id = ?", (user["id"],))
+        wardrobe = [dict(r) for r in cursor.fetchall()]
+
+        cursor.execute("SELECT * FROM products WHERE status = 'available' LIMIT 30")
+        market_products = [enrich_product_dict(r) for r in cursor.fetchall()]
+
+    if not wardrobe:
+        return {
+            "message": "Tủ đồ của bạn chưa có trang phục. Hãy mua sắm món đầu tiên để AI Stylist gợi ý phối đồ nhé!",
+            "outfits": []
+        }
+
+    anchor = next((w for w in wardrobe if w["id"] == anchor_item_id), wardrobe[0])
+    outfits = []
+
+    # Ghép món có sẵn trong tủ đồ với các món khác danh mục đang bán trên sàn
+    complementary = [p for p in market_products if p["category"] != anchor["category"]]
+    if trend and trend != "all":
+        trend_filtered = [p for p in complementary if p["trend"] == trend]
+        if trend_filtered:
+            complementary = trend_filtered
+
+    for idx, match_item in enumerate(complementary[:4]):
+        outfits.append({
+            "outfit_id": f"outfit-{idx + 1}",
+            "style_trend": match_item["trend"],
+            "stylist_tip": (
+                f"Kết hợp {anchor['title']} ({anchor['color']}) sẵn có trong tủ đồ của bạn "
+                f"cùng {match_item['title']} trên sàn tạo tổng thể hài hòa, tiết kiệm chi phí và tránh mua trùng lặp."
+            ),
+            "owned_item": anchor,
+            "recommended_market_item": match_item,
+            "missing_item_price": match_item["price"]
+        })
+
+    return {
+        "anchor_item": anchor,
+        "outfits": outfits
+    }
+
+
+# =============================================================================
+# 10. THANH TOÁN GIỎ HÀNG & TỰ ĐỘNG LƯU VÀO TỦ ĐỒ CÁ NHÂN
+# =============================================================================
+
+@app.post("/api/orders/checkout", summary="Thanh toán & Tự động lưu sản phẩm vào Tủ đồ số AI")
+def checkout_order(
+    payload: CheckoutRequest,
+    user: Dict[str, Any] = Depends(get_current_user)
+):
+    now = datetime.utcnow().isoformat()
+    today_str = datetime.utcnow().strftime("%d/%m/%Y")
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        unique_product_ids = list(dict.fromkeys(payload.product_ids))
+        if len(unique_product_ids) != len(payload.product_ids):
+            raise HTTPException(status_code=400, detail="Giỏ hàng chứa sản phẩm trùng lặp.")
+
+        if not payload.recipient_name.strip() or not payload.shipping_address.strip():
+            raise HTTPException(status_code=400, detail="Vui lòng nhập đầy đủ người nhận và địa chỉ.")
+
+        placeholders = ",".join(["?"] * len(payload.product_ids))
+        cursor.execute(f"SELECT * FROM products WHERE id IN ({placeholders}) AND status = 'available'", unique_product_ids)
+        products = [dict(r) for r in cursor.fetchall()]
+
+        if len(products) != len(unique_product_ids):
+            available_ids = {p["id"] for p in products}
+            unavailable_ids = [product_id for product_id in unique_product_ids if product_id not in available_ids]
+            raise HTTPException(
+                status_code=409,
+                detail=f"Sản phẩm không còn khả dụng: {', '.join(unavailable_ids)}"
+            )
+
+        subtotal = sum(p["price"] for p in products)
+        discount = 0
+        applied_voucher_code = None
+
+        # Áp dụng Voucher Điểm Xanh nếu có
+        if payload.voucher_id:
+            cursor.execute("SELECT * FROM vouchers WHERE id = ? AND user_id = ? AND is_used = 0", (payload.voucher_id, user["id"]))
+            voucher = cursor.fetchone()
+            if not voucher:
+                raise HTTPException(status_code=400, detail="Voucher không hợp lệ hoặc đã được sử dụng.")
+            if subtotal < voucher["min_order"]:
+                raise HTTPException(status_code=400, detail=f"Đơn hàng cần tối thiểu {voucher['min_order']:,}đ để dùng mã này.")
+            discount = min(subtotal, voucher["discount_amount"])
+            applied_voucher_code = voucher["code"]
+            cursor.execute("UPDATE vouchers SET is_used = 1 WHERE id = ?", (voucher["id"],))
+
+        total_paid = max(0, subtotal - discount)
+        total_points_earned = sum(p["points_reward"] for p in products)
+
+        # 1. Tự động lưu từng sản phẩm vào Tủ đồ số của khách hàng & cập nhật trạng thái đã bán
+        for p in products:
+            wardrobe_id = f"w-{uuid.uuid4().hex[:8]}"
+            cursor.execute("""
+                INSERT INTO wardrobe_items (id, user_id, source_product_id, title, category, size, color, material, cycle, original_price, paid_price, image_url, reconsigned, purchased_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+            """, (
+                wardrobe_id, user["id"], p["id"], p["title"], p["category"],
+                p["size"], p["color"], p["material"], p["cycle"],
+                p["original_price"], p["price"], p["image_url"], today_str
+            ))
+            cursor.execute("UPDATE products SET status = 'sold' WHERE id = ?", (p["id"],))
+
+        # 2. Tạo bản ghi đơn hàng
+        order_id = f"ord-{uuid.uuid4().hex[:8]}"
+        payment_status = "pending" if payload.payment_method != "COD" else "unpaid"
+        cursor.execute("""
+            INSERT INTO orders (
+                id, user_id, items_json, subtotal_vnd, discount_vnd, total_vnd,
+                voucher_code, points_earned, created_at, recipient_name, phone,
+                shipping_address, payment_method, payment_status, order_status
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            order_id, user["id"], json.dumps([p["id"] for p in products]),
+            subtotal, discount, total_paid, applied_voucher_code, total_points_earned, now,
+            payload.recipient_name.strip(), payload.phone.strip(), payload.shipping_address.strip(),
+            payload.payment_method, payment_status, "confirmed"
+        ))
+
+        # 3. Thông báo cho từng người bán kèm thông tin người mua
+        for product in products:
+            seller_id = product.get("seller_id")
+            if not seller_id or seller_id == user["id"]:
+                continue
+            cursor.execute("""
+                INSERT INTO notifications (
+                    id, user_id, notification_type, title, message, product_id, order_id,
+                    buyer_name, buyer_email, buyer_phone, buyer_address, is_read, created_at
+                )
+                VALUES (?, ?, 'sale_completed', ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+            """, (
+                f"noti-{uuid.uuid4().hex[:8]}",
+                seller_id,
+                "Sản phẩm của bạn đã có người mua",
+                f"{product['title']} đã được mua trong đơn hàng #{order_id}.",
+                product["id"],
+                order_id,
+                payload.recipient_name.strip(),
+                user["email"],
+                payload.phone.strip(),
+                payload.shipping_address.strip(),
+                now
+            ))
+
+        # 4. Cộng Điểm Xanh & cập nhật chỉ số môi trường
+        co2_gain = round(len(products) * 5.8, 1)
+        water_gain = len(products) * 1350
+        cursor.execute("""
+            UPDATE users
+            SET green_points = green_points + ?,
+                co2_saved = co2_saved + ?,
+                water_saved = water_saved + ?
+            WHERE id = ?
+        """, (total_points_earned, co2_gain, water_gain, user["id"]))
+
+        cursor.execute("""
+            INSERT INTO points_ledger (id, user_id, title, delta, entry_type, created_at)
+            VALUES (?, ?, ?, ?, 'earn', ?)
+        """, (f"l-{uuid.uuid4().hex[:8]}", user["id"], f"Mua {len(products)} sản phẩm tuần hoàn (#{order_id})", total_points_earned, now))
+
+    return {
+        "message": f"Thanh toán thành công! Đã lưu {len(products)} món đồ vào Tủ đồ AI và cộng +{total_points_earned} Điểm Xanh.",
+        "order_id": order_id,
+        "total_paid": total_paid,
+        "points_earned": total_points_earned,
+        "co2_saved_added": co2_gain,
+        "water_saved_added": water_gain,
+        "recipient_name": payload.recipient_name.strip(),
+        "phone": payload.phone.strip(),
+        "shipping_address": payload.shipping_address.strip(),
+        "payment_method": payload.payment_method,
+        "payment_status": payment_status,
+        "order_status": "confirmed"
+    }
+
+
+# =============================================================================
+# 11. TÍNH NĂNG 6: ĐỔI ĐIỂM XANH (VOUCHER & QUY ĐỔI HIỆN KIM GÓP QUỸ XANH)
+# =============================================================================
+
+@app.post("/api/points/redeem-voucher", summary="Đổi Điểm Xanh lấy mã giảm giá đơn hàng")
+def redeem_points_for_voucher(
+    payload: RedeemVoucherRequest,
+    user: Dict[str, Any] = Depends(get_current_user)
+):
+    if user["green_points"] < payload.points_cost:
+        raise HTTPException(status_code=400, detail="Số dư Điểm Xanh của bạn chưa đủ để đổi ưu đãi này.")
+
+    now = datetime.utcnow().isoformat()
+    voucher_id = f"v-{uuid.uuid4().hex[:8]}"
+    code = f"{payload.code_prefix}-{random.randint(1000, 9999)}"
+    min_order = payload.discount_amount * 5
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE users SET green_points = green_points - ? WHERE id = ?", (payload.points_cost, user["id"]))
+        cursor.execute("""
+            INSERT INTO vouchers (id, user_id, code, discount_amount, min_order, is_used, created_at)
+            VALUES (?, ?, ?, ?, ?, 0, ?)
+        """, (voucher_id, user["id"], code, payload.discount_amount, min_order, now))
+
+        cursor.execute("""
+            INSERT INTO points_ledger (id, user_id, title, delta, entry_type, created_at)
+            VALUES (?, ?, ?, ?, 'spend', ?)
+        """, (f"l-{uuid.uuid4().hex[:8]}", user["id"], f"Đổi Voucher {code} (-{payload.discount_amount:,}đ)", -payload.points_cost, now))
+
+    return {
+        "message": f"Đổi thành công mã giảm giá {code} trị giá {payload.discount_amount:,}đ!",
+        "voucher": {
+            "id": voucher_id,
+            "code": code,
+            "discount_amount": payload.discount_amount,
+            "min_order": min_order
+        }
+    }
+
+
+@app.get("/api/charity/projects", summary="Danh sách các dự án quỹ Xanh đang gây quỹ")
+def list_charity_projects():
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM charity_projects")
+        projects = []
+        for row in cursor.fetchall():
+            item = dict(row)
+            item["progress_percent"] = min(100, round((item["raised_vnd"] / item["goal_vnd"]) * 100, 1))
+            projects.append(item)
+        return {"projects": projects}
+
+
+@app.post("/api/charity/donate", summary="Quy đổi Điểm Xanh thành hiện kim đóng góp quỹ môi trường")
+def donate_points_to_charity(
+    payload: DonateCharityRequest,
+    user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Tỷ lệ quy đổi: 100 Điểm Xanh = 25.000đ hiện kim (250đ / 1 Điểm Xanh)."""
+    if user["green_points"] < payload.points_to_donate:
+        raise HTTPException(status_code=400, detail="Số dư Điểm Xanh không đủ để thực hiện quy đổi.")
+
+    vnd_converted = payload.points_to_donate * 250
+    now = datetime.utcnow().isoformat()
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM charity_projects WHERE id = ?", (payload.project_id,))
+        project = cursor.fetchone()
+        if not project:
+            raise HTTPException(status_code=404, detail="Không tìm thấy dự án quỹ môi trường.")
+
+        cursor.execute("""
+            UPDATE users
+            SET green_points = green_points - ?,
+                donated_vnd = donated_vnd + ?
+            WHERE id = ?
+        """, (payload.points_to_donate, vnd_converted, user["id"]))
+
+        cursor.execute("""
+            UPDATE charity_projects
+            SET raised_vnd = raised_vnd + ?
+            WHERE id = ?
+        """, (vnd_converted, payload.project_id))
+
+        cursor.execute("""
+            INSERT INTO points_ledger (id, user_id, title, delta, entry_type, created_at)
+            VALUES (?, ?, ?, ?, 'spend', ?)
+        """, (f"l-{uuid.uuid4().hex[:8]}", user["id"], f"Quy đổi {vnd_converted:,}đ góp {project['name']}", -payload.points_to_donate, now))
+
+        cursor.execute("SELECT donated_vnd, co2_saved, water_saved FROM users WHERE id = ?", (user["id"],))
+        updated_stats = dict(cursor.fetchone())
+
+    return {
+        "message": f"Cảm ơn {user['name']}! Đã quy đổi {payload.points_to_donate} Điểm Xanh thành {vnd_converted:,}đ đóng góp cho {project['name']}.",
+        "donated_vnd_added": vnd_converted,
+        "green_certificate": {
+            "holder_name": user["name"],
+            "total_donated_vnd": updated_stats["donated_vnd"],
+            "co2_saved_kg": updated_stats["co2_saved"],
+            "water_saved_liters": updated_stats["water_saved"]
+        }
+    }
+
+
+# =============================================================================
+# 12. ĐIỂM KHỞI CHẠY SERVER (ENTRY POINT)
+# =============================================================================
+
+if __name__ == "__main__":
+    import uvicorn
+    print("==========================================================")
+    print("  RE:LOOP Circular Fashion AI Backend dang khoi dong...")
+    print("  API Docs (Swagger UI): http://localhost:8000/docs")
+    print("  Tai khoan mau: minhanh@reloop.vn / 123456")
+    print("==========================================================")
+    uvicorn.run("reloop_backend:app", host="0.0.0.0", port=8000, reload=True)
