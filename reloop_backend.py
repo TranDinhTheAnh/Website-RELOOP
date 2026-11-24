@@ -45,7 +45,7 @@ VILAO_API_BASE_URL = (
     os.getenv("VILAO_API_BASE_URL", "").strip().rstrip("/")
     or "https://api.vilao.ai/v1"
 )
-KIMI_MODEL = os.getenv("KIMI_MODEL", "").strip() or "stal/kimi-2.7"
+KIMI_MODEL = os.getenv("KIMI_MODEL", "").strip() or "kimi-2.7"
 MAX_GARMENT_IMAGE_BYTES = 10 * 1024 * 1024
 CIRCULAR_BADGE_TEXT = "Sản phẩm chính hãng thuộc hệ tuần hoàn, đã được kiểm định từ vòng trước"
 logger = logging.getLogger(__name__)
