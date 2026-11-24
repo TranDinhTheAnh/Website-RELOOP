@@ -4,7 +4,7 @@ RE:LOOP — BACKEND API NỀN TẢNG THỜI TRANG TUẦN HOÀN TÍCH HỢP AI
 Tech Stack: Python 3.10+, FastAPI, SQLite3 (Zero-config DB), Pydantic v2
 Chạy server:
     pip install fastapi uvicorn python-multipart
-    Cấu hình GEMINI_API_KEY trong biến môi trường để bật phân tích ảnh AI.
+    Cấu hình KIMI_API_KEY trong biến môi trường để bật phân tích ảnh AI.
     python reloop_backend.py
 Tài liệu API tương tác (Swagger UI): http://localhost:8000/docs
 =============================================================================
@@ -37,7 +37,12 @@ from pydantic import BaseModel, Field
 
 DB_PATH = os.getenv("RELOOP_DB_PATH", "reloop_circular.db")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "").strip() or "gemini-2.5-flash"
+KIMI_API_KEY = os.getenv("KIMI_API_KEY", "").strip()
+KIMI_API_BASE_URL = (
+    os.getenv("KIMI_API_BASE_URL", "").strip().rstrip("/")
+    or "https://api.moonshot.ai/v1"
+)
+KIMI_MODEL = os.getenv("KIMI_MODEL", "").strip() or "kimi-k3.1-pro"
 MAX_GARMENT_IMAGE_BYTES = 10 * 1024 * 1024
 CIRCULAR_BADGE_TEXT = "Sản phẩm chính hãng thuộc hệ tuần hoàn, đã được kiểm định từ vòng trước"
 logger = logging.getLogger(__name__)
@@ -819,11 +824,11 @@ def get_product_detail(product_id: str):
 async def ai_analyze_garment(
     image: Optional[UploadFile] = File(None),
 ):
-    """Analyze the uploaded garment image with Gemini Vision."""
-    if not GEMINI_API_KEY:
+    """Analyze the uploaded garment image with Kimi Vision."""
+    if not KIMI_API_KEY:
         raise HTTPException(
             status_code=503,
-            detail="AI chưa được cấu hình. Hãy thêm GEMINI_API_KEY vào biến môi trường backend.",
+            detail="AI chưa được cấu hình. Hãy thêm KIMI_API_KEY vào biến môi trường backend.",
         )
     if not image:
         raise HTTPException(status_code=400, detail="Vui lòng tải ảnh quần áo lên.")
@@ -853,83 +858,89 @@ async def ai_analyze_garment(
         "color (string), material (string), condition_score (số nguyên 60-100), "
         "ai_note (string), suggested_price (số nguyên VND)."
     )
+    image_data = base64.b64encode(raw_bytes).decode("ascii")
     request_body = json.dumps({
-        "contents": [{
-            "parts": [
-                {"text": prompt},
-                {
-                    "inline_data": {
-                        "mime_type": content_type,
-                        "data": base64.b64encode(raw_bytes).decode("ascii"),
-                    }
-                },
-            ]
-        }],
-        "generationConfig": {
-            "responseMimeType": "application/json",
-            "temperature": 0.2,
-        },
+        "model": KIMI_MODEL,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:{content_type};base64,{image_data}",
+                        },
+                    },
+                    {"type": "text", "text": prompt},
+                ],
+            }
+        ],
+        "response_format": {"type": "json_object"},
     }).encode("utf-8")
     request = urllib.request.Request(
-        f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}",
+        f"{KIMI_API_BASE_URL}/chat/completions",
         data=request_body,
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {KIMI_API_KEY}",
+        },
     )
 
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
-            gemini_response = json.loads(response.read().decode("utf-8"))
+            kimi_response = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as error:
         try:
             error_body = json.loads(error.read(4096).decode("utf-8", errors="replace"))
             provider_error = error_body.get("error", {})
-            provider_status = str(provider_error.get("status", ""))
+            provider_status = str(
+                provider_error.get("status")
+                or provider_error.get("type")
+                or provider_error.get("code")
+                or ""
+            )
             provider_message = str(provider_error.get("message", ""))
         except (json.JSONDecodeError, AttributeError, TypeError):
             provider_status = ""
             provider_message = ""
-        if GEMINI_API_KEY:
-            provider_message = provider_message.replace(GEMINI_API_KEY, "[redacted]")
+        if KIMI_API_KEY:
+            provider_message = provider_message.replace(KIMI_API_KEY, "[redacted]")
         provider_message = provider_message[:300]
         logger.error(
-            "Gemini garment analysis failed with HTTP %s (%s): %s",
+            "Kimi garment analysis failed with HTTP %s (%s): %s",
             error.code,
             provider_status or "unknown status",
             provider_message or "no provider message",
         )
-        detail = f"Gemini API trả lỗi HTTP {error.code}"
+        detail = f"Kimi API trả lỗi HTTP {error.code}"
         if provider_status:
             detail += f" ({provider_status})"
         if provider_message:
             detail += f": {provider_message}"
         else:
-            detail += ". Hãy kiểm tra API key, quyền truy cập và quota."
+            detail += ". Hãy kiểm tra API key Kimi, model, quyền truy cập và quota."
         raise HTTPException(
             status_code=502,
             detail=detail,
         ) from error
     except (urllib.error.URLError, TimeoutError) as error:
-        logger.error("Could not reach Gemini for garment analysis: %s", error)
+        logger.error("Could not reach Kimi for garment analysis: %s", error)
         raise HTTPException(
             status_code=502,
             detail="Không kết nối được dịch vụ AI. Vui lòng thử lại sau.",
         ) from error
     except (json.JSONDecodeError, UnicodeDecodeError, KeyError, TypeError) as error:
-        logger.error("Gemini returned an invalid garment analysis response.")
+        logger.error("Kimi returned an invalid garment analysis response.")
         raise HTTPException(
             status_code=502,
             detail="Dịch vụ AI trả về kết quả không hợp lệ. Vui lòng thử lại.",
         ) from error
 
     try:
-        parts = gemini_response["candidates"][0]["content"]["parts"]
-        response_text = "".join(
-            part["text"] for part in parts
-            if "text" in part and not part.get("thought")
-        )
+        response_text = kimi_response["choices"][0]["message"]["content"]
         extracted = json.loads(response_text)
     except (KeyError, IndexError, TypeError, json.JSONDecodeError) as error:
-        logger.error("Gemini returned no parseable garment analysis.")
+        logger.error("Kimi returned no parseable garment analysis.")
         raise HTTPException(
             status_code=502,
             detail="AI không thể phân tích ảnh này. Hãy thử ảnh rõ hơn.",
@@ -950,7 +961,7 @@ async def ai_analyze_garment(
         or isinstance(price, bool)
         or not 30000 <= price <= 20000000
     ):
-        logger.error("Gemini returned garment analysis fields outside accepted limits.")
+        logger.error("Kimi returned garment analysis fields outside accepted limits.")
         raise HTTPException(
             status_code=502,
             detail="Kết quả AI không hợp lệ. Vui lòng thử lại với ảnh khác.",
@@ -970,7 +981,7 @@ async def ai_analyze_garment(
         raise HTTPException(status_code=502, detail="AI chưa trích xuất đủ thông tin. Vui lòng thử lại.")
 
     return {
-        "ai_engine": GEMINI_MODEL,
+        "ai_engine": KIMI_MODEL,
         "extracted_info": extracted,
         "points_reward_estimate": 120
     }
