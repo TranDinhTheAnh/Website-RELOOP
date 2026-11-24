@@ -4,6 +4,7 @@ RE:LOOP — BACKEND API NỀN TẢNG THỜI TRANG TUẦN HOÀN TÍCH HỢP AI
 Tech Stack: Python 3.10+, FastAPI, SQLite3 (Zero-config DB), Pydantic v2
 Chạy server:
     pip install fastapi uvicorn python-multipart
+    Cấu hình GEMINI_API_KEY trong biến môi trường để bật phân tích ảnh AI.
     python reloop_backend.py
 Tài liệu API tương tác (Swagger UI): http://localhost:8000/docs
 =============================================================================
@@ -11,6 +12,7 @@ Tài liệu API tương tác (Swagger UI): http://localhost:8000/docs
 
 import os
 import json
+import base64
 import uuid
 import hmac
 import random
@@ -34,7 +36,9 @@ from pydantic import BaseModel, Field
 # =============================================================================
 
 DB_PATH = os.getenv("RELOOP_DB_PATH", "reloop_circular.db")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")  # Tùy chọn: gắn API key thật nếu có
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "").strip() or "gemini-2.5-flash"
+MAX_GARMENT_IMAGE_BYTES = 10 * 1024 * 1024
 CIRCULAR_BADGE_TEXT = "Sản phẩm chính hãng thuộc hệ tuần hoàn, đã được kiểm định từ vòng trước"
 logger = logging.getLogger(__name__)
 
@@ -814,72 +818,136 @@ def get_product_detail(product_id: str):
 @app.post("/api/ai/analyze-garment", summary="AI phân tích ảnh quần áo & tự động định giá")
 async def ai_analyze_garment(
     image: Optional[UploadFile] = File(None),
-    sample_hint: Optional[str] = Form(None)
 ):
-    """
-    Nhận file ảnh thực tế từ người bán (hoặc gợi ý mẫu), phân tích đặc trưng vải,
-    chấm điểm độ mới (%) và tính toán giá bán lại tối ưu.
-    """
-    raw_bytes = await image.read() if image else b""
-    seed_source = raw_bytes if raw_bytes else (sample_hint or str(random.random())).encode("utf-8")
-    digest = hashlib.sha256(seed_source).hexdigest()
-    seed_idx = int(digest[:8], 16)
+    """Analyze the uploaded garment image with Gemini Vision."""
+    if not GEMINI_API_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail="AI chưa được cấu hình. Hãy thêm GEMINI_API_KEY vào biến môi trường backend.",
+        )
+    if not image:
+        raise HTTPException(status_code=400, detail="Vui lòng tải ảnh quần áo lên.")
 
-    presets = [
-        {
-            "title": "Áo Sơ Mi Oxford Trắng Form Rộng",
-            "category": "Áo",
-            "size": "M",
-            "color": "Trắng Tinh Khiết",
-            "material": "100% Cotton Oxford Dệt Mịn",
-            "condition_score": 96,
-            "condition_label": "Như mới",
-            "ai_note": "Cổ áo & cổ tay phẳng phiu, không sờn chỉ, độ trắng đạt 98% so với nguyên bản.",
-            "original_price": 690000,
-            "suggested_price": 310000,
-        },
-        {
-            "title": "Áo Khoác Blazer Linen Màu Be Cát",
-            "category": "Áo khoác",
-            "size": "M",
-            "color": "Be Cát Tự Nhiên",
-            "material": "100% Linen Cao Cấp",
-            "condition_score": 94,
-            "condition_label": "Như mới",
-            "ai_note": "Form vai đứng chuẩn, bề mặt vải linen mịn đẹp, khuy cài nguyên bản.",
-            "original_price": 1180000,
-            "suggested_price": 470000,
-        },
-        {
-            "title": "Váy Midi Hoa Nhí Cổ Vuông Vintage",
-            "category": "Váy",
-            "size": "S",
-            "color": "Kem Hoa Nhí",
-            "material": "Voan Lụa Mềm Mại",
-            "condition_score": 93,
-            "condition_label": "Rất tốt",
-            "ai_note": "Họa tiết sắc nét, bo chun lưng đàn hồi tốt, lớp lót nguyên vẹn.",
-            "original_price": 660000,
-            "suggested_price": 295000,
-        },
-        {
-            "title": "Quần Tây Ống Suông Xám Khói Công Sở",
-            "category": "Quần",
-            "size": "M",
-            "color": "Xám Khói",
-            "material": "Wool Blend Thoáng Khí",
-            "condition_score": 95,
-            "condition_label": "Như mới",
-            "ai_note": "Đường ly quần sắc nét, khóa kéo mượt mà, không xù lông bề mặt.",
-            "original_price": 820000,
-            "suggested_price": 350000,
-        }
-    ]
+    content_type = (image.content_type or "").split(";")[0].strip().lower()
+    if content_type not in {"image/jpeg", "image/png", "image/webp"}:
+        raise HTTPException(
+            status_code=415,
+            detail="Định dạng ảnh không hỗ trợ. Hãy dùng JPG, PNG hoặc WEBP.",
+        )
 
-    # Nếu có GEMINI_API_KEY trong môi trường, có thể mở rộng gọi Gemini Vision tại đây
-    extracted = presets[seed_idx % len(presets)]
+    raw_bytes = await image.read(MAX_GARMENT_IMAGE_BYTES + 1)
+    if len(raw_bytes) > MAX_GARMENT_IMAGE_BYTES:
+        raise HTTPException(status_code=413, detail="Ảnh tải lên không được vượt quá 10 MB.")
+    if not raw_bytes:
+        raise HTTPException(status_code=400, detail="Ảnh tải lên đang trống.")
+
+    prompt = (
+        "Phân tích ảnh quần áo đã qua sử dụng để hỗ trợ người bán tạo tin đăng. "
+        "Chỉ mô tả điều nhìn thấy; không khẳng định thành phần sợi vải hoặc lỗi ở vùng "
+        "không nhìn thấy. Nếu không thể nhận biết chất liệu, ghi 'Không xác định qua ảnh'. "
+        "Ước lượng tình trạng một cách thận trọng chỉ từ các dấu hiệu nhìn thấy và ghi rõ "
+        "người bán cần tự kiểm tra trước khi đăng. Giá là gợi ý tham khảo bằng VND, không "
+        "phải định giá chắc chắn. Nếu ảnh không có quần áo, đặt is_garment=false. "
+        "Trả về duy nhất JSON với đúng các khóa: is_garment (boolean), title (string), "
+        "category (một trong 'Áo', 'Quần', 'Váy', 'Áo khoác', 'Set & Phụ kiện'), "
+        "color (string), material (string), condition_score (số nguyên 60-100), "
+        "ai_note (string), suggested_price (số nguyên VND)."
+    )
+    request_body = json.dumps({
+        "contents": [{
+            "parts": [
+                {"text": prompt},
+                {
+                    "inline_data": {
+                        "mime_type": content_type,
+                        "data": base64.b64encode(raw_bytes).decode("ascii"),
+                    }
+                },
+            ]
+        }],
+        "generationConfig": {
+            "responseMimeType": "application/json",
+            "temperature": 0.2,
+        },
+    }).encode("utf-8")
+    request = urllib.request.Request(
+        f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}",
+        data=request_body,
+        headers={"Content-Type": "application/json"},
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            gemini_response = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as error:
+        logger.error("Gemini garment analysis failed with HTTP %s.", error.code)
+        raise HTTPException(
+            status_code=502,
+            detail="Dịch vụ AI từ chối phân tích ảnh. Hãy kiểm tra API key/quota rồi thử lại.",
+        ) from error
+    except (urllib.error.URLError, TimeoutError) as error:
+        logger.error("Could not reach Gemini for garment analysis: %s", error)
+        raise HTTPException(
+            status_code=502,
+            detail="Không kết nối được dịch vụ AI. Vui lòng thử lại sau.",
+        ) from error
+    except (json.JSONDecodeError, UnicodeDecodeError, KeyError, TypeError) as error:
+        logger.error("Gemini returned an invalid garment analysis response.")
+        raise HTTPException(
+            status_code=502,
+            detail="Dịch vụ AI trả về kết quả không hợp lệ. Vui lòng thử lại.",
+        ) from error
+
+    try:
+        parts = gemini_response["candidates"][0]["content"]["parts"]
+        response_text = "".join(
+            part["text"] for part in parts
+            if "text" in part and not part.get("thought")
+        )
+        extracted = json.loads(response_text)
+    except (KeyError, IndexError, TypeError, json.JSONDecodeError) as error:
+        logger.error("Gemini returned no parseable garment analysis.")
+        raise HTTPException(
+            status_code=502,
+            detail="AI không thể phân tích ảnh này. Hãy thử ảnh rõ hơn.",
+        ) from error
+
+    if not isinstance(extracted, dict) or extracted.get("is_garment") is not True:
+        raise HTTPException(status_code=422, detail="Ảnh này không có quần áo phù hợp để phân tích.")
+
+    valid_categories = {"Áo", "Quần", "Váy", "Áo khoác", "Set & Phụ kiện"}
+    score = extracted.get("condition_score")
+    price = extracted.get("suggested_price")
+    if (
+        extracted.get("category") not in valid_categories
+        or not isinstance(score, int)
+        or isinstance(score, bool)
+        or not 60 <= score <= 100
+        or not isinstance(price, int)
+        or isinstance(price, bool)
+        or not 30000 <= price <= 20000000
+    ):
+        logger.error("Gemini returned garment analysis fields outside accepted limits.")
+        raise HTTPException(
+            status_code=502,
+            detail="Kết quả AI không hợp lệ. Vui lòng thử lại với ảnh khác.",
+        )
+
+    extracted = {
+        "title": str(extracted.get("title", "")).strip()[:120],
+        "category": extracted["category"],
+        "color": str(extracted.get("color", "")).strip()[:80],
+        "material": str(extracted.get("material", "")).strip()[:120],
+        "condition_score": score,
+        "condition_label": "Như mới" if score >= 95 else "Rất tốt" if score >= 85 else "Tốt",
+        "ai_note": str(extracted.get("ai_note", "")).strip()[:500],
+        "suggested_price": price,
+    }
+    if not extracted["title"] or not extracted["color"] or not extracted["material"]:
+        raise HTTPException(status_code=502, detail="AI chưa trích xuất đủ thông tin. Vui lòng thử lại.")
+
     return {
-        "ai_engine": "RE:LOOP Vision Inspector v2.4",
+        "ai_engine": GEMINI_MODEL,
         "extracted_info": extracted,
         "points_reward_estimate": 120
     }

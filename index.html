@@ -3236,58 +3236,57 @@
       // =========================================================
       // FEATURE 1: AI VISUAL LISTING & AUTO-PRICING
       // =========================================================
-      const SAMPLE_AI_PRESETS = [
-        {
-          name: "Áo Sơ Mi Linen Trắng Cổ Đức",
-          category: "Áo",
-          color: "Trắng kem tự nhiên",
-          material: "100% Linen hữu cơ",
-          condition: 96,
-          price: 250000,
-          note: "Thớ vải linen đanh mịn, cổ áo và hàng khuy nguyên bản không ố vàng.",
-          img: FASHION_IMAGES[0],
-        },
-        {
-          name: "Áo Khoác Blazer Dáng Suông Hàn Quốc",
-          category: "Áo khoác",
-          color: "Be cát ấm",
-          material: "Cotton pha Linen cao cấp",
-          condition: 94,
-          price: 380000,
-          note: "Form vai đứng chuẩn, lớp lót lụa bên trong sạch đẹp như mới.",
-          img: FASHION_IMAGES[1],
-        },
-        {
-          name: "Quần Jeans Ống Đứng Vintage Wash",
-          category: "Quần",
-          color: "Xanh denim nhạt",
-          material: "100% Cotton Denim dày dặn",
-          condition: 92,
-          price: 275000,
-          note: "Màu wash tự nhiên đồng đều, khóa kéo YKK và đường chỉ nổi chắc chắn.",
-          img: FASHION_IMAGES[2],
-        },
+      const SAMPLE_AI_IMAGES = [
+        FASHION_IMAGES[0],
+        FASHION_IMAGES[1],
+        FASHION_IMAGES[2],
       ];
 
       async function handleSellFileUpload(e) {
         const file = e.target.files[0];
         if (!file) return;
+        if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+          showToast("Vui lòng chọn ảnh JPG, PNG hoặc WEBP.", "warning");
+          e.target.value = "";
+          return;
+        }
+        if (file.size > 10 * 1024 * 1024) {
+          showToast("Ảnh tải lên không được vượt quá 10 MB.", "warning");
+          e.target.value = "";
+          return;
+        }
         state.pendingSellFile = file;
         const reader = new FileReader();
         reader.onload = async (ev) => {
           state.pendingSellImageUrl = ev.target.result;
           showSellPreview(ev.target.result);
-          await runBackendAIAnalysis(file, null);
+          await runBackendAIAnalysis(file);
         };
         reader.readAsDataURL(file);
       }
 
       async function triggerSampleAIAnalysis(index) {
-        const preset = SAMPLE_AI_PRESETS[index];
-        state.pendingSellFile = null;
-        state.pendingSellImageUrl = preset.img;
-        showSellPreview(preset.img);
-        await runBackendAIAnalysis(null, preset);
+        const imageUrl = SAMPLE_AI_IMAGES[index];
+        if (!imageUrl) return;
+        state.pendingSellImageUrl = imageUrl;
+        showSellPreview(imageUrl);
+        try {
+          const response = await fetch(imageUrl);
+          if (!response.ok) throw new Error("Không tải được ảnh mẫu.");
+          const blob = await response.blob();
+          const file = new File([blob], `sample-garment-${index + 1}`, {
+            type: blob.type,
+          });
+          state.pendingSellFile = file;
+          await runBackendAIAnalysis(file);
+        } catch (err) {
+          document
+            .getElementById("sell-scanner-overlay")
+            .classList.add("hidden");
+          document.getElementById("ai-analysis-badge").textContent =
+            "Không thể tải hoặc phân tích ảnh mẫu";
+          showToast(err.message || "Không thể tải ảnh mẫu.", "warning");
+        }
       }
 
       function showSellPreview(src) {
@@ -3300,56 +3299,37 @@
           .classList.remove("hidden");
       }
 
-      async function runBackendAIAnalysis(file, fallbackPreset) {
+      async function runBackendAIAnalysis(file) {
         try {
           const fd = new FormData();
-          if (file) {
-            fd.append("file", file);
-          } else {
-            const blob = new Blob(["sample"], { type: "image/jpeg" });
-            fd.append("file", blob, "sample_garment.jpg");
-          }
+          fd.append("image", file);
           const aiRes = await apiFetch("/api/ai/analyze-garment", {
             method: "POST",
             body: fd,
           });
-          const data = aiRes.analysis || aiRes;
+          const data = aiRes.extracted_info;
           applyAIResultToForm(
             {
-              name: fallbackPreset
-                ? fallbackPreset.name
-                : data.name || "Áo Thời Trang Tuần Hoàn Tuyển Chọn",
-              category: fallbackPreset
-                ? fallbackPreset.category
-                : data.category || "Áo",
-              color: fallbackPreset
-                ? fallbackPreset.color
-                : data.color || "Trắng tự nhiên",
-              material: fallbackPreset
-                ? fallbackPreset.material
-                : data.material || "Cotton hữu cơ",
-              condition:
-                data.condition_percent ||
-                (fallbackPreset ? fallbackPreset.condition : 95),
-              price:
-                data.suggested_price ||
-                (fallbackPreset ? fallbackPreset.price : 240000),
-              note:
-                data.condition_note ||
-                (fallbackPreset
-                  ? fallbackPreset.note
-                  : "AI xác nhận bề mặt vải tốt, đạt chuẩn lưu hành RE:LOOP."),
+              name: data.title,
+              category: data.category,
+              color: data.color,
+              material: data.material,
+              condition: data.condition_score,
+              price: data.suggested_price,
+              note: data.ai_note,
             },
-            "✓ AI Vision đã hoàn tất trích xuất thông số",
+            "✓ AI đã phân tích ảnh — vui lòng kiểm tra lại thông tin",
           );
-        } catch {
-          setTimeout(() => {
-            const p = fallbackPreset || SAMPLE_AI_PRESETS[0];
-            applyAIResultToForm(
-              p,
-              "✓ AI Vision đã hoàn tất trích xuất thông số",
-            );
-          }, 900);
+        } catch (err) {
+          document
+            .getElementById("sell-scanner-overlay")
+            .classList.add("hidden");
+          document.getElementById("ai-analysis-badge").textContent =
+            "Phân tích ảnh thất bại";
+          showToast(
+            err.message || "AI không thể phân tích ảnh. Vui lòng thử lại.",
+            "warning",
+          );
         }
       }
 
