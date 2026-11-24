@@ -203,6 +203,13 @@
               Đã mua / Ký gửi lại
             </button>
             <button
+              onclick="switchTab('seller')"
+              data-tab="seller"
+              class="nav-tab px-4 py-2 rounded-xl text-sm font-medium text-ink-700 hover:text-ink-900 transition"
+            >
+              Đơn bán của tôi
+            </button>
+            <button
               onclick="switchTab('green')"
               data-tab="green"
               class="nav-tab px-4 py-2 rounded-xl text-sm font-medium text-ink-700 hover:text-ink-900 transition"
@@ -453,6 +460,13 @@
             class="nav-tab shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-100 text-ink-700"
           >
             Ký gửi lại
+          </button>
+          <button
+            onclick="switchTab('seller')"
+            data-tab="seller"
+            class="nav-tab shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-100 text-ink-700"
+          >
+            Đơn bán
           </button>
           <button
             onclick="switchTab('green')"
@@ -1078,7 +1092,66 @@
       </section>
 
       <!-- ========================================================= -->
-      <!-- TAB 5: ĐIỂM XANH & ĐÓNG GÓP MÔI TRƯỜNG                    -->
+      <!-- TAB 5: QUẢN LÝ TIN BÁN CỦA TÔI                            -->
+      <!-- ========================================================= -->
+      <section id="section-seller" class="hidden max-w-6xl mx-auto space-y-6">
+        <div class="border-b border-slate-100 pb-6">
+          <span class="text-xs font-semibold uppercase tracking-wider text-eco-700">
+            Seller Center
+          </span>
+          <h2 class="text-3xl font-bold text-ink-900 mt-1">Đơn bán của tôi</h2>
+          <p class="text-sm text-ink-600 mt-1">
+            Theo dõi sản phẩm đang bán, đã bán và tin đã hủy. Tin đang bán có thể
+            được hủy; sản phẩm đã bán vẫn được lưu trong lịch sử.
+          </p>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div class="rounded-2xl bg-white border border-slate-200 p-4">
+            <span class="block text-xs text-ink-500">Đang bán</span>
+            <strong id="seller-active-count" class="text-2xl text-ink-900">0</strong>
+          </div>
+          <div class="rounded-2xl bg-white border border-slate-200 p-4">
+            <span class="block text-xs text-ink-500">Đã bán</span>
+            <strong id="seller-sold-count" class="text-2xl text-ink-900">0</strong>
+          </div>
+          <div class="rounded-2xl bg-white border border-slate-200 p-4">
+            <span class="block text-xs text-ink-500">Đã hủy</span>
+            <strong id="seller-cancelled-count" class="text-2xl text-ink-900">0</strong>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap gap-2">
+          <button
+            data-seller-filter="available"
+            onclick="setSellerListingFilter('available')"
+            class="seller-listing-filter px-4 py-2 rounded-xl text-xs font-semibold"
+          >
+            Đang bán
+          </button>
+          <button
+            data-seller-filter="sold"
+            onclick="setSellerListingFilter('sold')"
+            class="seller-listing-filter px-4 py-2 rounded-xl text-xs font-semibold"
+          >
+            Đã bán
+          </button>
+          <button
+            data-seller-filter="cancelled"
+            onclick="setSellerListingFilter('cancelled')"
+            class="seller-listing-filter px-4 py-2 rounded-xl text-xs font-semibold"
+          >
+            Đã hủy
+          </button>
+        </div>
+
+        <div id="seller-listings-content" class="space-y-3">
+          <!-- Rendered by JS -->
+        </div>
+      </section>
+
+      <!-- ========================================================= -->
+      <!-- TAB 6: ĐIỂM XANH & ĐÓNG GÓP MÔI TRƯỜNG                    -->
       <!-- ========================================================= -->
       <section id="section-green" class="hidden space-y-8">
         <!-- Green Summary Banner -->
@@ -1892,6 +1965,10 @@
         cart: [],
         wardrobe: [],
         orders: [],
+        sellerListings: [],
+        sellerListingsLoading: false,
+        sellerListingsError: null,
+        sellerListingFilter: "available",
         vouchers: [],
         notifications: [],
         charityProjects: [
@@ -3724,6 +3801,161 @@
           .join("");
       }
 
+      function setSellerListingFilter(status) {
+        if (!["available", "sold", "cancelled"].includes(status)) return;
+        state.sellerListingFilter = status;
+        renderSellerListings();
+      }
+
+      async function loadSellerListings() {
+        if (!state.token) {
+          state.sellerListings = [];
+          state.sellerListingsError = null;
+          state.sellerListingsLoading = false;
+          renderSellerListings();
+          return;
+        }
+
+        state.sellerListingsLoading = true;
+        state.sellerListingsError = null;
+        renderSellerListings();
+        try {
+          const response = await apiFetch("/api/seller/listings");
+          if (!response || !Array.isArray(response.items)) {
+            throw new Error("Backend trả về danh sách tin bán không hợp lệ.");
+          }
+          state.sellerListings = response.items.map((item) => ({
+            ...item,
+            name: item.title || item.name,
+            condition_percent: item.condition_score,
+            image_url: normalizeProductImage(item.image_url),
+          }));
+        } catch (error) {
+          state.sellerListingsError = error.message;
+        } finally {
+          state.sellerListingsLoading = false;
+          renderSellerListings();
+        }
+      }
+
+      function renderSellerListings() {
+        const listingsContent = document.getElementById(
+          "seller-listings-content",
+        );
+        const listingsByStatus = {
+          available: state.sellerListings.filter(
+            (listing) => listing.status === "available",
+          ),
+          sold: state.sellerListings.filter(
+            (listing) => listing.status === "sold",
+          ),
+          cancelled: state.sellerListings.filter(
+            (listing) => listing.status === "cancelled",
+          ),
+        };
+
+        document.getElementById("seller-active-count").textContent =
+          listingsByStatus.available.length;
+        document.getElementById("seller-sold-count").textContent =
+          listingsByStatus.sold.length;
+        document.getElementById("seller-cancelled-count").textContent =
+          listingsByStatus.cancelled.length;
+
+        document
+          .querySelectorAll(".seller-listing-filter")
+          .forEach((button) => {
+            const active =
+              button.dataset.sellerFilter === state.sellerListingFilter;
+            button.className = active
+              ? "seller-listing-filter px-4 py-2 rounded-xl text-xs font-semibold bg-ink-900 text-white"
+              : "seller-listing-filter px-4 py-2 rounded-xl text-xs font-medium bg-white text-ink-700 border border-slate-200";
+          });
+
+        if (!state.token) {
+          listingsContent.innerHTML =
+            '<div class="rounded-2xl bg-slate-50 p-8 text-center text-sm text-ink-600">Vui lòng đăng nhập để xem và quản lý sản phẩm bạn đã đăng bán.</div>';
+          return;
+        }
+        if (state.sellerListingsLoading) {
+          listingsContent.innerHTML =
+            '<div class="rounded-2xl bg-slate-50 p-8 text-center text-sm text-ink-600">Đang tải đơn bán của bạn...</div>';
+          return;
+        }
+        if (state.sellerListingsError) {
+          listingsContent.innerHTML = `<div class="rounded-2xl bg-rose-50 p-5 text-sm text-rose-700">Không tải được đơn bán: ${escapeHtml(state.sellerListingsError)}</div>`;
+          return;
+        }
+
+        const filteredListings = listingsByStatus[state.sellerListingFilter];
+        if (filteredListings.length === 0) {
+          const emptyMessages = {
+            available: "Bạn chưa có sản phẩm nào đang bán.",
+            sold: "Chưa có sản phẩm nào được bán.",
+            cancelled: "Bạn chưa hủy tin bán nào.",
+          };
+          listingsContent.innerHTML = `<div class="rounded-2xl bg-slate-50 p-8 text-center text-sm text-ink-600">${emptyMessages[state.sellerListingFilter]}</div>`;
+          return;
+        }
+
+        const statusLabels = {
+          available: "Đang bán",
+          sold: "Đã bán",
+          cancelled: "Đã hủy",
+        };
+        listingsContent.innerHTML = filteredListings
+          .map((listing) => {
+            const date = listing.created_at
+              ? new Date(listing.created_at).toLocaleDateString("vi-VN")
+              : "";
+            const action =
+              listing.status === "available"
+                ? `<button onclick="cancelSellerListing('${escapeHtml(listing.id)}')" class="px-3 py-2 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 text-xs font-semibold">Hủy tin</button>`
+                : `<span class="text-xs font-semibold ${listing.status === "sold" ? "text-eco-700" : "text-ink-500"}">${statusLabels[listing.status] || "Không xác định"}</span>`;
+            return `
+              <article class="flex flex-col sm:flex-row sm:items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4">
+                <img src="${escapeHtml(listing.image_url)}" alt="${escapeHtml(listing.name)}" class="h-28 w-24 rounded-xl bg-sand-50 object-cover" />
+                <div class="min-w-0 flex-1">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="rounded-full bg-eco-50 px-2.5 py-1 text-[11px] font-semibold text-eco-700">${statusLabels[listing.status] || "Không xác định"}</span>
+                    <span class="text-[11px] text-ink-400">Đăng ngày ${escapeHtml(date || "—")}</span>
+                  </div>
+                  <h3 class="mt-1 truncate text-sm font-bold text-ink-900">${escapeHtml(listing.name)}</h3>
+                  <p class="mt-1 text-xs text-ink-500">${escapeHtml(listing.category)} • Size ${escapeHtml(listing.size)} • ${escapeHtml(listing.color)}</p>
+                  <p class="mt-1 text-sm font-bold text-eco-700">${formatVND(listing.price)}</p>
+                </div>
+                <div class="shrink-0">${action}</div>
+              </article>
+            `;
+          })
+          .join("");
+      }
+
+      async function cancelSellerListing(productId) {
+        const listing = state.sellerListings.find(
+          (item) => item.id === productId,
+        );
+        if (!listing || listing.status !== "available") return;
+        if (
+          !window.confirm(
+            `Bạn có chắc muốn hủy tin "${listing.name}"? Sản phẩm sẽ không còn hiển thị trên gian hàng.`,
+          )
+        ) {
+          return;
+        }
+
+        try {
+          const result = await apiFetch(
+            `/api/seller/listings/${encodeURIComponent(productId)}/cancel`,
+            { method: "POST" },
+          );
+          await syncFromBackend(false);
+          await loadSellerListings();
+          showToast(result.message || "Đã hủy tin bán.", "success");
+        } catch (error) {
+          showToast(`Không thể hủy tin bán: ${error.message}`, "error");
+        }
+      }
+
       function generateAIOutfits(notify = false, focusWardrobeId = null) {
         const vibe = document.getElementById("stylist-vibe").value;
         const grid = document.getElementById("ai-outfits-grid");
@@ -4255,11 +4487,13 @@
       // NAVIGATION & UI HELPERS
       // =========================================================
       function switchTab(tabName) {
-        ["store", "sell", "wardrobe", "orders", "green"].forEach((t) => {
-          document
-            .getElementById(`section-${t}`)
-            .classList.toggle("hidden", t !== tabName);
-        });
+        ["store", "sell", "wardrobe", "orders", "seller", "green"].forEach(
+          (t) => {
+            document
+              .getElementById(`section-${t}`)
+              .classList.toggle("hidden", t !== tabName);
+          },
+        );
         document.querySelectorAll(".nav-tab").forEach((btn) => {
           const active = btn.dataset.tab === tabName;
           if (btn.closest("nav")) {
@@ -4273,6 +4507,7 @@
           }
         });
         if (tabName === "wardrobe") generateAIOutfits(false);
+        if (tabName === "seller") loadSellerListings();
       }
 
       function showToast(msg, type = "info") {
@@ -4281,6 +4516,7 @@
         const colors = {
           success: "bg-eco-700 text-white",
           warning: "bg-amber-600 text-white",
+          error: "bg-rose-600 text-white",
           info: "bg-ink-900 text-white",
         };
         toast.className = `${colors[type] || colors.info} px-4 py-3 rounded-2xl shadow-lg text-xs font-semibold max-w-xs transition-all duration-300`;

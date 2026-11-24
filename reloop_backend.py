@@ -1085,6 +1085,67 @@ def delete_marketplace_product(
     }
 
 
+@app.get("/api/seller/listings", summary="Danh sách tin bán của người dùng hiện tại")
+def get_my_seller_listings(user: Dict[str, Any] = Depends(get_current_user)):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT * FROM products WHERE seller_id = ? ORDER BY created_at DESC",
+            (user["id"],),
+        )
+        listings = [dict(row) for row in cursor.fetchall()]
+
+    return {"items": listings}
+
+
+@app.post(
+    "/api/seller/listings/{product_id}/cancel",
+    summary="Hủy tin đang bán của người dùng hiện tại",
+)
+def cancel_my_seller_listing(
+    product_id: str,
+    user: Dict[str, Any] = Depends(get_current_user),
+):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT seller_id, status FROM products WHERE id = ?",
+            (product_id,),
+        )
+        listing = cursor.fetchone()
+        if not listing:
+            raise HTTPException(status_code=404, detail="Không tìm thấy tin bán.")
+        if listing["seller_id"] != user["id"]:
+            raise HTTPException(
+                status_code=403,
+                detail="Bạn không có quyền hủy tin bán của người khác.",
+            )
+        if listing["status"] != "available":
+            raise HTTPException(
+                status_code=409,
+                detail="Chỉ có thể hủy tin đang bán; tin đã bán hoặc đã hủy không thể thay đổi.",
+            )
+
+        cursor.execute(
+            """
+            UPDATE products SET status = 'cancelled'
+            WHERE id = ? AND seller_id = ? AND status = 'available'
+            """,
+            (product_id, user["id"]),
+        )
+        if cursor.rowcount != 1:
+            raise HTTPException(
+                status_code=409,
+                detail="Tin bán đã được cập nhật. Hãy tải lại danh sách.",
+            )
+
+    return {
+        "message": "Đã hủy tin bán. Sản phẩm được lưu trong lịch sử của bạn.",
+        "product_id": product_id,
+        "status": "cancelled",
+    }
+
+
 # =============================================================================
 # 7. TÍNH NĂNG 2: TRỢ LÝ AI TƯ VẤN KHÁCH HÀNG TỰ ĐỘNG
 # =============================================================================
