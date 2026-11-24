@@ -2244,8 +2244,32 @@
           data = { raw: text };
         }
         if (!res.ok) {
+          const detail = data.detail;
+          let errorMessage;
+          if (typeof detail === "string") {
+            errorMessage = detail;
+          } else if (Array.isArray(detail)) {
+            const fieldLabels = {
+              name: "Họ và tên",
+              email: "Email",
+              password: "Mật khẩu",
+              height: "Chiều cao",
+              weight: "Cân nặng",
+            };
+            errorMessage = detail
+              .map((issue) => {
+                const field = Array.isArray(issue.loc)
+                  ? issue.loc[issue.loc.length - 1]
+                  : null;
+                const label = fieldLabels[field] || field;
+                return `${label ? `${label}: ` : ""}${issue.msg || "Dữ liệu không hợp lệ"}`;
+              })
+              .join("; ");
+          } else if (detail && typeof detail === "object") {
+            errorMessage = detail.message || JSON.stringify(detail);
+          }
           const err = new Error(
-            data.detail || data.message || `HTTP ${res.status}`,
+            errorMessage || data.message || `HTTP ${res.status}`,
           );
           err.status = res.status;
           err.isHttpError = true;
@@ -2633,8 +2657,8 @@
             showAuthError("Vui lòng nhập Họ và tên của bạn để tạo tài khoản.");
             return;
           }
-          if (password.length < 3) {
-            showAuthError("Mật khẩu phải có ít nhất 3 ký tự.");
+          if (password.length < 6) {
+            showAuthError("Mật khẩu phải có ít nhất 6 ký tự.");
             return;
           }
 
