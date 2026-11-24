@@ -1918,6 +1918,7 @@
           },
         ],
         activeContextProductId: null,
+        chatHistory: [],
         reconsignTargetItem: null,
         pendingSellImageUrl:
           "https://images.unsplash.com/photo-1596755094514-f87e34085b2c?auto=format&fit=crop&w=600&q=80",
@@ -4065,8 +4066,8 @@
           div.textContent = text;
         } else {
           div.className =
-            "max-w-[90%] bg-white border border-slate-200 text-ink-800 p-3 rounded-2xl rounded-tl-none shadow-2xs leading-relaxed";
-          div.innerHTML = text;
+            "max-w-[90%] bg-white border border-slate-200 text-ink-800 p-3 rounded-2xl rounded-tl-none shadow-2xs leading-relaxed whitespace-pre-wrap";
+          div.textContent = text;
         }
         box.appendChild(div);
         box.scrollTop = box.scrollHeight;
@@ -4093,39 +4094,26 @@
           const res = await apiFetch("/api/ai/chat", {
             method: "POST",
             body: JSON.stringify({
-              message,
+              question: message,
               product_id: state.activeContextProductId,
-              height_cm: state.user?.height || 165,
-              weight_kg: state.user?.weight || 55,
+              history: state.chatHistory.slice(-8),
             }),
           });
-          const reply = res.reply || res.response || res.answer || res.message;
-          if (reply) {
-            appendChatBubble(reply, "ai");
-            return;
+          if (typeof res.reply !== "string" || !res.reply.trim()) {
+            throw new Error("AI không trả về câu trả lời hợp lệ.");
           }
-        } catch {}
-
-        const h = state.user?.height || 165;
-        const w = state.user?.weight || 55;
-        let fallback = `Với số đo <strong>${h}cm • ${w}kg</strong>, bạn mặc chuẩn <strong>Size M</strong> của RE:LOOP (độ rủ thoải mái, tôn dáng). `;
-        if (message.toLowerCase().includes("kiểm định")) {
-          fallback =
-            "Mọi sản phẩm trên RE:LOOP đều trải qua <strong>3 bước kiểm định</strong>: (1) AI quét bề mặt vải & đường may, (2) Giặt hấp khử khuẩn Ozone, (3) Gắn mã vòng đời tuần hoàn minh bạch.";
-        } else if (
-          message.toLowerCase().includes("điểm") ||
-          message.toLowerCase().includes("đổi trả")
-        ) {
-          fallback =
-            "Bạn được đổi trả trong <strong>3 ngày</strong> nếu sản phẩm không đúng mô tả AI, đồng thời nhận ngay <strong>+50 Điểm Xanh</strong> khi mua và <strong>+150 Điểm Xanh</strong> khi ký gửi lại!";
-        } else if (
-          message.toLowerCase().includes("chất liệu") ||
-          message.toLowerCase().includes("tình trạng")
-        ) {
-          fallback =
-            "Sản phẩm được kiểm định độ mới thực tế trên <strong>90%</strong>, ưu tiên chất liệu tự nhiên (Linen, Cotton hữu cơ, Lụa Tencel) bền bỉ qua nhiều vòng đời.";
+          appendChatBubble(res.reply, "ai");
+          state.chatHistory.push(
+            { role: "user", content: message },
+            { role: "assistant", content: res.reply },
+          );
+          state.chatHistory = state.chatHistory.slice(-8);
+        } catch (error) {
+          appendChatBubble(
+            `Không thể nhận câu trả lời từ AI: ${error.message}`,
+            "ai",
+          );
         }
-        appendChatBubble(fallback, "ai");
       }
 
       // =========================================================
