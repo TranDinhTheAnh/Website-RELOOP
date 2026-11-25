@@ -586,6 +586,10 @@ def init_db():
             ON messages (conversation_id, created_at)
         """)
         cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_messages_recipient_read
+            ON messages (recipient_id, read_at)
+        """)
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS message_presence (
                 user_id TEXT PRIMARY KEY,
                 last_seen_at TEXT NOT NULL,
@@ -1068,10 +1072,17 @@ def list_notifications(user: Dict[str, Any] = Depends(get_current_user)):
             LIMIT 50
         """, (user["id"],))
         notifications = [dict(r) for r in cursor.fetchall()]
+        cursor.execute("""
+            SELECT COUNT(*) AS unread_messages_count
+            FROM messages
+            WHERE recipient_id = ? AND read_at IS NULL
+        """, (user["id"],))
+        unread_messages_count = cursor.fetchone()["unread_messages_count"]
 
     return {
         "items": notifications,
-        "unread_count": sum(1 for notification in notifications if not notification["is_read"])
+        "unread_count": sum(1 for notification in notifications if not notification["is_read"]),
+        "unread_messages_count": unread_messages_count,
     }
 
 

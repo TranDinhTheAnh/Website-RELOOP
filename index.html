@@ -6878,6 +6878,9 @@
         sellerListingFilter: "available",
         vouchers: [],
         notifications: [],
+        notificationsRefreshInFlight: false,
+        notificationsRefreshErrorLogged: false,
+        unreadMessageCount: null,
         aiRecommendationIds: null,
         aiRecommendations: [],
         conversations: [],
@@ -7757,6 +7760,7 @@
         state.user = null;
         state.notifications = [];
         state.conversations = [];
+        state.unreadMessageCount = 0;
         state.activeConversationId = null;
         renderConversations();
         document.getElementById("conversation-thread").textContent =
@@ -7912,16 +7916,46 @@
         );
       }
 
-      function renderNotifications() {
-        const list = document.getElementById("notifications-list");
-        const badge = document.getElementById("notification-badge");
-        if (!list || !badge) return;
-
-        const unreadCount = state.notifications.filter(
-          (item) => !item.is_read,
+      function getUnreadMessageCount() {
+        if (Number.isFinite(state.unreadMessageCount)) {
+          return Math.max(0, state.unreadMessageCount);
+        }
+        return state.conversations.reduce(
+          (total, conversation) =>
+            total + Math.max(0, Number(conversation.unread_count) || 0),
+          0,
+        ) || state.notifications.filter(
+          (item) =>
+            !item.is_read && item.notification_type === "message_received",
         ).length;
+      }
+
+      function updateNotificationBadge() {
+        const badge = document.getElementById("notification-badge");
+        if (!badge) return;
+        const otherUnreadCount = state.notifications.filter(
+          (item) =>
+            !item.is_read && item.notification_type !== "message_received",
+        ).length;
+        const unreadCount = otherUnreadCount + getUnreadMessageCount();
         badge.textContent = unreadCount > 99 ? "99+" : unreadCount;
         badge.classList.toggle("hidden", unreadCount === 0);
+      }
+
+      function syncUnreadMessageCountFromConversations() {
+        state.unreadMessageCount = state.conversations.reduce(
+          (total, conversation) =>
+            total + Math.max(0, Number(conversation.unread_count) || 0),
+          0,
+        );
+        updateMessageUnreadBadge();
+        updateNotificationBadge();
+      }
+
+      function renderNotifications() {
+        const list = document.getElementById("notifications-list");
+        if (!list) return;
+        updateNotificationBadge();
 
         if (state.notifications.length === 0) {
           list.innerHTML = `<p class="px-3 py-6 text-center text-xs text-ink-500">Chưa có thông báo.</p>`;
@@ -7960,11 +7994,7 @@
       }
 
       function updateMessageUnreadBadge() {
-        const unreadCount = state.conversations.reduce(
-          (total, conversation) =>
-            total + Math.max(0, Number(conversation.unread_count) || 0),
-          0,
-        );
+        const unreadCount = getUnreadMessageCount();
         document
           .querySelectorAll('[data-tab="messages"]')
           .forEach((button) => {
@@ -7998,6 +8028,7 @@
 
       function renderConversations() {
         updateMessageUnreadBadge();
+        updateNotificationBadge();
         const list = document.getElementById("conversations-list");
         if (!list) return;
         const signature = JSON.stringify([
@@ -8072,6 +8103,7 @@
         try {
           const result = await apiFetch("/api/conversations");
           state.conversations = Array.isArray(result.items) ? result.items : [];
+          syncUnreadMessageCountFromConversations();
           if (
             state.activeConversationId &&
             !state.conversations.some(
@@ -8105,6 +8137,7 @@
         try {
           const result = await apiFetch("/api/conversations");
           state.conversations = Array.isArray(result.items) ? result.items : [];
+          syncUnreadMessageCountFromConversations();
           renderConversations();
           updateConversationPresence(
             state.conversations.find(
@@ -8129,6 +8162,7 @@
                 (item) => item.id === conversationId,
               );
               if (activeConversation) activeConversation.unread_count = 0;
+              syncUnreadMessageCountFromConversations();
               markConversationNotificationsRead(conversationId);
               renderConversations();
             }
@@ -8691,15 +8725,39 @@
       }
 
       async function refreshNotifications() {
-        if (!state.token) return;
+        if (
+          !state.token ||
+          isLocalAuthToken(state.token) ||
+          state.notificationsRefreshInFlight
+        ) {
+          return;
+        }
+        const refreshToken = state.token;
+        state.notificationsRefreshInFlight = true;
         try {
           const result = await apiFetch("/api/notifications");
+          if (state.token !== refreshToken) return;
           state.notifications = Array.isArray(result.items) ? result.items : [];
+          const unreadMessagesCount = Number(result.unread_messages_count);
+          if (
+            Number.isSafeInteger(unreadMessagesCount) &&
+            unreadMessagesCount >= 0
+          ) {
+            state.unreadMessageCount = unreadMessagesCount;
+          } else {
+            await loadConversations(true);
+          }
           renderNotifications();
+          updateMessageUnreadBadge();
+          state.notificationsRefreshErrorLogged = false;
         } catch (err) {
-          console.warn("Không thể tự động cập nhật thông báo:", err);
+          if (!state.notificationsRefreshErrorLogged) {
+            console.warn("Không thể tự động cập nhật thông báo:", err);
+            state.notificationsRefreshErrorLogged = true;
+          }
+        } finally {
+          state.notificationsRefreshInFlight = false;
         }
-        await loadConversations(true);
       }
 
       // =========================================================
@@ -11620,7 +11678,7 @@
         const requestedTab = window.location.hash.match(/^#([a-z]+)$/)?.[1];
         switchTab(validTabs.includes(requestedTab) ? requestedTab : "intro");
         syncFromBackend(false);
-        setInterval(refreshNotifications, 30000);
+        setInterval(refreshNotifications, 5000);
       });
     </script>
     <script>
