@@ -4135,6 +4135,60 @@
           </div>
         </div>
 
+        <div
+          class="hero-panel rounded-3xl bg-gradient-to-br from-sand-100 via-white to-eco-50 border border-sand-200 p-5 sm:p-7 space-y-4"
+        >
+          <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+            <div class="max-w-2xl">
+              <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-eco-200 text-eco-700 text-xs font-semibold shadow-sm">
+                ✨ Gợi ý mua sắm cá nhân hóa
+              </span>
+              <h2 class="mt-3 text-xl sm:text-2xl font-extrabold text-ink-900">
+                Tìm món đồ hợp với bạn
+              </h2>
+              <p class="mt-1 text-sm text-ink-600">
+                Mô tả ngân sách, kiểu dáng hoặc dịp sử dụng. AI sẽ đối chiếu với sản phẩm đang có.
+              </p>
+            </div>
+            <span class="text-xs text-ink-500 lg:pt-2">Gợi ý chỉ gồm sản phẩm có trong gian hàng</span>
+          </div>
+
+          <label for="ai-product-query" class="block text-xs font-semibold text-ink-700">
+            Bạn đang tìm món đồ như thế nào?
+          </label>
+          <textarea
+            id="ai-product-query"
+            rows="2"
+            maxlength="500"
+            placeholder="Ví dụ: Đồ đi làm thanh lịch dưới 350k, size M"
+            class="w-full resize-y px-4 py-3 rounded-2xl bg-white border border-slate-200 text-sm text-ink-900 placeholder:text-ink-400 focus:outline-none focus:border-eco-500"
+          ></textarea>
+
+          <div class="flex flex-wrap gap-2" aria-label="Gợi ý tìm kiếm nhanh">
+            <button type="button" data-ai-query="Đồ đi làm thanh lịch dưới 350k, size M" onclick="applyAiQuerySuggestion(this)" class="rounded-full border border-sand-200 bg-white px-3 py-2 text-xs font-medium text-ink-700 hover:border-eco-400 transition">
+              Đồ đi làm dưới 350k, size M
+            </button>
+            <button type="button" data-ai-query="Váy hoặc áo chất liệu thoáng mát, độ mới từ 94%" onclick="applyAiQuerySuggestion(this)" class="rounded-full border border-sand-200 bg-white px-3 py-2 text-xs font-medium text-ink-700 hover:border-eco-400 transition">
+              Chất liệu thoáng mát, mới từ 94%
+            </button>
+            <button type="button" data-ai-query="Đồ tuần hoàn vòng >= 2 để dạo phố cuối tuần" onclick="applyAiQuerySuggestion(this)" class="rounded-full border border-sand-200 bg-white px-3 py-2 text-xs font-medium text-ink-700 hover:border-eco-400 transition">
+              Đồ vòng đời từ 2 để dạo phố
+            </button>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2">
+            <button id="ai-product-search-button" type="button" onclick="searchProductsWithAI()" class="rounded-xl bg-eco-600 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-eco-700 disabled:cursor-wait disabled:opacity-60 transition">
+              ✨ Tìm bằng AI
+            </button>
+            <button type="button" onclick="clearAiRecommendations()" class="rounded-xl border border-sand-200 bg-white px-4 py-3 text-sm font-semibold text-ink-700 hover:bg-sand-50 transition">
+              Xóa gợi ý
+            </button>
+          </div>
+
+          <p id="ai-product-search-status" class="text-sm text-ink-600" role="status" aria-live="polite"></p>
+          <div id="ai-recommendation-results" class="hidden space-y-4" aria-live="polite"></div>
+        </div>
+
         <!-- Filter & Search Controls -->
         <div
           class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100"
@@ -5712,6 +5766,8 @@
         sellerListingFilter: "available",
         vouchers: [],
         notifications: [],
+        aiRecommendationIds: null,
+        aiRecommendations: [],
         conversations: [],
         activeConversationId: null,
         messagesSocket: null,
@@ -7296,8 +7352,18 @@
           "filter-circular-only",
         ).checked;
         const sortBy = document.getElementById("sort-select").value;
+        const recommendationOrder = Array.isArray(state.aiRecommendationIds)
+          ? new Map(
+              state.aiRecommendationIds.map((id, index) => [String(id), index]),
+            )
+          : null;
 
         let list = state.products.filter((p) => {
+          if (
+            recommendationOrder &&
+            !recommendationOrder.has(String(p.id))
+          )
+            return false;
           if (
             state.selectedCategory !== "Tất cả" &&
             p.category !== state.selectedCategory
@@ -7327,6 +7393,14 @@
             if (aTime !== bTime) return bTime - aTime;
             return state.products.indexOf(a) - state.products.indexOf(b);
           });
+        }
+
+        if (recommendationOrder) {
+          list.sort(
+            (a, b) =>
+              recommendationOrder.get(String(a.id)) -
+              recommendationOrder.get(String(b.id)),
+          );
         }
 
         return list;
@@ -7432,6 +7506,582 @@
       function loadAllProducts() {
         state.visibleLimit = state.products.length;
         renderProducts();
+      }
+
+      function normalizeAiSearchText(value) {
+        return String(value ?? "")
+          .toLocaleLowerCase("vi")
+          .replace(/đ/g, "d")
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "");
+      }
+
+      function containsAiTerm(text, term) {
+        const normalized = normalizeAiSearchText(text);
+        if (term.includes(" ")) return normalized.includes(term);
+        return normalized.split(/[^a-z0-9]+/).includes(term);
+      }
+
+      function extractAiSearchCriteria(query) {
+        const normalized = normalizeAiSearchText(query);
+        const criteria = {
+          categories: [],
+          size: null,
+          priceMin: null,
+          priceMax: null,
+          colors: [],
+          materials: [],
+          conditionMin: null,
+          cycleMin: null,
+          styleTerms: [],
+        };
+        const categoryRules = [
+          ["Áo khoác", /\bao khoac\b/],
+          ["Set & Phụ kiện", /\bset\b|\bphu kien\b/],
+          ["Váy", /\bvay\b|\bdam\b/],
+          ["Quần", /\bquan\b/],
+        ];
+        categoryRules.forEach(([category, pattern]) => {
+          if (pattern.test(normalized)) criteria.categories.push(category);
+        });
+        const withoutCoat = normalized.replace(/\bao khoac\b/g, "");
+        if (/\bao\b/.test(withoutCoat)) criteria.categories.push("Áo");
+
+        const sizeMatch = normalized.match(
+          /\b(?:size|co)\s*(xxl|xl|xs|s|m|l)\b/,
+        );
+        if (sizeMatch) criteria.size = sizeMatch[1].toUpperCase();
+
+        const amountPattern = "(\\d+(?:[.,]\\d+)?)\\s*(trieu|tr|m|k)?";
+        const priceRange = normalized.match(
+          new RegExp(
+            "\\b(?:tu\\s*)?" +
+              amountPattern +
+            "\\s*(?:den|to|-)\\s*" +
+              amountPattern,
+          ),
+        );
+        const parseAmount = (value, unit) => {
+          let amount = Number(
+            unit ? value.replace(",", ".") : value.replace(/[.,]/g, ""),
+          );
+          if (unit === "k") amount *= 1000;
+          if (["tr", "trieu", "m"].includes(unit)) amount *= 1000000;
+          return Number.isFinite(amount) ? Math.round(amount) : null;
+        };
+        const isPriceAmount = (value, unit) =>
+          Boolean(unit) || parseAmount(value, unit) >= 1000;
+        if (priceRange) {
+          if (
+            isPriceAmount(priceRange[1], priceRange[2]) &&
+            isPriceAmount(priceRange[3], priceRange[4])
+          ) {
+            criteria.priceMin = parseAmount(priceRange[1], priceRange[2]);
+            criteria.priceMax = parseAmount(priceRange[3], priceRange[4]);
+          }
+        } else {
+          const maxMatch = normalized.match(
+            new RegExp(
+              "(?:duoi|toi da|khong qua|<=)\\s*" + amountPattern,
+            ),
+          );
+          const minMatch = normalized.match(
+            new RegExp(
+              "(?:tu|tren|toi thieu|it nhat|>=)\\s*" +
+                amountPattern +
+                "(?!\\s*%)",
+            ),
+          );
+          if (
+            maxMatch &&
+            isPriceAmount(maxMatch[1], maxMatch[2])
+          )
+            criteria.priceMax = parseAmount(maxMatch[1], maxMatch[2]);
+          if (
+            minMatch &&
+            isPriceAmount(minMatch[1], minMatch[2])
+          )
+            criteria.priceMin = parseAmount(minMatch[1], minMatch[2]);
+        }
+
+        const colorRules = [
+          ["trắng", ["trang", "kem", "ivory"]],
+          ["đen", ["den", "black"]],
+          ["be", ["be", "beige"]],
+          ["nâu", ["nau", "brown"]],
+          ["xanh", ["xanh", "blue", "navy"]],
+          ["đỏ", ["do", "red"]],
+          ["hồng", ["hong", "pink"]],
+          ["vàng", ["vang", "yellow"]],
+          ["xám", ["xam", "gray", "grey"]],
+        ];
+        const rawQuery = String(query ?? "").toLocaleLowerCase("vi");
+        colorRules.forEach(([color, aliases]) => {
+          const matches = aliases.some((alias) => {
+            if (alias === "do")
+              return (
+                /(?:^|[^a-z])(?:đỏ|red)(?:$|[^a-z])/.test(rawQuery) ||
+                /\b(?:mau|color)\s+do\b/.test(normalized)
+              );
+            if (alias === "den")
+              return (
+                /(?:^|[^a-z])(?:đen|black)(?:$|[^a-z])/.test(rawQuery) ||
+                /\b(?:mau|color)\s+den\b/.test(normalized)
+              );
+            if (alias === "trang")
+              return (
+                /(?:^|[^a-z])(?:trắng|white)(?:$|[^a-z])/.test(rawQuery) ||
+                /\b(?:mau|color)\s+trang\b/.test(normalized)
+              );
+            return containsAiTerm(normalized, alias);
+          });
+          if (matches)
+            criteria.colors.push({ color, aliases });
+        });
+
+        const materialRules = [
+          ["linen", ["linen", "lanh"]],
+          ["cotton", ["cotton", "bong"]],
+          [
+            "thoáng mát",
+            ["thoang mat", "thoang khi", "linen", "lanh", "cotton", "tencel", "vai tre"],
+          ],
+          ["lụa", ["lua", "silk"]],
+          ["denim", ["denim", "jean"]],
+          ["len", ["len", "wool"]],
+          ["kaki", ["kaki", "khaki"]],
+          ["voan", ["voan", "chiffon"]],
+          ["satin", ["satin"]],
+          ["polyester", ["polyester"]],
+          ["thun", ["thun", "jersey"]],
+        ];
+        materialRules.forEach(([material, aliases]) => {
+          const matches = aliases.some((alias) => {
+            if (alias === "len")
+              return (
+                /(?:^|[^a-z])(?:len|wool)(?:$|[^a-z])/.test(rawQuery) ||
+                containsAiTerm(normalized, "wool")
+              );
+            if (alias === "bong")
+              return (
+                /(?:^|[^a-z])(?:bông|cotton)(?:$|[^a-z])/.test(rawQuery) ||
+                /\b(?:vai|chat lieu)\s+bong\b/.test(normalized)
+              );
+            return containsAiTerm(normalized, alias);
+          });
+          if (matches)
+            criteria.materials.push({ material, aliases });
+        });
+
+        const conditionMatch =
+          normalized.match(/do moi(?: tu)?\s*(\d{2,3})\s*%?/) ||
+          normalized.match(
+            /(?:tu|it nhat|toi thieu|>=|tren)\s*(\d{2,3})\s*%/,
+          );
+        if (conditionMatch)
+          criteria.conditionMin = Math.min(100, Number(conditionMatch[1]));
+
+        const cycleMatch =
+          normalized.match(
+            /\bvong(?: doi)?\s*(?:>=|>|=|tu|toi thieu)?\s*(\d+)\b/,
+          ) ||
+          normalized.match(/(?:>=|>)\s*(\d+)\s*vong\b/);
+        if (cycleMatch)
+          criteria.cycleMin = Number(cycleMatch[1] || cycleMatch[2]);
+
+        const phrases = [
+          "di lam",
+          "thanh lich",
+          "cong so",
+          "dao pho",
+          "cuoi tuan",
+          "toi gian",
+          "thoang mat",
+          "nhe nhang",
+          "the thao",
+          "du tiec",
+        ];
+        criteria.styleTerms = phrases.filter((term) =>
+          normalized.includes(term),
+        );
+        const stopWords = new Set([
+          "va", "hoac", "cho", "voi", "mot", "nhung", "cac", "do", "size",
+          "duoi", "tren", "toi", "da", "khong", "qua", "ngan", "sach", "gia",
+          "vong", "doi", "tu", "it", "nhat", "moi", "phan", "tram", "mau",
+          "chat", "lieu", "ao", "quan", "vay", "dam", "set", "phu", "kien",
+          "trieu", "tr", "k", "m", "l", "s", "xl", "xs", "xxl",
+          "tim", "mon", "san", "pham", "den", "do", "trang", "be", "nau",
+          "xanh", "hong", "vang", "xam", "cotton", "linen", "lua", "silk",
+          "denim", "jean", "len", "kaki", "voan", "satin", "polyester",
+          "thun", "bong",
+        ]);
+        const styleWords = normalized
+          .split(/[^a-z0-9]+/)
+          .filter(
+            (word) =>
+              word.length > 2 &&
+              !stopWords.has(word) &&
+              !/\d/.test(word) &&
+              !criteria.styleTerms.some((phrase) => phrase.includes(word)),
+          );
+        criteria.styleTerms = [
+          ...new Set([...criteria.styleTerms, ...styleWords]),
+        ];
+        return criteria;
+      }
+
+      function getLocalProductRecommendations(query, limit = 6) {
+        const criteria = extractAiSearchCriteria(query);
+        const hasCriteria =
+          criteria.categories.length ||
+          criteria.size ||
+          criteria.priceMin !== null ||
+          criteria.priceMax !== null ||
+          criteria.colors.length ||
+          criteria.materials.length ||
+          criteria.conditionMin !== null ||
+          criteria.cycleMin !== null ||
+          criteria.styleTerms.length;
+        if (!hasCriteria) return [];
+
+        const ranked = state.products
+          .filter((product) => {
+            if (
+              criteria.categories.length &&
+              !criteria.categories.includes(product.category)
+            )
+              return false;
+            if (
+              criteria.size &&
+              normalizeAiSearchText(product.size) !==
+                normalizeAiSearchText(criteria.size)
+            )
+              return false;
+            if (
+              criteria.priceMin !== null &&
+              Number(product.price) < criteria.priceMin
+            )
+              return false;
+            if (
+              criteria.priceMax !== null &&
+              Number(product.price) > criteria.priceMax
+            )
+              return false;
+            if (
+              criteria.conditionMin !== null &&
+              Number(product.condition_percent) < criteria.conditionMin
+            )
+              return false;
+            if (
+              criteria.cycleMin !== null &&
+              Number(product.cycle || 1) < criteria.cycleMin
+            )
+              return false;
+            return true;
+          })
+          .map((product) => {
+            const productColor = normalizeAiSearchText(product.color);
+            const productMaterial = normalizeAiSearchText(product.material);
+            const searchable = normalizeAiSearchText(
+              `${product.name} ${product.category} ${product.trend} ${product.condition_note}`,
+            );
+            let possible = 0;
+            let points = 0;
+            const reasons = [];
+            const addMatch = (weight, matched, reason) => {
+              possible += weight;
+              if (matched) {
+                points += weight;
+                if (reason) reasons.push(reason);
+              }
+            };
+
+            if (criteria.categories.length)
+              addMatch(
+                20,
+                criteria.categories.includes(product.category),
+                `Danh mục ${product.category}`,
+              );
+            if (criteria.size)
+              addMatch(14, true, `đúng size ${product.size}`);
+            if (
+              criteria.priceMin !== null ||
+              criteria.priceMax !== null
+            ) {
+              const rangeText =
+                criteria.priceMin !== null && criteria.priceMax !== null
+                  ? `trong khoảng ${formatVND(criteria.priceMin)}–${formatVND(criteria.priceMax)}`
+                  : criteria.priceMax !== null
+                    ? `trong ngân sách dưới ${formatVND(criteria.priceMax)}`
+                    : `đạt mức giá từ ${formatVND(criteria.priceMin)}`;
+              addMatch(18, true, rangeText);
+            }
+            if (criteria.colors.length) {
+              const matchedColor = criteria.colors.find(({ aliases }) =>
+                aliases.some((alias) => containsAiTerm(productColor, alias)),
+              );
+              addMatch(
+                10,
+                Boolean(matchedColor),
+                matchedColor ? `màu ${product.color}` : "",
+              );
+            }
+            if (criteria.materials.length) {
+              const matchedMaterial = criteria.materials.find(
+                ({ aliases }) =>
+                  aliases.some((alias) =>
+                    containsAiTerm(productMaterial, alias),
+                  ),
+              );
+              addMatch(
+                12,
+                Boolean(matchedMaterial),
+                matchedMaterial ? `chất liệu ${product.material}` : "",
+              );
+            }
+            if (criteria.conditionMin !== null)
+              addMatch(
+                12,
+                true,
+                conditionReason(product.condition_percent, criteria.conditionMin),
+              );
+            if (criteria.cycleMin !== null)
+              addMatch(
+                10,
+                true,
+                `đã qua ${product.cycle || 1} vòng đời`,
+              );
+            if (criteria.styleTerms.length) {
+              const matchedTerms = criteria.styleTerms.filter((term) =>
+                matchesAiStyleTerm(term, searchable),
+              );
+              const styleScore =
+                matchedTerms.length / criteria.styleTerms.length;
+              possible += 14;
+              points += 14 * styleScore;
+              if (matchedTerms.length)
+                reasons.push(`phù hợp phong cách ${matchedTerms.join(", ")}`);
+            }
+
+            return {
+              product_id: String(product.id),
+              score: possible ? Math.round((points / possible) * 100) : 0,
+              reason: reasons.length
+                ? `Khớp ${reasons.slice(0, 3).join("; ")}.`
+                : "Sản phẩm đáp ứng các tiêu chí chính.",
+            };
+          })
+          .filter(
+            (item) =>
+              item.score > 0 &&
+              (!criteria.styleTerms.length ||
+                item.reason !== "Sản phẩm đáp ứng các tiêu chí chính."),
+          )
+          .sort((a, b) => b.score - a.score);
+        return ranked.slice(0, limit);
+      }
+
+      function conditionReason(conditionPercent, minimum) {
+        return `độ mới ${conditionPercent}% (từ ${minimum}%)`;
+      }
+
+      function matchesAiStyleTerm(term, searchable) {
+        const aliases = {
+          "di lam": ["di lam", "cong so", "van phong"],
+          "thanh lich": ["thanh lich", "cong so", "elegant"],
+          "cong so": ["cong so", "di lam", "van phong"],
+          "dao pho": ["dao pho", "casual", "streetwear"],
+          "cuoi tuan": ["cuoi tuan", "dao pho", "casual"],
+          "thoang mat": [
+            "thoang mat",
+            "thoang khi",
+            "linen",
+            "cotton",
+            "tencel",
+            "vai tre",
+          ],
+        };
+        return (aliases[term] || [term]).some((alias) =>
+          containsAiTerm(searchable, alias),
+        );
+      }
+
+      function applyAiQuerySuggestion(button) {
+        const input = document.getElementById("ai-product-query");
+        input.value = button.dataset.aiQuery || "";
+        input.focus();
+      }
+
+      function renderAiRecommendations(recommendations) {
+        const container = document.getElementById("ai-recommendation-results");
+        const productsById = new Map(
+          state.products.map((product) => [String(product.id), product]),
+        );
+        state.aiRecommendations = recommendations
+          .map((item) => {
+            const product = productsById.get(String(item.product_id));
+            if (!product) return null;
+            return {
+              product,
+              score: Math.max(0, Math.min(100, Number(item.score) || 0)),
+              reason: String(item.reason || "Phù hợp với mong muốn của bạn."),
+            };
+          })
+          .filter(Boolean);
+
+        if (!state.aiRecommendations.length) {
+          container.innerHTML = "";
+          container.classList.add("hidden");
+          return;
+        }
+
+        container.innerHTML = `
+          <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <p class="text-sm font-semibold text-ink-900">Tìm thấy ${state.aiRecommendations.length} gợi ý phù hợp</p>
+            <button type="button" onclick="applyAiRecommendationsToStore()" class="rounded-xl border border-eco-200 bg-eco-50 px-4 py-2.5 text-xs font-semibold text-eco-800 hover:bg-eco-100 transition">
+              Áp dụng vào lưới gian hàng
+            </button>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+            ${state.aiRecommendations
+              .map(
+                ({ product, score, reason }) => `
+                  <article class="rounded-2xl border border-sand-200 bg-white p-3 shadow-sm">
+                    <div class="flex gap-3">
+                      <img src="${escapeHtml(normalizeProductImage(product.image_url))}" alt="${escapeHtml(product.name)}" onerror="handleImageFallback(this)" class="h-24 w-20 shrink-0 rounded-xl bg-sand-50 object-cover" />
+                      <div class="min-w-0 flex-1">
+                        <div class="flex items-center justify-between gap-2">
+                          <span class="rounded-full bg-eco-50 px-2 py-1 text-[11px] font-bold text-eco-700">Khớp ${score}%</span>
+                          <span class="text-sm font-bold text-ink-900">${escapeHtml(formatVND(product.price))}</span>
+                        </div>
+                        <h3 class="mt-2 line-clamp-2 text-sm font-bold text-ink-900">${escapeHtml(product.name)}</h3>
+                        <p class="mt-1 text-[11px] text-ink-500">${escapeHtml(product.category)} · Size ${escapeHtml(product.size)} · ${escapeHtml(product.material)}</p>
+                      </div>
+                    </div>
+                    <p class="mt-3 text-xs leading-relaxed text-ink-600">${escapeHtml(reason)}</p>
+                    <div class="mt-3 flex flex-wrap gap-2">
+                      <button type="button" data-recommend-action="detail" data-product-id="${escapeHtml(product.id)}" class="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-ink-700 hover:bg-slate-50 transition">Xem chi tiết</button>
+                      <button type="button" data-recommend-action="cart" data-product-id="${escapeHtml(product.id)}" class="rounded-lg bg-ink-900 px-3 py-2 text-xs font-semibold text-white hover:bg-eco-600 transition">+ Giỏ hàng</button>
+                    </div>
+                  </article>`,
+              )
+              .join("")}
+          </div>`;
+        container.classList.remove("hidden");
+        container.onclick = (event) => {
+          const button = event.target.closest("[data-recommend-action]");
+          if (!button) return;
+          const productId = button.dataset.productId;
+          if (button.dataset.recommendAction === "detail")
+            openProductModal(productId);
+          if (button.dataset.recommendAction === "cart") addToCart(productId);
+        };
+      }
+
+      async function searchProductsWithAI() {
+        const query = document
+          .getElementById("ai-product-query")
+          .value.trim();
+        const status = document.getElementById("ai-product-search-status");
+        const searchButton = document.getElementById(
+          "ai-product-search-button",
+        );
+        if (!query) {
+          status.textContent = "Hãy nhập mong muốn để bắt đầu tìm kiếm.";
+          status.className = "text-sm text-rose-600";
+          return;
+        }
+
+        state.aiRecommendationIds = null;
+        state.visibleLimit = 16;
+        renderProducts();
+        searchButton.disabled = true;
+        status.className = "text-sm text-ink-600";
+        status.textContent = "Đang đối chiếu sản phẩm với mong muốn của bạn…";
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 8000);
+          let response;
+          try {
+            response = await apiFetch("/api/ai/recommend-products", {
+              method: "POST",
+              body: JSON.stringify({ query, limit: 6 }),
+              signal: controller.signal,
+            });
+          } finally {
+            clearTimeout(timeoutId);
+          }
+          if (!Array.isArray(response.items))
+            throw new Error("AI trả về danh sách gợi ý không hợp lệ.");
+
+          const recommendations = response.items
+            .filter(
+              (item) =>
+                item &&
+                state.products.some(
+                  (product) =>
+                    String(product.id) === String(item.product_id),
+                ),
+            )
+            .map((item) => ({
+              product_id: String(item.product_id),
+              score: item.score,
+              reason: item.reason,
+            }));
+          if (response.items.length && !recommendations.length)
+            throw new Error("Không tìm thấy sản phẩm hợp lệ trong gợi ý AI.");
+          renderAiRecommendations(recommendations);
+          state.aiRecommendationIds = null;
+          status.className = "text-sm text-eco-700";
+          status.textContent = "Đã tìm bằng AI trên danh sách sản phẩm đang bán.";
+          if (!recommendations.length)
+            status.textContent =
+              "AI chưa tìm thấy sản phẩm phù hợp. Hãy thử mô tả rộng hơn.";
+        } catch (error) {
+          const recommendations = getLocalProductRecommendations(query, 6);
+          renderAiRecommendations(recommendations);
+          state.aiRecommendationIds = null;
+          status.className = "text-sm text-amber-700";
+          status.textContent =
+            "AI trực tuyến hiện chưa khả dụng; kết quả dưới đây dùng đối sánh cục bộ từ danh sách sản phẩm đã tải.";
+          showToast(
+            "AI backend chưa khả dụng; RE:LOOP đã dùng đối sánh cục bộ.",
+            "warning",
+          );
+          if (!recommendations.length)
+            status.textContent +=
+              " Chưa có món khớp rõ ràng — hãy thử bổ sung danh mục, size hoặc ngân sách.";
+          console.warn("AI product search used local matching:", error);
+        } finally {
+          searchButton.disabled = false;
+        }
+      }
+
+      function clearAiRecommendations() {
+        state.aiRecommendations = [];
+        state.aiRecommendationIds = null;
+        document.getElementById("ai-product-query").value = "";
+        document.getElementById("ai-product-search-status").textContent = "";
+        document.getElementById("ai-recommendation-results").innerHTML = "";
+        document
+          .getElementById("ai-recommendation-results")
+          .classList.add("hidden");
+        renderProducts();
+      }
+
+      function applyAiRecommendationsToStore() {
+        state.aiRecommendationIds = state.aiRecommendations.map(({ product }) =>
+          String(product.id),
+        );
+        state.selectedCategory = "Tất cả";
+        state.visibleLimit = Math.max(16, state.aiRecommendationIds.length);
+        document.getElementById("search-input").value = "";
+        document.getElementById("filter-circular-only").checked = false;
+        document.getElementById("sort-select").value = "newest";
+        filterCategory("Tất cả");
+        document
+          .getElementById("products-grid")
+          .scrollIntoView({ behavior: "smooth", block: "start" });
       }
 
       function openProductModal(id) {
