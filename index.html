@@ -161,8 +161,8 @@
     <header
       class="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-100"
     >
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex items-center justify-between h-16 lg:h-20 gap-4">
+      <div class="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8">
+        <div class="flex items-center justify-between h-16 lg:h-20 gap-2 lg:gap-4">
           <!-- Logo -->
           <a
             href="#"
@@ -194,7 +194,7 @@
                 >RE:LOOP</span
               >
               <span
-                class="block text-[10px] uppercase tracking-widest text-eco-700 font-semibold -mt-1"
+                class="hidden lg:block text-[10px] uppercase tracking-widest text-eco-700 font-semibold -mt-1"
                 >Circular AI Fashion</span
               >
             </div>
@@ -202,65 +202,65 @@
 
           <!-- Desktop Nav -->
           <nav
-            class="hidden lg:flex items-center gap-1 bg-slate-50 p-1 rounded-2xl border border-slate-100"
+            class="hidden md:flex shrink-0 items-center gap-0.5 whitespace-nowrap bg-slate-50 p-1 rounded-2xl border border-slate-100"
           >
             <button
               onclick="switchTab('store')"
               data-tab="store"
-              class="nav-tab px-4 py-2 rounded-xl text-sm font-semibold transition bg-white text-ink-900 shadow-sm"
+              class="nav-tab whitespace-nowrap px-0.5 md:px-1 lg:px-2 py-2 rounded-xl text-[10px] lg:text-xs font-semibold transition bg-white text-ink-900 shadow-sm"
             >
-              Khám phá Gian hàng
+              Khám phá
             </button>
             <button
               onclick="switchTab('sell')"
               data-tab="sell"
-              class="nav-tab px-4 py-2 rounded-xl text-sm font-medium text-ink-700 hover:text-ink-900 transition"
+              class="nav-tab whitespace-nowrap px-0.5 md:px-1 lg:px-2 py-2 rounded-xl text-[10px] lg:text-xs font-medium text-ink-700 hover:text-ink-900 transition"
             >
-              Đăng bán AI
+              Đăng bán
             </button>
             <button
               onclick="switchTab('wardrobe')"
               data-tab="wardrobe"
-              class="nav-tab px-4 py-2 rounded-xl text-sm font-medium text-ink-700 hover:text-ink-900 transition"
+              class="nav-tab whitespace-nowrap px-0.5 md:px-1 lg:px-2 py-2 rounded-xl text-[10px] lg:text-xs font-medium text-ink-700 hover:text-ink-900 transition"
             >
-              Tủ đồ & Phối đồ AI
+              Tủ đồ
             </button>
             <button
               onclick="switchTab('orders')"
               data-tab="orders"
-              class="nav-tab px-4 py-2 rounded-xl text-sm font-medium text-ink-700 hover:text-ink-900 transition"
+              class="nav-tab whitespace-nowrap px-0.5 md:px-1 lg:px-2 py-2 rounded-xl text-[10px] lg:text-xs font-medium text-ink-700 hover:text-ink-900 transition"
             >
-              Đã mua / Ký gửi lại
+              Đã mua
             </button>
             <button
               onclick="switchTab('seller')"
               data-tab="seller"
-              class="nav-tab px-4 py-2 rounded-xl text-sm font-medium text-ink-700 hover:text-ink-900 transition"
+              class="nav-tab whitespace-nowrap px-0.5 md:px-1 lg:px-2 py-2 rounded-xl text-[10px] lg:text-xs font-medium text-ink-700 hover:text-ink-900 transition"
             >
-              Đơn bán của tôi
+              Đơn bán
             </button>
             <button
               onclick="switchTab('messages')"
               data-tab="messages"
-              class="nav-tab px-4 py-2 rounded-xl text-sm font-medium text-ink-700 hover:text-ink-900 transition"
+              class="nav-tab whitespace-nowrap px-0.5 md:px-1 lg:px-2 py-2 rounded-xl text-[10px] lg:text-xs font-medium text-ink-700 hover:text-ink-900 transition"
             >
               Tin nhắn
             </button>
             <button
               onclick="switchTab('green')"
               data-tab="green"
-              class="nav-tab px-4 py-2 rounded-xl text-sm font-medium text-ink-700 hover:text-ink-900 transition"
+              class="nav-tab whitespace-nowrap px-0.5 md:px-1 lg:px-2 py-2 rounded-xl text-[10px] lg:text-xs font-medium text-ink-700 hover:text-ink-900 transition"
             >
               Điểm Xanh
             </button>
           </nav>
 
           <!-- Right Actions -->
-          <div class="flex items-center gap-2 sm:gap-3">
+          <div class="flex items-center gap-1 sm:gap-2 xl:gap-3">
             <!-- Green Points Pill -->
             <button
               onclick="switchTab('green')"
-              class="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-eco-50 border border-eco-200 text-eco-700 text-xs font-semibold hover:bg-eco-100 transition"
+              class="hidden lg:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-eco-50 border border-eco-200 text-eco-700 text-xs font-semibold hover:bg-eco-100 transition"
             >
               <span>🌱</span>
               <span id="header-points">0</span>
@@ -270,7 +270,7 @@
             <!-- Cart Button -->
             <button
               onclick="toggleCart(true)"
-              class="relative p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-ink-900 transition"
+              class="relative p-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-ink-900 transition"
               title="Giỏ hàng"
             >
               <svg
@@ -297,13 +297,13 @@
             <div id="auth-guest-area" class="flex items-center gap-2">
               <button
                 onclick="openAuthModal('login')"
-                class="px-3.5 py-2 rounded-xl text-sm font-semibold text-ink-700 hover:bg-slate-100 transition"
+                class="whitespace-nowrap px-2 lg:px-3.5 py-2 rounded-xl text-xs lg:text-sm font-semibold text-ink-700 hover:bg-slate-100 transition"
               >
                 Đăng nhập
               </button>
               <button
                 onclick="openAuthModal('register')"
-                class="px-3.5 py-2 rounded-xl text-sm font-semibold bg-ink-900 text-white hover:bg-ink-700 transition shadow-sm"
+                class="whitespace-nowrap px-2 lg:px-3.5 py-2 rounded-xl text-xs lg:text-sm font-semibold bg-ink-900 text-white hover:bg-ink-700 transition shadow-sm"
               >
                 Tạo tài khoản
               </button>
@@ -348,7 +348,7 @@
               </div>
               <button
                 onclick="toggleUserDropdown()"
-                class="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-full bg-sand-100 border border-sand-200 hover:bg-sand-200/70 transition"
+                class="flex items-center gap-1 lg:gap-2 pl-1 lg:pl-2 pr-1 lg:pr-3 py-1.5 rounded-full bg-sand-100 border border-sand-200 hover:bg-sand-200/70 transition"
               >
                 <div
                   id="user-avatar-initials"
@@ -358,7 +358,7 @@
                 </div>
                 <span
                   id="user-display-name"
-                  class="text-sm font-semibold text-ink-900 max-w-[110px] truncate"
+                  class="hidden lg:inline text-sm font-semibold text-ink-900 max-w-[110px] truncate"
                   >Minh Anh</span
                 >
                 <span
@@ -367,7 +367,7 @@
                   >Admin</span
                 >
                 <svg
-                  class="w-4 h-4 text-ink-500"
+                  class="hidden lg:block w-4 h-4 text-ink-500"
                   fill="none"
                   stroke="currentColor"
                   stroke-width="2"
@@ -468,35 +468,35 @@
 
         <!-- Mobile Navigation -->
         <div
-          class="flex lg:hidden items-center gap-1.5 overflow-x-auto pb-2.5 no-scrollbar"
+          class="flex md:hidden items-center gap-1.5 whitespace-nowrap overflow-x-auto pb-2.5 no-scrollbar"
         >
           <button
             onclick="switchTab('store')"
             data-tab="store"
             class="nav-tab shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold bg-eco-600 text-white"
           >
-            Gian hàng
+            Khám phá
           </button>
           <button
             onclick="switchTab('sell')"
             data-tab="sell"
             class="nav-tab shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-100 text-ink-700"
           >
-            Đăng bán AI
+            Đăng bán
           </button>
           <button
             onclick="switchTab('wardrobe')"
             data-tab="wardrobe"
             class="nav-tab shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-100 text-ink-700"
           >
-            Tủ đồ & Phối đồ
+            Tủ đồ
           </button>
           <button
             onclick="switchTab('orders')"
             data-tab="orders"
             class="nav-tab shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-100 text-ink-700"
           >
-            Ký gửi lại
+            Đã mua
           </button>
           <button
             onclick="switchTab('seller')"
@@ -1143,7 +1143,7 @@
           <span class="text-xs font-semibold uppercase tracking-wider text-eco-700">
             Seller Center
           </span>
-          <h2 class="text-3xl font-bold text-ink-900 mt-1">Đơn bán của tôi</h2>
+          <h2 class="text-3xl font-bold text-ink-900 mt-1">Đơn bán</h2>
           <p class="text-sm text-ink-600 mt-1">
             Theo dõi sản phẩm đang bán, đã bán và tin đã hủy. Tin đang bán có thể
             được hủy; sản phẩm đã bán vẫn được lưu trong lịch sử.
@@ -4992,12 +4992,12 @@
           const active = btn.dataset.tab === tabName;
           if (btn.closest("nav")) {
             btn.className = active
-              ? "nav-tab px-4 py-2 rounded-xl text-sm font-semibold transition bg-white text-ink-900 shadow-sm"
-              : "nav-tab px-4 py-2 rounded-xl text-sm font-medium text-ink-700 hover:text-ink-900 transition";
+              ? "nav-tab whitespace-nowrap px-0.5 md:px-1 lg:px-2 py-2 rounded-xl text-[10px] lg:text-xs font-semibold transition bg-white text-ink-900 shadow-sm"
+              : "nav-tab whitespace-nowrap px-0.5 md:px-1 lg:px-2 py-2 rounded-xl text-[10px] lg:text-xs font-medium text-ink-700 hover:text-ink-900 transition";
           } else {
             btn.className = active
-              ? "nav-tab shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold bg-eco-600 text-white"
-              : "nav-tab shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-100 text-ink-700";
+              ? "nav-tab whitespace-nowrap shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold bg-eco-600 text-white"
+              : "nav-tab whitespace-nowrap shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-100 text-ink-700";
           }
         });
         if (tabName === "wardrobe") generateAIOutfits(false);
