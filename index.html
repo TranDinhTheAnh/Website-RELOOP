@@ -3193,8 +3193,13 @@
         activeConversationId: null,
         messagesSocket: null,
         messagesSocketConnecting: false,
+        messagesSocketConnectingToken: null,
         messagesReconnectTimer: null,
+        messagesReconnectAttempts: 0,
         messagesHeartbeatTimer: null,
+        messagesHeartbeatTimeoutTimer: null,
+        messagesVisibilityHandler: null,
+        messagesSocketAuthFailedToken: null,
         messagesRealtimeWarned: false,
         typingIndicatorTimer: null,
         lastTypingSentAt: 0,
@@ -4328,8 +4333,33 @@
         }
       }
 
+      function isLocalAuthToken(token) {
+        return /^(local-token-|offline-|api-token-)/.test(token || "");
+      }
+
+      function scheduleMessagesReconnect() {
+        if (!state.token || state.messagesReconnectTimer) return;
+        const delay = Math.min(
+          3000 * 2 ** state.messagesReconnectAttempts,
+          30000,
+        );
+        state.messagesReconnectAttempts += 1;
+        state.messagesReconnectTimer = setTimeout(() => {
+          state.messagesReconnectTimer = null;
+          connectMessagesSocket();
+        }, delay + Math.floor(Math.random() * 1000));
+      }
+
       async function connectMessagesSocket() {
-        if (!state.token || state.messagesSocketConnecting) return;
+        const token = state.token;
+        if (
+          !token ||
+          isLocalAuthToken(token) ||
+          state.messagesSocketAuthFailedToken === token ||
+          state.messagesSocketConnecting
+        ) {
+          return;
+        }
         if (
           state.messagesSocket &&
           (state.messagesSocket.readyState === WebSocket.OPEN ||
@@ -4343,30 +4373,79 @@
         }
 
         state.messagesSocketConnecting = true;
+        state.messagesSocketConnectingToken = token;
         try {
           const result = await apiFetch("/api/messages/ws-ticket", {
             method: "POST",
           });
-          if (!state.token) {
-            state.messagesSocketConnecting = false;
+          if (state.token !== token) {
+            if (state.messagesSocketConnectingToken === token) {
+              state.messagesSocketConnecting = false;
+              state.messagesSocketConnectingToken = null;
+            }
             return;
           }
           const socketUrl = `${API_BASE.replace(/^http/, "ws")}/api/messages/ws?ticket=${encodeURIComponent(result.ticket)}`;
           const socket = new WebSocket(socketUrl);
+          let visibilityHandler = null;
           state.messagesSocket = socket;
           socket.onopen = () => {
+            if (state.token !== token) {
+              if (state.messagesSocket === socket) {
+                state.messagesSocket = null;
+              }
+              if (state.messagesSocketConnectingToken === token) {
+                state.messagesSocketConnecting = false;
+                state.messagesSocketConnectingToken = null;
+              }
+              socket.close(1000, "Session changed");
+              return;
+            }
             state.messagesSocketConnecting = false;
+            state.messagesSocketConnectingToken = null;
+            state.messagesReconnectAttempts = 0;
+            state.messagesSocketAuthFailedToken = null;
             state.messagesRealtimeWarned = false;
             if (state.messagesHeartbeatTimer) {
               clearInterval(state.messagesHeartbeatTimer);
             }
-            state.messagesHeartbeatTimer = setInterval(() => {
-              if (socket.readyState === WebSocket.OPEN) {
-                socket.send(JSON.stringify({ type: "ping" }));
+            const sendHeartbeat = () => {
+              if (
+                document.hidden ||
+                socket.readyState !== WebSocket.OPEN ||
+                state.messagesSocket !== socket
+              ) {
+                return;
               }
-            }, 25000);
+              try {
+                socket.send(JSON.stringify({ type: "ping" }));
+              } catch {
+                socket.close();
+                return;
+              }
+              if (state.messagesHeartbeatTimeoutTimer) {
+                clearTimeout(state.messagesHeartbeatTimeoutTimer);
+              }
+              state.messagesHeartbeatTimeoutTimer = setTimeout(() => {
+                socket.close(4000, "Heartbeat timeout");
+              }, 10000);
+            };
+            visibilityHandler = () => {
+              if (document.hidden) {
+                if (state.messagesHeartbeatTimeoutTimer) {
+                  clearTimeout(state.messagesHeartbeatTimeoutTimer);
+                  state.messagesHeartbeatTimeoutTimer = null;
+                }
+              } else {
+                sendHeartbeat();
+              }
+            };
+            state.messagesVisibilityHandler = visibilityHandler;
+            document.addEventListener("visibilitychange", visibilityHandler);
+            state.messagesHeartbeatTimer = setInterval(sendHeartbeat, 25000);
           };
           socket.onmessage = (event) => {
+            if (state.messagesSocket !== socket) return;
             let payload;
             try {
               payload = JSON.parse(event.data);
@@ -4374,48 +4453,78 @@
               console.warn("Nhận được sự kiện tin nhắn không hợp lệ:", error);
               return;
             }
+            if (payload.type === "pong") {
+              if (state.messagesHeartbeatTimeoutTimer) {
+                clearTimeout(state.messagesHeartbeatTimeoutTimer);
+                state.messagesHeartbeatTimeoutTimer = null;
+              }
+              return;
+            }
             handleMessagesSocketEvent(payload);
           };
           socket.onclose = () => {
+            if (visibilityHandler) {
+              document.removeEventListener(
+                "visibilitychange",
+                visibilityHandler,
+              );
+              if (state.messagesVisibilityHandler === visibilityHandler) {
+                state.messagesVisibilityHandler = null;
+              }
+              visibilityHandler = null;
+            }
             if (state.messagesSocket !== socket) return;
             state.messagesSocket = null;
-            state.messagesSocketConnecting = false;
+            if (state.messagesSocketConnectingToken === token) {
+              state.messagesSocketConnecting = false;
+              state.messagesSocketConnectingToken = null;
+            }
             if (state.messagesHeartbeatTimer) {
               clearInterval(state.messagesHeartbeatTimer);
               state.messagesHeartbeatTimer = null;
             }
+            if (state.messagesHeartbeatTimeoutTimer) {
+              clearTimeout(state.messagesHeartbeatTimeoutTimer);
+              state.messagesHeartbeatTimeoutTimer = null;
+            }
             setTypingIndicator(false);
-            if (state.token) {
+            if (state.token === token) {
               if (!state.messagesRealtimeWarned) {
                 showToast(
-                  "Kết nối trực tiếp bị gián đoạn. Hệ thống đang kết nối lại...",
+                  "Kết nối tin nhắn trực tiếp bị gián đoạn. Hệ thống đang kết nối lại...",
                   "warning",
                 );
                 state.messagesRealtimeWarned = true;
               }
-              state.messagesReconnectTimer = setTimeout(() => {
-                state.messagesReconnectTimer = null;
-                connectMessagesSocket();
-              }, 3000);
+              scheduleMessagesReconnect();
             }
           };
-          socket.onerror = () => socket.close();
+          socket.onerror = () => {
+            if (state.messagesSocket === socket) socket.close();
+          };
         } catch (err) {
-          state.messagesSocketConnecting = false;
+          if (state.messagesSocketConnectingToken === token) {
+            state.messagesSocketConnecting = false;
+            state.messagesSocketConnectingToken = null;
+          }
+          if (state.token !== token) return;
+          if (err.status === 401 || err.status === 403) {
+            state.messagesSocketAuthFailedToken = token;
+            showToast(
+              "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại để dùng hộp thư.",
+              "warning",
+            );
+            return;
+          }
           console.warn("Không thể kết nối WebSocket tin nhắn:", err.message);
           if (!state.messagesRealtimeWarned) {
             showToast(
-              "Kết nối trực tiếp bị gián đoạn. Hệ thống đang kết nối lại...",
+              "Kết nối tin nhắn trực tiếp bị gián đoạn. Hệ thống đang kết nối lại...",
               "warning",
             );
             state.messagesRealtimeWarned = true;
           }
-          if (state.token) {
-            state.messagesReconnectTimer = setTimeout(() => {
-              state.messagesReconnectTimer = null;
-              connectMessagesSocket();
-            }, 3000);
-          }
+          scheduleMessagesReconnect();
         }
       }
 
@@ -4492,9 +4601,23 @@
           clearInterval(state.messagesHeartbeatTimer);
           state.messagesHeartbeatTimer = null;
         }
+        if (state.messagesHeartbeatTimeoutTimer) {
+          clearTimeout(state.messagesHeartbeatTimeoutTimer);
+          state.messagesHeartbeatTimeoutTimer = null;
+        }
+        if (state.messagesVisibilityHandler) {
+          document.removeEventListener(
+            "visibilitychange",
+            state.messagesVisibilityHandler,
+          );
+          state.messagesVisibilityHandler = null;
+        }
+        state.messagesReconnectAttempts = 0;
+        state.messagesSocketAuthFailedToken = null;
         const socket = state.messagesSocket;
         state.messagesSocket = null;
         state.messagesSocketConnecting = false;
+        state.messagesSocketConnectingToken = null;
         if (socket) socket.close(1000, "Signed out");
         setTypingIndicator(false);
       }
@@ -6114,6 +6237,13 @@
         if (tabName === "messages" && (!state.user || !state.token)) {
           showToast("Vui lòng đăng nhập để sử dụng hộp thư.", "info");
           openAuthModal("login");
+          return;
+        }
+        if (tabName === "messages" && isLocalAuthToken(state.token)) {
+          showToast(
+            "Hộp thư cần kết nối máy chủ. Vui lòng đăng nhập lại khi dịch vụ trực tuyến.",
+            "warning",
+          );
           return;
         }
         [
