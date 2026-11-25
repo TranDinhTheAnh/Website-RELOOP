@@ -51,7 +51,64 @@
         },
       };
     </script>
+    <script>
+      const savedReloopTheme = localStorage.getItem("reloop_theme");
+      const prefersDarkTheme = window.matchMedia(
+        "(prefers-color-scheme: dark)",
+      ).matches;
+      document.documentElement.dataset.theme =
+        savedReloopTheme === "light" || savedReloopTheme === "dark"
+          ? savedReloopTheme
+          : prefersDarkTheme
+            ? "dark"
+            : "light";
+    </script>
     <style>
+      :root {
+        color-scheme: light;
+        --page-bg: #faf8f5;
+        --surface: #ffffff;
+        --surface-muted: #f5f2eb;
+        --surface-subtle: #f8fafc;
+        --ink-900: #111827;
+        --ink-700: #374151;
+        --ink-500: #6b7280;
+        --ink-400: #6b7280;
+        --eco-50: #ecfdf5;
+        --eco-100: #d1fae5;
+        --eco-200: #a7f3d0;
+        --eco-500: #10b981;
+        --eco-600: #059669;
+        --eco-700: #047857;
+        --eco-900: #064e3b;
+        --sand-50: #faf8f5;
+        --sand-100: #f5f2eb;
+        --sand-200: #e8e2d5;
+        --line: rgba(17, 24, 39, 0.08);
+        --shadow-card:
+          0 2px 6px rgba(17, 24, 39, 0.03),
+          0 14px 36px -22px rgba(17, 24, 39, 0.2);
+        --shadow-float:
+          0 12px 30px -16px rgba(17, 24, 39, 0.22),
+          0 4px 12px rgba(17, 24, 39, 0.05);
+        --radius-card: 1.75rem;
+        --duration-fast: 180ms;
+        --duration-ui: 280ms;
+        --duration-reveal: 560ms;
+        --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);
+      }
+
+      @keyframes dropdown-enter {
+        from {
+          opacity: 0;
+          transform: translateY(-4px) scale(0.98);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+      }
+
       * {
         font-family:
           "Plus Jakarta Sans",
@@ -60,87 +117,849 @@
           BlinkMacSystemFont,
           sans-serif;
       }
-      body {
-        background-color: #ffffff;
-        color: #111827;
+
+      html {
+        scroll-behavior: auto;
+        scroll-padding-top: 6rem;
       }
 
-      /* AI Laser Scan Animation */
-      @keyframes scanLine {
-        0% {
-          top: 0%;
-          opacity: 0.9;
-        }
-        50% {
-          top: 96%;
-          opacity: 1;
-        }
-        100% {
-          top: 0%;
-          opacity: 0.9;
-        }
+      body.bg-white {
+        background:
+          radial-gradient(ellipse at 12% 0%, rgba(16, 185, 129, 0.035), transparent 34rem),
+          var(--page-bg) !important;
+        color: var(--ink-900);
       }
-      .ai-scanner-bar {
+
+      .bg-white {
+        background-color: var(--surface) !important;
+      }
+
+      .bg-slate-50,
+      .bg-slate-100 {
+        background-color: var(--surface-subtle) !important;
+      }
+
+      .bg-sand-50 {
+        background-color: var(--sand-50) !important;
+      }
+
+      .bg-sand-100 {
+        background-color: var(--surface-muted) !important;
+      }
+
+      .bg-eco-50 {
+        background-color: var(--eco-50) !important;
+      }
+
+      .bg-eco-100 {
+        background-color: var(--eco-100) !important;
+      }
+
+      .bg-eco-200 {
+        background-color: var(--eco-200) !important;
+      }
+
+      .bg-eco-500 {
+        background-color: var(--eco-500) !important;
+      }
+
+      .bg-eco-600 {
+        background-color: var(--eco-700) !important;
+      }
+
+      .bg-eco-700 {
+        background-color: var(--eco-900) !important;
+      }
+
+      .bg-rose-600 {
+        background-color: #be123c !important;
+      }
+
+      .bg-amber-600 {
+        background-color: #b45309 !important;
+      }
+
+      .hover\:bg-eco-700:hover,
+      .hover\:bg-eco-600:hover {
+        background-color: var(--eco-900) !important;
+      }
+
+      .text-ink-900 {
+        color: var(--ink-900) !important;
+      }
+
+      .text-ink-700 {
+        color: var(--ink-700) !important;
+      }
+
+      .text-ink-500 {
+        color: var(--ink-500) !important;
+      }
+
+      .text-ink-400 {
+        color: var(--ink-400) !important;
+      }
+
+      .text-rose-500 {
+        color: #be123c !important;
+      }
+
+      .text-eco-500,
+      .text-eco-600,
+      .text-eco-700,
+      .text-eco-800 {
+        color: var(--eco-700) !important;
+      }
+
+      .text-eco-900 {
+        color: var(--eco-900) !important;
+      }
+
+      .border-slate-100,
+      .border-slate-200 {
+        border-color: var(--line) !important;
+      }
+
+      .border-sand-200 {
+        border-color: var(--sand-200) !important;
+      }
+
+      .border-eco-200 {
+        border-color: var(--eco-200) !important;
+      }
+
+      .border-eco-600 {
+        border-color: var(--eco-600) !important;
+      }
+
+      body.modal-open {
+        overflow: hidden;
+      }
+
+      button,
+      input,
+      select,
+      textarea {
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      button {
+        transition-property: transform, opacity !important;
+        transition-duration: var(--duration-fast) !important;
+        transition-timing-function: var(--ease-smooth) !important;
+      }
+
+      [class*="transition"] {
+        transition-property: transform, opacity !important;
+        transition-duration: var(--duration-ui) !important;
+        transition-timing-function: var(--ease-smooth) !important;
+      }
+
+      button:not(:disabled):active {
+        transform: scale(0.98);
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.58;
+      }
+
+      button.is-loading {
+        position: relative;
+        pointer-events: none;
+        color: transparent !important;
+      }
+
+      button.is-loading::after {
         position: absolute;
-        left: 0;
-        right: 0;
-        height: 3px;
-        background: linear-gradient(
-          90deg,
-          transparent,
-          #10b981,
-          #34d399,
-          #10b981,
-          transparent
-        );
-        box-shadow: 0 0 14px 3px rgba(16, 185, 129, 0.75);
-        animation: scanLine 2s ease-in-out infinite;
+        top: 50%;
+        left: 50%;
+        width: 1rem;
+        height: 1rem;
+        border: 2px solid currentColor;
+        border-right-color: transparent;
+        border-radius: 50%;
+        content: "";
+        color: #ffffff;
+        transform: translate(-50%, -50%);
+        animation: loading-spin 700ms linear infinite;
       }
 
-      /* Custom Scrollbar */
+      :focus-visible {
+        outline: 3px solid rgba(16, 185, 129, 0.75);
+        outline-offset: 3px;
+      }
+
+      input:not([type="checkbox"]):focus,
+      select:focus,
+      textarea:focus {
+        box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.12);
+      }
+
+      ::selection {
+        background: rgba(16, 185, 129, 0.18);
+      }
+
       ::-webkit-scrollbar {
-        width: 6px;
-        height: 6px;
+        width: 7px;
+        height: 7px;
       }
+
       ::-webkit-scrollbar-track {
-        background: #f8fafc;
+        background: transparent;
       }
+
       ::-webkit-scrollbar-thumb {
         background: #cbd5e1;
+        border: 2px solid transparent;
         border-radius: 999px;
+        background-clip: padding-box;
       }
+
       ::-webkit-scrollbar-thumb:hover {
         background: #94a3b8;
+        background-clip: padding-box;
+      }
+
+      .scroll-progress {
+        position: fixed;
+        inset: 0 auto auto 0;
+        z-index: 60;
+        width: 100%;
+        height: 3px;
+        background: linear-gradient(90deg, #10b981, #a3e635);
+        transform: scaleX(0);
+        transform-origin: left center;
+        pointer-events: none;
+        will-change: transform;
+      }
+
+      .site-header {
+        background: rgba(255, 255, 255, 0.82);
+        border-color: rgba(17, 24, 39, 0.07);
+        backdrop-filter: blur(18px) saturate(150%);
+        -webkit-backdrop-filter: blur(18px) saturate(150%);
+      }
+
+      .site-header.is-scrolled {
+        background: rgba(255, 255, 255, 0.94);
+        box-shadow: 0 8px 26px -20px rgba(17, 24, 39, 0.45);
+        border-color: rgba(17, 24, 39, 0.1);
+      }
+
+      .header-row {
+        transform-origin: center top;
+        transition: transform 220ms var(--ease-smooth);
+      }
+
+      .site-header.is-scrolled .header-row {
+        transform: scale(0.985);
+      }
+
+      .tab-rail,
+      .mobile-tab-rail {
+        position: relative;
+        isolation: isolate;
+      }
+
+      .tab-rail::before,
+      .mobile-tab-rail::before {
+        position: absolute;
+        z-index: -1;
+        top: 0;
+        left: 0;
+        width: 1px;
+        height: 1px;
+        border-radius: 0.8rem;
+        content: "";
+        pointer-events: none;
+        transform: translate3d(var(--pill-x, 0), var(--pill-y, 0), 0)
+          scale(var(--pill-scale-x, 0), var(--pill-scale-y, 0));
+        transform-origin: top left;
+        transition: transform 320ms var(--ease-smooth);
+      }
+
+      .tab-rail::before {
+        background: #ffffff;
+        box-shadow: 0 2px 8px rgba(17, 24, 39, 0.08);
+      }
+
+      .mobile-tab-rail::before {
+        background: linear-gradient(135deg, var(--eco-700), var(--eco-900));
+      }
+
+      .tab-rail .nav-tab,
+      .mobile-tab-rail .nav-tab {
+        position: relative;
+        z-index: 1;
+      }
+
+      .tab-rail .nav-tab {
+        background-color: transparent !important;
+        box-shadow: none !important;
+      }
+
+      .mobile-tab-rail .nav-tab.bg-eco-600 {
+        background-color: transparent !important;
+      }
+
+      .hero-panel {
+        isolation: isolate;
+        background:
+          radial-gradient(ellipse at 88% 18%, rgba(16, 185, 129, 0.13), transparent 30%),
+          radial-gradient(ellipse at 66% 100%, rgba(217, 180, 118, 0.17), transparent 36%),
+          linear-gradient(135deg, #f5f2eb 0%, #ffffff 52%, #ecfdf5 100%);
+        box-shadow: var(--shadow-card);
+      }
+
+      .hero-panel::before,
+      .hero-panel::after {
+        position: absolute;
+        z-index: -1;
+        width: 18rem;
+        height: 18rem;
+        border-radius: 50%;
+        content: "";
+        filter: blur(55px);
+        opacity: 0.28;
+        pointer-events: none;
+        animation: aurora-drift 14s ease-in-out infinite alternate;
+      }
+
+      .hero-panel::before {
+        top: -9rem;
+        right: 18%;
+        background: #6ee7b7;
+      }
+
+      .hero-panel::after {
+        right: -8rem;
+        bottom: -12rem;
+        background: #d6bd91;
+        animation-delay: -7s;
+      }
+
+      .hero-title {
+        font-size: clamp(2.15rem, 5vw, 4.25rem);
+        letter-spacing: -0.055em;
+        line-height: 1.06;
+        text-wrap: balance;
+      }
+
+      .hero-gradient {
+        color: var(--eco-700);
+        background: linear-gradient(
+          110deg,
+          var(--eco-900) 10%,
+          var(--eco-700) 55%,
+          var(--eco-700)
+        );
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .hero-stat-card {
+        box-shadow: var(--shadow-float);
+        animation: float-card 5s ease-in-out infinite;
+      }
+
+      .hero-count {
+        font-variant-numeric: tabular-nums;
+      }
+
+      .hero-stat-card:nth-child(2) {
+        animation-delay: -1.7s;
+      }
+
+      .hero-stat-card:nth-child(3) {
+        animation-delay: -3.1s;
+      }
+
+      .hero-panel > .max-w-2xl {
+        animation: fade-up 650ms var(--ease-smooth) both;
+      }
+
+      .hero-panel > .max-w-2xl > :nth-child(2) {
+        animation: fade-up 700ms 90ms var(--ease-smooth) both;
+      }
+
+      .hero-panel > .max-w-2xl > :nth-child(3) {
+        animation: fade-up 700ms 170ms var(--ease-smooth) both;
+      }
+
+      .hero-panel > .max-w-2xl > :nth-child(4) {
+        animation: fade-up 700ms 250ms var(--ease-smooth) both;
+      }
+
+      .hero-panel button {
+        position: relative;
+        overflow: hidden;
+      }
+
+      .hero-panel button::after {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(110deg, transparent 25%, rgba(255, 255, 255, 0.28), transparent 70%);
+        content: "";
+        transform: translateX(-120%);
+        transition: transform 550ms var(--ease-smooth);
+      }
+
+      .hero-panel button:hover::after {
+        transform: translateX(120%);
+      }
+
+      #section-store,
+      #section-sell,
+      #section-wardrobe,
+      #section-orders,
+      #section-seller,
+      #section-messages,
+      #section-green {
+        animation: tab-enter 280ms var(--ease-smooth) both;
       }
 
       .card-hover {
+        box-shadow: var(--shadow-card);
         transition:
-          transform 0.25s ease,
-          box-shadow 0.25s ease;
+          transform 280ms var(--ease-smooth),
+          opacity 280ms var(--ease-smooth);
       }
+
       .card-hover:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 16px 32px -12px rgba(17, 24, 39, 0.12);
+        transform: translateY(-5px);
+        border-color: rgba(16, 185, 129, 0.3);
+        box-shadow: var(--shadow-float);
       }
+
+      #products-grid > article,
+      #wardrobe-grid > div,
+      #ai-outfits-grid > div,
+      #seller-listings-content article,
+      #charity-projects-list > div {
+        box-shadow: var(--shadow-card);
+        transition:
+          transform var(--duration-ui) var(--ease-smooth),
+          opacity var(--duration-ui) var(--ease-smooth);
+      }
+
+      #wardrobe-grid > div:hover,
+      #ai-outfits-grid > div:hover,
+      #seller-listings-content article:hover,
+      #charity-projects-list > div:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--shadow-float);
+      }
+
+      #products-grid > article {
+        animation: product-enter 420ms var(--ease-smooth);
+      }
+
+      #products-grid > article:nth-child(4n + 2) {
+        animation-delay: 45ms;
+      }
+
+      #products-grid > article:nth-child(4n + 3) {
+        animation-delay: 90ms;
+      }
+
+      #products-grid > article:nth-child(4n + 4) {
+        animation-delay: 135ms;
+      }
+
+      #products-grid > article img {
+        transition: transform 650ms var(--ease-smooth);
+      }
+
+      #products-grid > article:hover img {
+        transform: scale(1.045);
+      }
+
+      .quick-view-button {
+        position: absolute;
+        left: 0.75rem;
+        right: auto;
+        bottom: 0.75rem;
+        z-index: 2;
+        padding: 0.6rem 0.9rem;
+        border: 1px solid rgba(255, 255, 255, 0.65);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.9);
+        color: #111827;
+        font-size: 0.72rem;
+        font-weight: 700;
+        opacity: 0;
+        transform: translateY(0.5rem);
+        backdrop-filter: blur(12px);
+        transition:
+          opacity 180ms ease,
+          transform 220ms var(--ease-smooth);
+      }
+
+      #products-grid article:hover .quick-view-button,
+      #products-grid article:focus-within .quick-view-button {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      .quick-view-button:hover {
+        background: #ffffff;
+      }
+
+      .product-skeleton {
+        overflow: hidden;
+        border: 1px solid rgba(17, 24, 39, 0.06);
+        border-radius: var(--radius-card);
+        background: #ffffff;
+        box-shadow: var(--shadow-card);
+      }
+
+      .skeleton-shimmer {
+        position: relative;
+        overflow: hidden;
+        background: #e9eee9;
+      }
+
+      .skeleton-shimmer::after {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(100deg, transparent 20%, rgba(255, 255, 255, 0.72) 48%, transparent 76%);
+        content: "";
+        transform: translateX(-100%);
+        animation: shimmer 1.5s ease-in-out infinite;
+      }
+
+      .reveal-on-scroll {
+        opacity: 0;
+        transform: translateY(18px);
+        transition:
+          opacity var(--duration-reveal) var(--ease-smooth),
+          transform var(--duration-reveal) var(--ease-smooth);
+      }
+
+      .reveal-on-scroll.is-visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      .modal-backdrop {
+        background: rgba(8, 24, 18, 0.54);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        animation: overlay-in 180ms ease both;
+      }
+
+      #product-modal > div,
+      #reconsign-modal > div,
+      #auth-modal > div,
+      #certificate-modal > div {
+        animation: modal-enter 320ms var(--ease-smooth) both;
+      }
+
+      #cart-drawer > div {
+        animation: drawer-enter 320ms var(--ease-smooth) both;
+      }
+
+      #ai-chat-window {
+        max-width: calc(100vw - 2rem);
+        transform-origin: bottom right;
+      }
+
+      #ai-chat-window:not(.hidden) {
+        animation: chat-enter 260ms var(--ease-smooth) both;
+      }
+
+      #notifications-panel:not(.hidden),
+      #user-dropdown:not(.hidden) {
+        animation: dropdown-enter 220ms var(--ease-smooth) both;
+        transform-origin: top right;
+      }
+
+      #chat-messages > div,
+      #conversation-messages > div {
+        animation: message-enter 240ms var(--ease-smooth) both;
+      }
+
       .typing-indicator-dots {
         display: inline-flex;
         align-items: center;
         gap: 3px;
       }
+
       .typing-indicator-dots span {
         width: 5px;
         height: 5px;
         border-radius: 999px;
         background: currentColor;
-        animation: typingDot 1s infinite ease-in-out;
+        animation: typing-dot 1s infinite ease-in-out;
       }
+
       .typing-indicator-dots span:nth-child(2) {
-        animation-delay: 0.15s;
+        animation-delay: 140ms;
       }
+
       .typing-indicator-dots span:nth-child(3) {
-        animation-delay: 0.3s;
+        animation-delay: 280ms;
       }
-      @keyframes typingDot {
+
+      .chat-trigger {
+        box-shadow: 0 10px 32px rgba(6, 78, 59, 0.28);
+      }
+
+      .chat-trigger:hover {
+        transform: translateY(-3px);
+      }
+
+      .toast-notification {
+        position: relative;
+        overflow: hidden;
+        box-shadow: var(--shadow-float);
+        animation: toast-enter 300ms var(--ease-smooth) both;
+      }
+
+      .toast-notification::after {
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        height: 3px;
+        background: rgba(255, 255, 255, 0.62);
+        content: "";
+        transform: scaleX(1);
+        transform-origin: left center;
+        animation: toast-progress 3.2s linear both;
+      }
+
+      .charity-progress-fill {
+        transform: scaleX(0);
+        transform-origin: left center;
+        animation: progress-enter 900ms 100ms var(--ease-smooth) both;
+      }
+
+      .badge-pop {
+        animation: badge-pop 360ms var(--ease-smooth);
+      }
+
+      .theme-toggle {
+        display: inline-flex;
+        width: 2.5rem;
+        height: 2.5rem;
+        flex: 0 0 auto;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgba(17, 24, 39, 0.08);
+        border-radius: 0.9rem;
+        background: rgba(255, 255, 255, 0.75);
+        color: #374151;
+      }
+
+      .theme-toggle:hover {
+        background: #f5f2eb;
+      }
+
+      .theme-icon-dark {
+        display: none;
+      }
+
+      html[data-theme="dark"] .theme-icon-light {
+        display: none;
+      }
+
+      html[data-theme="dark"] .theme-icon-dark {
+        display: block;
+      }
+
+      html[data-theme="dark"] {
+        color-scheme: dark;
+        --page-bg: #0b1411;
+        --surface: #111d18;
+        --surface-muted: #17241e;
+        --ink-900: #f1f7f3;
+        --ink-700: #d4e0d9;
+        --ink-500: #a4b5ab;
+        --line: rgba(226, 240, 231, 0.1);
+        --shadow-card:
+          0 2px 8px rgba(0, 0, 0, 0.2),
+          0 18px 40px -24px rgba(0, 0, 0, 0.65);
+        --shadow-float:
+          0 14px 36px -16px rgba(0, 0, 0, 0.65),
+          0 4px 12px rgba(0, 0, 0, 0.2);
+      }
+
+      html[data-theme="dark"] body.bg-white {
+        background:
+          radial-gradient(ellipse at 12% 0%, rgba(16, 185, 129, 0.08), transparent 34rem),
+          var(--page-bg) !important;
+        color: var(--ink-900);
+      }
+
+      html[data-theme="dark"] .site-header,
+      html[data-theme="dark"] .site-header.is-scrolled {
+        background: rgba(13, 26, 20, 0.9);
+        border-color: rgba(226, 240, 231, 0.1);
+      }
+
+      html[data-theme="dark"] .tab-rail,
+      html[data-theme="dark"] .mobile-tab-rail {
+        background-color: #17241e !important;
+        border-color: rgba(226, 240, 231, 0.1) !important;
+      }
+
+      html[data-theme="dark"] .tab-rail::before {
+        background: #26382f;
+      }
+
+      html[data-theme="dark"] .hero-panel {
+        background:
+          radial-gradient(ellipse at 88% 18%, rgba(16, 185, 129, 0.15), transparent 30%),
+          radial-gradient(ellipse at 66% 100%, rgba(217, 180, 118, 0.08), transparent 36%),
+          linear-gradient(135deg, #17241e 0%, #111d18 52%, #10251c 100%) !important;
+        border-color: rgba(226, 240, 231, 0.1) !important;
+      }
+
+      html[data-theme="dark"] .hero-gradient,
+      html[data-theme="dark"] .text-eco-700,
+      html[data-theme="dark"] .text-eco-800,
+      html[data-theme="dark"] .text-eco-900 {
+        color: #6ee7b7 !important;
+      }
+
+      html[data-theme="dark"] .hero-gradient {
+        background-image: linear-gradient(110deg, #6ee7b7 10%, #34d399 55%, #bef264);
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      html[data-theme="dark"] .bg-white,
+      html[data-theme="dark"] [class~="bg-white/90"],
+      html[data-theme="dark"] [class~="bg-white/95"] {
+        background-color: #111d18 !important;
+      }
+
+      html[data-theme="dark"] .bg-slate-50,
+      html[data-theme="dark"] .bg-slate-100,
+      html[data-theme="dark"] .bg-sand-50,
+      html[data-theme="dark"] .bg-sand-100,
+      html[data-theme="dark"] .bg-eco-50,
+      html[data-theme="dark"] .bg-eco-100,
+      html[data-theme="dark"] .bg-eco-200,
+      html[data-theme="dark"] [class~="bg-eco-50/40"] {
+        background-color: #17241e !important;
+      }
+
+      html[data-theme="dark"] .bg-ink-900 {
+        background-color: #173c2e !important;
+      }
+
+      html[data-theme="dark"] .text-ink-900,
+      html[data-theme="dark"] .text-ink-800 {
+        color: #f1f7f3 !important;
+      }
+
+      html[data-theme="dark"] .text-ink-700,
+      html[data-theme="dark"] .text-ink-600 {
+        color: #d4e0d9 !important;
+      }
+
+      html[data-theme="dark"] .text-ink-500,
+      html[data-theme="dark"] .text-ink-400 {
+        color: #a4b5ab !important;
+      }
+
+      html[data-theme="dark"] .text-eco-600,
+      html[data-theme="dark"] .text-eco-700,
+      html[data-theme="dark"] .text-eco-800,
+      html[data-theme="dark"] .text-eco-900 {
+        color: #6ee7b7 !important;
+      }
+
+      html[data-theme="dark"] .border-slate-100,
+      html[data-theme="dark"] .border-slate-200,
+      html[data-theme="dark"] .border-slate-300,
+      html[data-theme="dark"] .border-sand-200,
+      html[data-theme="dark"] .border-sand-300,
+      html[data-theme="dark"] .border-eco-100,
+      html[data-theme="dark"] .border-eco-200 {
+        border-color: rgba(226, 240, 231, 0.12) !important;
+      }
+
+      html[data-theme="dark"] input,
+      html[data-theme="dark"] select,
+      html[data-theme="dark"] textarea {
+        background-color: #111d18;
+        color: #f1f7f3;
+        border-color: rgba(226, 240, 231, 0.16);
+      }
+
+      html[data-theme="dark"] input::placeholder,
+      html[data-theme="dark"] textarea::placeholder {
+        color: #8da196;
+      }
+
+      html[data-theme="dark"] .theme-toggle {
+        background: #17241e;
+        border-color: rgba(226, 240, 231, 0.15);
+        color: #f1f7f3;
+      }
+
+      html[data-theme="dark"] .theme-toggle:hover {
+        background: #26382f;
+      }
+
+      html[data-theme="dark"] .tab-rail .nav-tab:not(.text-ink-900) {
+        color: #d4e0d9 !important;
+      }
+
+      html[data-theme="dark"] .mobile-tab-rail .nav-tab.bg-slate-100 {
+        background-color: transparent !important;
+      }
+
+      html[data-theme="dark"] .mobile-tab-rail .nav-tab.bg-eco-600 {
+        color: #ffffff !important;
+      }
+
+      html[data-theme="dark"] .product-skeleton {
+        background: #111d18;
+        border-color: rgba(226, 240, 231, 0.1);
+      }
+
+      html[data-theme="dark"] .skeleton-shimmer {
+        background: #26382f;
+      }
+
+      @keyframes scanLine {
+        0%,
+        100% {
+          opacity: 0.85;
+          transform: translateY(0);
+        }
+        50% {
+          opacity: 1;
+          transform: translateY(calc(100cqh - 3px));
+        }
+      }
+
+      .ai-scanner-bar {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, transparent, #10b981, #34d399, #10b981, transparent);
+        box-shadow: 0 0 14px 3px rgba(16, 185, 129, 0.75);
+        animation: scanLine 2s ease-in-out infinite;
+      }
+
+      #sell-dropzone {
+        container-type: size;
+      }
+
+      #sell-scanner-overlay {
+        background-image: radial-gradient(rgba(167, 243, 208, 0.24) 1px, transparent 1px);
+        background-size: 18px 18px;
+      }
+
+      @keyframes typing-dot {
         0%,
         60%,
         100% {
@@ -152,17 +971,222 @@
           transform: translateY(-3px);
         }
       }
+
+      @keyframes fade-up {
+        from {
+          opacity: 0;
+          transform: translateY(14px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @keyframes tab-enter {
+        from {
+          opacity: 0.65;
+          transform: translateY(8px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @keyframes product-enter {
+        from {
+          opacity: 0;
+          transform: translateY(12px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @keyframes aurora-drift {
+        from {
+          transform: translate3d(
+              calc(-10px + var(--pointer-x, 0px)),
+              calc(-6px + var(--pointer-y, 0px)),
+              0
+            )
+            scale(0.96);
+        }
+        to {
+          transform: translate3d(
+              calc(14px + var(--pointer-x, 0px)),
+              calc(12px + var(--pointer-y, 0px)),
+              0
+            )
+            scale(1.06);
+        }
+      }
+
+      @keyframes float-card {
+        0%,
+        100% {
+          transform: translateY(0);
+        }
+        50% {
+          transform: translateY(-5px);
+        }
+      }
+
+      @keyframes shimmer {
+        to {
+          transform: translateX(100%);
+        }
+      }
+
+      @keyframes overlay-in {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+
+      @keyframes modal-enter {
+        from {
+          opacity: 0;
+          transform: scale(0.96) translateY(8px);
+        }
+        to {
+          opacity: 1;
+          transform: scale(1) translateY(0);
+        }
+      }
+
+      @keyframes drawer-enter {
+        from {
+          opacity: 0.7;
+          transform: translateX(24px);
+        }
+        to {
+          opacity: 1;
+          transform: translateX(0);
+        }
+      }
+
+      @keyframes chat-enter {
+        from {
+          opacity: 0;
+          transform: scale(0.96) translateY(8px);
+        }
+        to {
+          opacity: 1;
+          transform: scale(1) translateY(0);
+        }
+      }
+
+      @keyframes message-enter {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @keyframes toast-enter {
+        from {
+          opacity: 0;
+          transform: translateX(12px);
+        }
+        to {
+          opacity: 1;
+          transform: translateX(0);
+        }
+      }
+
+      @keyframes toast-progress {
+        to {
+          transform: scaleX(0);
+        }
+      }
+
+      @keyframes progress-enter {
+        to {
+          transform: scaleX(1);
+        }
+      }
+
+      @keyframes badge-pop {
+        0% {
+          transform: scale(1);
+        }
+        45% {
+          transform: scale(1.25);
+        }
+        100% {
+          transform: scale(1);
+        }
+      }
+
+      @keyframes loading-spin {
+        to {
+          transform: translate(-50%, -50%) rotate(360deg);
+        }
+      }
+
+      @media (max-width: 420px) {
+        .site-header .header-row {
+          gap: 0.35rem;
+        }
+
+        .site-header .header-logo {
+          gap: 0.4rem;
+        }
+
+        #auth-guest-area button:last-child {
+          display: none;
+        }
+
+        .theme-toggle {
+          width: 2.25rem;
+          height: 2.25rem;
+        }
+      }
+
+      @media (hover: none) {
+        .quick-view-button {
+          opacity: 1;
+          transform: none;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+        }
+
+        .reveal-on-scroll {
+          opacity: 1;
+          transform: none;
+        }
+      }
     </style>
   </head>
   <body
     class="font-sans bg-white text-ink-900 antialiased selection:bg-eco-100 selection:text-eco-900"
   >
+    <div class="scroll-progress" aria-hidden="true"></div>
     <!-- HEADER / NAVIGATION -->
     <header
-      class="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-100"
+      class="site-header sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-100"
     >
       <div class="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8">
-        <div class="flex items-center justify-between h-16 lg:h-20 gap-2 lg:gap-4">
+        <div class="header-row flex items-center justify-between h-16 lg:h-20 gap-2 lg:gap-4">
           <!-- Logo -->
           <a
             href="#"
@@ -170,7 +1194,7 @@
               switchTab('store');
               return false;
             "
-            class="flex items-center gap-2.5 shrink-0"
+            class="header-logo flex items-center gap-2.5 shrink-0"
           >
             <div
               class="w-10 h-10 rounded-xl bg-eco-600 text-white flex items-center justify-center shadow-sm"
@@ -202,7 +1226,7 @@
 
           <!-- Desktop Nav -->
           <nav
-            class="hidden md:flex shrink-0 items-center gap-0.5 whitespace-nowrap bg-slate-50 p-1 rounded-2xl border border-slate-100"
+            class="tab-rail hidden xl:flex shrink-0 items-center gap-0.5 whitespace-nowrap bg-slate-50 p-1 rounded-2xl border border-slate-100"
           >
             <button
               onclick="switchTab('store')"
@@ -257,6 +1281,44 @@
 
           <!-- Right Actions -->
           <div class="flex items-center gap-1 sm:gap-2 xl:gap-3">
+            <button
+              type="button"
+              id="theme-toggle"
+              class="theme-toggle"
+              aria-label="Bật giao diện tối"
+              aria-pressed="false"
+              title="Đổi giao diện sáng/tối"
+            >
+              <svg
+                class="theme-icon-light w-4 h-4"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="4"></circle>
+                <path
+                  stroke-linecap="round"
+                  d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"
+                ></path>
+              </svg>
+              <svg
+                class="theme-icon-dark w-4 h-4"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                aria-hidden="true"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M20.2 15.1A8.5 8.5 0 018.9 3.8 8.5 8.5 0 1020.2 15.1Z"
+                ></path>
+              </svg>
+            </button>
+
             <!-- Green Points Pill -->
             <button
               onclick="switchTab('green')"
@@ -272,8 +1334,10 @@
               onclick="toggleCart(true)"
               class="relative p-2 rounded-xl bg-slate-50 hover:bg-slate-100 text-ink-900 transition"
               title="Giỏ hàng"
+              aria-label="Mở giỏ hàng"
             >
               <svg
+                aria-hidden="true"
                 class="w-5 h-5"
                 fill="none"
                 stroke="currentColor"
@@ -314,6 +1378,7 @@
                 onclick="toggleNotifications()"
                 class="relative p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-ink-900 transition"
                 title="Thông báo"
+                aria-label="Mở thông báo"
               >
                 <span class="text-lg">🔔</span>
                 <span
@@ -349,6 +1414,7 @@
               <button
                 onclick="toggleUserDropdown()"
                 class="flex items-center gap-1 lg:gap-2 pl-1 lg:pl-2 pr-1 lg:pr-3 py-1.5 rounded-full bg-sand-100 border border-sand-200 hover:bg-sand-200/70 transition"
+                aria-label="Mở menu tài khoản"
               >
                 <div
                   id="user-avatar-initials"
@@ -468,7 +1534,7 @@
 
         <!-- Mobile Navigation -->
         <div
-          class="flex md:hidden items-center gap-1.5 whitespace-nowrap overflow-x-auto pb-2.5 no-scrollbar"
+          class="mobile-tab-rail flex xl:hidden items-center gap-1.5 whitespace-nowrap overflow-x-auto pb-2.5 no-scrollbar"
         >
           <button
             onclick="switchTab('store')"
@@ -531,7 +1597,7 @@
       <section id="section-store" class="space-y-8">
         <!-- Hero Banner -->
         <div
-          class="rounded-3xl bg-gradient-to-br from-sand-100 via-white to-eco-50 border border-sand-200 p-6 sm:p-10 lg:p-12 relative overflow-hidden"
+          class="hero-panel rounded-3xl bg-gradient-to-br from-sand-100 via-white to-eco-50 border border-sand-200 p-6 sm:p-10 lg:p-12 relative overflow-hidden"
         >
           <div class="max-w-2xl space-y-4 relative z-10">
             <div
@@ -539,10 +1605,9 @@
             >
               <span>♻️ Nền tảng Thời trang Tuần hoàn AI</span>
             </div>
-            <h1
-              class="text-3xl sm:text-4xl lg:text-5xl font-bold text-ink-900 leading-tight tracking-tight"
-            >
-              Mặc đẹp có trách nhiệm, kéo dài vòng đời từng thớ vải.
+            <h1 class="hero-title font-extrabold text-ink-900">
+              Mặc đẹp có trách nhiệm,
+              <span class="hero-gradient">kéo dài vòng đời từng thớ vải.</span>
             </h1>
             <p class="text-ink-700 text-sm sm:text-base leading-relaxed">
               Mỗi trang phục được AI kiểm định độ mới minh bạch, định giá công
@@ -568,7 +1633,7 @@
             class="hidden lg:grid grid-cols-2 gap-3 absolute right-10 top-1/2 -translate-y-1/2 w-80"
           >
             <div
-              class="bg-white/90 backdrop-blur p-4 rounded-2xl border border-sand-200 shadow-sm"
+              class="hero-stat-card bg-white/90 backdrop-blur p-4 rounded-2xl border border-sand-200 shadow-sm"
             >
               <p class="text-2xl font-bold text-eco-700" id="hero-stat-items">
                 100+
@@ -578,18 +1643,27 @@
               </p>
             </div>
             <div
-              class="bg-white/90 backdrop-blur p-4 rounded-2xl border border-sand-200 shadow-sm"
+              class="hero-stat-card bg-white/90 backdrop-blur p-4 rounded-2xl border border-sand-200 shadow-sm"
             >
-              <p class="text-2xl font-bold text-ink-900">94.8%</p>
+              <p
+                class="hero-count hero-stat-value text-2xl font-bold text-ink-900"
+                data-count-value="94.8"
+              >
+                94.8%
+              </p>
               <p class="text-xs text-ink-500 mt-1">
                 Độ mới trung bình trên sàn
               </p>
             </div>
             <div
-              class="bg-white/90 backdrop-blur p-4 rounded-2xl border border-sand-200 shadow-sm col-span-2"
+              class="hero-stat-card bg-white/90 backdrop-blur p-4 rounded-2xl border border-sand-200 shadow-sm col-span-2"
             >
               <p class="text-sm font-semibold text-ink-900">
-                🌿 Tiết kiệm 4.2 kg CO₂ & 2,700L nước
+                🌿 Tiết kiệm
+                <span class="hero-count" data-count-value="4.2">4.2</span> kg
+                CO₂ &amp;
+                <span class="hero-count" data-count-value="2700">2,700</span>L
+                nước
               </p>
               <p class="text-xs text-ink-500 mt-0.5">
                 Cho mỗi sản phẩm được tái tuần hoàn thành công
@@ -696,7 +1770,38 @@
           id="products-grid"
           class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"
         >
-          <!-- Rendered by JS -->
+          <div class="product-skeleton" aria-hidden="true">
+            <div class="skeleton-shimmer aspect-[4/5]"></div>
+            <div class="space-y-3 p-4">
+              <div class="skeleton-shimmer h-3 w-2/3 rounded-full"></div>
+              <div class="skeleton-shimmer h-4 w-full rounded-full"></div>
+              <div class="skeleton-shimmer h-4 w-1/3 rounded-full"></div>
+            </div>
+          </div>
+          <div class="product-skeleton hidden sm:block" aria-hidden="true">
+            <div class="skeleton-shimmer aspect-[4/5]"></div>
+            <div class="space-y-3 p-4">
+              <div class="skeleton-shimmer h-3 w-2/3 rounded-full"></div>
+              <div class="skeleton-shimmer h-4 w-full rounded-full"></div>
+              <div class="skeleton-shimmer h-4 w-1/3 rounded-full"></div>
+            </div>
+          </div>
+          <div class="product-skeleton hidden lg:block" aria-hidden="true">
+            <div class="skeleton-shimmer aspect-[4/5]"></div>
+            <div class="space-y-3 p-4">
+              <div class="skeleton-shimmer h-3 w-2/3 rounded-full"></div>
+              <div class="skeleton-shimmer h-4 w-full rounded-full"></div>
+              <div class="skeleton-shimmer h-4 w-1/3 rounded-full"></div>
+            </div>
+          </div>
+          <div class="product-skeleton hidden lg:block" aria-hidden="true">
+            <div class="skeleton-shimmer aspect-[4/5]"></div>
+            <div class="space-y-3 p-4">
+              <div class="skeleton-shimmer h-3 w-2/3 rounded-full"></div>
+              <div class="skeleton-shimmer h-4 w-full rounded-full"></div>
+              <div class="skeleton-shimmer h-4 w-1/3 rounded-full"></div>
+            </div>
+          </div>
         </div>
 
         <!-- Load More Controls -->
@@ -1400,7 +2505,11 @@
     <!-- ========================================================= -->
     <div
       id="product-modal"
-      class="hidden fixed inset-0 z-50 bg-ink-900/50 backdrop-blur-xs flex items-center justify-center p-4"
+      class="modal-backdrop hidden fixed inset-0 z-50 bg-ink-900/50 backdrop-blur-xs flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Chi tiết sản phẩm"
+      tabindex="-1"
     >
       <div
         class="bg-white rounded-3xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-100"
@@ -1416,7 +2525,11 @@
     <!-- ========================================================= -->
     <div
       id="reconsign-modal"
-      class="hidden fixed inset-0 z-50 bg-ink-900/50 backdrop-blur-xs flex items-center justify-center p-4"
+      class="modal-backdrop hidden fixed inset-0 z-50 bg-ink-900/50 backdrop-blur-xs flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Ký gửi lại sản phẩm"
+      tabindex="-1"
     >
       <div
         class="bg-white rounded-3xl max-w-2xl w-full max-h-[92vh] overflow-y-auto shadow-2xl border border-slate-100 p-6 sm:p-8 space-y-6"
@@ -1436,6 +2549,7 @@
           <button
             onclick="closeReconsignModal()"
             class="p-2 rounded-xl hover:bg-slate-100 text-ink-500"
+            aria-label="Đóng cửa sổ ký gửi lại"
           >
             ✕
           </button>
@@ -1582,7 +2696,11 @@
     <!-- ========================================================= -->
     <div
       id="auth-modal"
-      class="hidden fixed inset-0 z-50 bg-ink-900/50 backdrop-blur-xs flex items-center justify-center p-4"
+      class="modal-backdrop hidden fixed inset-0 z-50 bg-ink-900/50 backdrop-blur-xs flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="auth-modal-title"
+      tabindex="-1"
     >
       <div
         class="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-100 p-6 sm:p-8 space-y-6"
@@ -1599,6 +2717,7 @@
           <button
             onclick="closeAuthModal()"
             class="p-2 rounded-xl hover:bg-slate-100 text-ink-500"
+            aria-label="Đóng cửa sổ đăng nhập"
           >
             ✕
           </button>
@@ -1729,7 +2848,11 @@
     <!-- ========================================================= -->
     <div
       id="certificate-modal"
-      class="hidden fixed inset-0 z-50 bg-ink-900/50 backdrop-blur-xs flex items-center justify-center p-4"
+      class="modal-backdrop hidden fixed inset-0 z-50 bg-ink-900/50 backdrop-blur-xs flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Chứng nhận Sống Xanh"
+      tabindex="-1"
     >
       <div
         class="bg-sand-50 rounded-3xl max-w-lg w-full border-4 border-eco-600 p-8 text-center space-y-4 shadow-2xl relative"
@@ -1739,6 +2862,7 @@
             document.getElementById('certificate-modal').classList.add('hidden')
           "
           class="absolute top-4 right-4 p-2 rounded-xl hover:bg-sand-200 text-ink-600"
+          aria-label="Đóng chứng nhận"
         >
           ✕
         </button>
@@ -1782,7 +2906,11 @@
     <!-- ========================================================= -->
     <div
       id="cart-drawer"
-      class="hidden fixed inset-0 z-50 bg-ink-900/40 backdrop-blur-xs flex justify-end"
+      class="modal-backdrop hidden fixed inset-0 z-50 bg-ink-900/40 backdrop-blur-xs flex justify-end"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Giỏ hàng"
+      tabindex="-1"
     >
       <div
         class="bg-white w-full max-w-md h-full flex flex-col justify-between shadow-2xl"
@@ -1799,6 +2927,7 @@
           <button
             onclick="toggleCart(false)"
             class="p-2 rounded-xl hover:bg-slate-100"
+            aria-label="Đóng giỏ hàng"
           >
             ✕
           </button>
@@ -1915,6 +3044,8 @@
       <div
         id="ai-chat-window"
         class="hidden mb-3 w-[340px] sm:w-[380px] bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col"
+        role="dialog"
+        aria-label="Trợ lý thời trang RE:LOOP"
       >
         <div
           class="bg-ink-900 text-white px-5 py-4 flex items-center justify-between"
@@ -1935,6 +3066,7 @@
           <button
             onclick="toggleChat(false)"
             class="text-slate-400 hover:text-white"
+            aria-label="Đóng trợ lý AI"
           >
             ✕
           </button>
@@ -2019,7 +3151,8 @@
       <!-- Floating Trigger Button -->
       <button
         onclick="toggleChat()"
-        class="ml-auto flex items-center gap-2 px-4 py-3 rounded-full bg-ink-900 hover:bg-ink-800 text-white text-xs font-semibold shadow-xl transition"
+        class="chat-trigger ml-auto flex items-center gap-2 px-4 py-3 rounded-full bg-ink-900 hover:bg-ink-800 text-white text-xs font-semibold shadow-xl transition"
+        aria-label="Mở trợ lý AI"
       >
         <span class="w-2.5 h-2.5 rounded-full bg-eco-400 animate-ping"></span>
         <span>💬 Hỏi Trợ lý AI</span>
@@ -3626,6 +4759,14 @@
                     : ""
                 }
               </div>
+              <button
+                type="button"
+                class="quick-view-button"
+                onclick="event.stopPropagation(); openProductModal('${p.id}')"
+                aria-label="Xem nhanh sản phẩm"
+              >
+                Xem nhanh
+              </button>
               <span class="absolute bottom-3 right-3 px-2.5 py-1 rounded-lg bg-ink-900/80 text-white text-[11px] font-semibold">
                 Size ${p.size}
               </span>
@@ -3700,7 +4841,7 @@
         box.innerHTML = `
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
           <div class="relative aspect-[4/5] rounded-2xl overflow-hidden bg-sand-50">
-            <img src="${p.image_url}" alt="${p.name}" onerror="handleImageFallback(this)" class="w-full h-full object-cover" />
+            <img src="${p.image_url}" alt="${p.name}" loading="lazy" decoding="async" onerror="handleImageFallback(this)" class="w-full h-full object-cover" />
             <span class="absolute top-3 left-3 px-3 py-1 rounded-full bg-white/95 text-eco-700 text-xs font-bold">
               AI Chấm điểm: Độ mới ${p.condition_percent}%
             </span>
@@ -3711,7 +4852,7 @@
                 <span class="text-xs font-semibold text-eco-700">${p.category} • Vòng đời #${p.cycle || 1}</span>
                 <h3 class="text-2xl font-bold text-ink-900 mt-1">${p.name}</h3>
               </div>
-              <button onclick="document.getElementById('product-modal').classList.add('hidden')" class="p-2 rounded-xl hover:bg-slate-100">✕</button>
+              <button onclick="document.getElementById('product-modal').classList.add('hidden')" class="p-2 rounded-xl hover:bg-slate-100" aria-label="Đóng chi tiết sản phẩm">✕</button>
             </div>
 
             ${
@@ -4875,7 +6016,7 @@
             </div>
             <div class="space-y-1">
               <div class="w-full h-2.5 rounded-full bg-slate-100 overflow-hidden">
-                <div class="h-full bg-eco-500 rounded-full" style="width: ${pct}%"></div>
+                <div class="charity-progress-fill h-full bg-eco-500 rounded-full" style="width: ${pct}%"></div>
               </div>
               <div class="flex justify-between text-[11px] text-ink-500">
                 <span>Đã quyên góp: <strong class="text-eco-700">${formatVND(p.raised)}</strong></span>
@@ -5017,11 +6158,12 @@
           error: "bg-rose-600 text-white",
           info: "bg-ink-900 text-white",
         };
-        toast.className = `${colors[type] || colors.info} px-4 py-3 rounded-2xl shadow-lg text-xs font-semibold max-w-xs transition-all duration-300`;
+        toast.className = `toast-notification ${colors[type] || colors.info} px-4 py-3 rounded-2xl shadow-lg text-xs font-semibold max-w-xs transition-all duration-300`;
         toast.textContent = msg;
         container.appendChild(toast);
         setTimeout(() => {
           toast.style.opacity = "0";
+          toast.style.transform = "translateX(12px)";
           setTimeout(() => toast.remove(), 300);
         }, 3200);
       }
@@ -5081,6 +6223,401 @@
         syncFromBackend(false);
         setInterval(refreshNotifications, 30000);
       });
+    </script>
+    <script>
+      (() => {
+        const themeButton = document.getElementById("theme-toggle");
+        const themeMedia = window.matchMedia("(prefers-color-scheme: dark)");
+        const themeKey = "reloop_theme";
+        const root = document.documentElement;
+        const scrollProgress = document.querySelector(".scroll-progress");
+        const siteHeader = document.querySelector(".site-header");
+        const prefersReducedMotion = window.matchMedia(
+          "(prefers-reduced-motion: reduce)",
+        ).matches;
+
+        const applyTheme = (theme, persist = false) => {
+          root.dataset.theme = theme;
+          if (persist) localStorage.setItem(themeKey, theme);
+          if (themeButton) {
+            const isDark = theme === "dark";
+            themeButton.setAttribute("aria-pressed", String(isDark));
+            themeButton.setAttribute(
+              "aria-label",
+              isDark ? "Bật giao diện sáng" : "Bật giao diện tối",
+            );
+            themeButton.title = isDark
+              ? "Chuyển sang giao diện sáng"
+              : "Chuyển sang giao diện tối";
+          }
+        };
+
+        applyTheme(root.dataset.theme === "dark" ? "dark" : "light");
+        if (themeButton) {
+          themeButton.addEventListener("click", () => {
+            const nextTheme =
+              root.dataset.theme === "dark" ? "light" : "dark";
+            applyTheme(nextTheme, true);
+          });
+        }
+
+        themeMedia.addEventListener?.("change", (event) => {
+          if (!localStorage.getItem(themeKey)) {
+            applyTheme(event.matches ? "dark" : "light");
+          }
+        });
+
+        let scrollFrame = 0;
+        const updateScrollEffects = () => {
+          scrollFrame = 0;
+          const scrollableHeight =
+            document.documentElement.scrollHeight - window.innerHeight;
+          const progress =
+            scrollableHeight > 0 ? window.scrollY / scrollableHeight : 0;
+          if (scrollProgress) {
+            scrollProgress.style.transform = `scaleX(${Math.min(1, Math.max(0, progress))})`;
+          }
+          if (siteHeader) {
+            siteHeader.classList.toggle("is-scrolled", window.scrollY > 12);
+          }
+        };
+
+        window.addEventListener(
+          "scroll",
+          () => {
+            if (!scrollFrame) {
+              scrollFrame = window.requestAnimationFrame(updateScrollEffects);
+            }
+          },
+          { passive: true },
+        );
+        window.addEventListener("resize", updateScrollEffects, {
+          passive: true,
+        });
+        updateScrollEffects();
+
+        const syncPill = (rail) => {
+          if (!rail) return;
+          const isDesktopRail = rail.classList.contains("tab-rail");
+          const activeTab = [...rail.querySelectorAll(".nav-tab")].find(
+            (button) =>
+              isDesktopRail
+                ? button.classList.contains("shadow-sm")
+                : button.classList.contains("bg-eco-600"),
+          );
+          if (!activeTab) return;
+          const railRect = rail.getBoundingClientRect();
+          const tabRect = activeTab.getBoundingClientRect();
+          rail.style.setProperty("--pill-x", `${tabRect.left - railRect.left}px`);
+          rail.style.setProperty("--pill-y", `${tabRect.top - railRect.top}px`);
+          rail.style.setProperty("--pill-scale-x", `${tabRect.width}`);
+          rail.style.setProperty("--pill-scale-y", `${tabRect.height}`);
+        };
+
+        const tabRails = [
+          document.querySelector(".tab-rail"),
+          document.querySelector(".mobile-tab-rail"),
+        ].filter(Boolean);
+        const schedulePillSync = () =>
+          window.requestAnimationFrame(() =>
+            tabRails.forEach((rail) => syncPill(rail)),
+          );
+
+        tabRails.forEach((rail) => {
+          new MutationObserver(schedulePillSync).observe(rail, {
+            attributes: true,
+            attributeFilter: ["class"],
+            subtree: true,
+          });
+        });
+        window.addEventListener("resize", schedulePillSync, { passive: true });
+        schedulePillSync();
+
+        const revealObserver =
+          "IntersectionObserver" in window
+            ? new IntersectionObserver(
+                (entries, observer) => {
+                  entries.forEach((entry) => {
+                    if (entry.isIntersecting) {
+                      entry.target.classList.add("is-visible");
+                      observer.unobserve(entry.target);
+                    }
+                  });
+                },
+                { threshold: 0.08, rootMargin: "0px 0px -24px 0px" },
+              )
+            : null;
+
+        const observeReveal = (element) => {
+          if (!(element instanceof HTMLElement)) return;
+          element.classList.add("reveal-on-scroll");
+          if (prefersReducedMotion || !revealObserver) {
+            element.classList.add("is-visible");
+          } else {
+            revealObserver.observe(element);
+          }
+        };
+
+        document.querySelectorAll("main > section").forEach((section) => {
+          [...section.children].forEach(observeReveal);
+        });
+
+        const dynamicRevealContainers = [
+          "#products-grid",
+          "#wardrobe-grid",
+          "#ai-outfits-grid",
+          "#orders-list",
+          "#seller-listings-content",
+          "#conversations-list",
+          "#conversation-thread",
+          "#cart-items-container",
+          "#charity-projects-list",
+          "#my-vouchers-list",
+          "#notifications-list",
+        ]
+          .map((selector) => document.querySelector(selector))
+          .filter(Boolean);
+
+        const observeContainerChildren = (container) => {
+          [...container.children].forEach(observeReveal);
+        };
+
+        dynamicRevealContainers.forEach((container) => {
+          observeContainerChildren(container);
+          new MutationObserver(() => observeContainerChildren(container)).observe(
+            container,
+            { childList: true },
+          );
+        });
+
+        const prepareImages = (rootNode) => {
+          if (!(rootNode instanceof Element)) return;
+          const images = [];
+          if (rootNode instanceof HTMLImageElement) images.push(rootNode);
+          images.push(...rootNode.querySelectorAll("img"));
+          images.forEach((image) => {
+            if (!image.hasAttribute("loading")) image.loading = "lazy";
+            if (!image.hasAttribute("decoding")) image.decoding = "async";
+          });
+        };
+
+        prepareImages(document.body);
+        new MutationObserver((records) => {
+          records.forEach((record) =>
+            record.addedNodes.forEach(prepareImages),
+          );
+        }).observe(document.body, { childList: true, subtree: true });
+
+        const numberTargets = [
+          "header-points",
+          "mobile-points",
+          "green-page-points",
+          "hero-stat-items",
+        ]
+          .map((id) => document.getElementById(id))
+          .filter(Boolean);
+        const countStates = new WeakMap();
+        const initializeCount = (element) => {
+          const value = element.textContent.trim();
+          countStates.set(element, /^\d+$/.test(value) ? Number(value) : 0);
+        };
+        numberTargets.forEach(initializeCount);
+
+        const animateCount = (element) => {
+          if (element.dataset.countAnimating === "true") return;
+          const targetText = element.textContent.trim();
+          if (!/^\d+$/.test(targetText)) return;
+          const target = Number(targetText);
+          const start = countStates.get(element) || 0;
+          countStates.set(element, target);
+          if (start === target || prefersReducedMotion) return;
+          element.dataset.countAnimating = "true";
+          const startedAt = performance.now();
+          const duration = 650;
+          const draw = (now) => {
+            const progress = Math.min(1, (now - startedAt) / duration);
+            const eased = 1 - Math.pow(1 - progress, 3);
+            element.textContent = String(
+              Math.round(start + (target - start) * eased),
+            );
+            if (progress < 1) {
+              window.requestAnimationFrame(draw);
+            } else {
+              element.textContent = targetText;
+              element.dataset.countAnimating = "false";
+            }
+          };
+          window.requestAnimationFrame(draw);
+        };
+
+        numberTargets.forEach((element) => {
+          new MutationObserver(() => animateCount(element)).observe(element, {
+            childList: true,
+            characterData: true,
+            subtree: true,
+          });
+        });
+
+        const cartBadge = document.getElementById("cart-badge");
+        if (cartBadge) {
+          new MutationObserver(() => {
+            cartBadge.classList.remove("badge-pop");
+            void cartBadge.offsetWidth;
+            cartBadge.classList.add("badge-pop");
+          }).observe(cartBadge, { childList: true, characterData: true });
+        }
+
+        const modalIds = [
+          "product-modal",
+          "reconsign-modal",
+          "auth-modal",
+          "certificate-modal",
+          "cart-drawer",
+        ];
+        const modalRoots = modalIds
+          .map((id) => document.getElementById(id))
+          .filter(Boolean);
+        let activeModal = null;
+        let lastFocusedElement = null;
+
+        const updateActiveModal = (modal) => {
+          const isOpen = !modal.classList.contains("hidden");
+          if (isOpen) {
+            if (activeModal !== modal) {
+              activeModal = modal;
+              lastFocusedElement = document.activeElement;
+              document.body.classList.add("modal-open");
+              window.requestAnimationFrame(() => {
+                const firstFocusable = modal.querySelector(
+                  'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [href], [tabindex]:not([tabindex="-1"])',
+                );
+                (firstFocusable || modal).focus();
+              });
+            }
+          } else if (activeModal === modal) {
+            activeModal = null;
+            document.body.classList.remove("modal-open");
+            if (lastFocusedElement instanceof HTMLElement) {
+              lastFocusedElement.focus();
+            }
+          }
+        };
+
+        modalRoots.forEach((modal) => {
+          new MutationObserver(() => updateActiveModal(modal)).observe(modal, {
+            attributes: true,
+            attributeFilter: ["class"],
+          });
+          modal.addEventListener("click", (event) => {
+            if (event.target !== modal) return;
+            if (modal.id === "reconsign-modal") closeReconsignModal();
+            else if (modal.id === "auth-modal") closeAuthModal();
+            else if (modal.id === "cart-drawer") toggleCart(false);
+            else modal.classList.add("hidden");
+          });
+        });
+
+        document.addEventListener("keydown", (event) => {
+          if (!activeModal) return;
+          if (event.key === "Escape") {
+            event.preventDefault();
+            if (activeModal.id === "reconsign-modal") closeReconsignModal();
+            else if (activeModal.id === "auth-modal") closeAuthModal();
+            else if (activeModal.id === "cart-drawer") toggleCart(false);
+            else activeModal.classList.add("hidden");
+            return;
+          }
+          if (event.key !== "Tab") return;
+          const focusable = [
+            ...activeModal.querySelectorAll(
+              'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+            ),
+          ].filter((element) => element.offsetParent !== null);
+          if (!focusable.length) {
+            event.preventDefault();
+            activeModal.focus();
+            return;
+          }
+          const first = focusable[0];
+          const last = focusable[focusable.length - 1];
+          if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last.focus();
+          } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
+          }
+        });
+
+        const heroPanel = document.querySelector(".hero-panel");
+        const animateHeroCounters = () => {
+          if (prefersReducedMotion) return;
+          heroPanel?.querySelectorAll(".hero-count").forEach((element) => {
+            if (element.dataset.countAnimated === "true") return;
+            const original = element.textContent.trim();
+            const match = original.match(/^([^\d]*)([\d,.]+)([^\d]*)$/);
+            if (!match) return;
+            const [, prefix, numberText, suffix] = match;
+            const target = Number(
+              element.dataset.countValue || numberText.replace(/,/g, ""),
+            );
+            if (!Number.isFinite(target)) return;
+            const decimalPlaces = (
+              element.dataset.countValue || numberText
+            ).split(".")[1]?.length || 0;
+            element.dataset.countAnimated = "true";
+            const startedAt = performance.now();
+            const draw = (now) => {
+              const progress = Math.min(1, (now - startedAt) / 900);
+              const eased = 1 - Math.pow(1 - progress, 3);
+              const current = target * eased;
+              const formatted =
+                decimalPlaces > 0
+                  ? current.toFixed(decimalPlaces)
+                  : Math.round(current).toLocaleString("en-US");
+              element.textContent = `${prefix}${formatted}${suffix}`;
+              if (progress < 1) {
+                window.requestAnimationFrame(draw);
+              } else {
+                element.textContent = original;
+              }
+            };
+            window.requestAnimationFrame(draw);
+          });
+        };
+
+        if (heroPanel && "IntersectionObserver" in window) {
+          const heroStatsObserver = new IntersectionObserver(
+            (entries, observer) => {
+              if (entries.some((entry) => entry.isIntersecting)) {
+                animateHeroCounters();
+                observer.disconnect();
+              }
+            },
+            { threshold: 0.2 },
+          );
+          heroStatsObserver.observe(heroPanel);
+        } else {
+          animateHeroCounters();
+        }
+
+        const supportsFinePointer = window.matchMedia(
+          "(hover: hover) and (pointer: fine)",
+        ).matches;
+        if (heroPanel && supportsFinePointer && !prefersReducedMotion) {
+          heroPanel.addEventListener("pointermove", (event) => {
+            const bounds = heroPanel.getBoundingClientRect();
+            const x = (event.clientX - bounds.left) / bounds.width - 0.5;
+            const y = (event.clientY - bounds.top) / bounds.height - 0.5;
+            heroPanel.style.setProperty("--pointer-x", `${x * 12}px`);
+            heroPanel.style.setProperty("--pointer-y", `${y * 10}px`);
+          });
+          heroPanel.addEventListener("pointerleave", () => {
+            heroPanel.style.setProperty("--pointer-x", "0px");
+            heroPanel.style.setProperty("--pointer-y", "0px");
+          });
+        }
+      })();
     </script>
   </body>
 </html>
