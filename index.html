@@ -6934,16 +6934,8 @@
         pendingReconsignPhotos: [],
       };
 
-      const ADMIN_EMAIL = "admin@reloop.vn";
-      const ADMIN_PASSWORD = "123";
-      const ADMIN_SESSION_SECRET = "RELOOP_ADMIN_VERIFIED_admin@reloop.vn_123";
-
       function checkIsAdmin(userObj) {
-        if (!userObj) return false;
-        const em = (userObj.email || "").trim().toLowerCase();
-        return (
-          em === ADMIN_EMAIL && userObj.adminSecret === ADMIN_SESSION_SECRET
-        );
+        return Boolean(userObj && userObj.isAdmin);
       }
 
       // Remove account data from the previous local-only authentication flow.
@@ -7356,18 +7348,15 @@
             try {
               const me = await apiFetch("/api/auth/me");
               const u = me.user || me;
-              const isAdminAccount =
-                (u.email || "").trim().toLowerCase() === ADMIN_EMAIL;
               const mergedUser = {
                 id: u.id,
                 name: u.full_name || u.name || "Thành viên RE:LOOP",
                 email: u.email,
                 points: u.green_points ?? u.points ?? 450,
                 height: u.height_cm || 165,
-                weight: u.weight_kg || 55,
-                adminSecret: isAdminAccount ? ADMIN_SESSION_SECRET : null,
+                weight: u.weight_kg || u.weight || 55,
+                isAdmin: Boolean(me.is_admin ?? u.is_admin),
               };
-              mergedUser.isAdmin = checkIsAdmin(mergedUser);
               state.user = mergedUser;
               state.notifications = Array.isArray(me.notifications)
                 ? me.notifications
@@ -7539,61 +7528,7 @@
         }
 
         // =========================================================
-        // 1. STRICT ADMIN ACCESS CONTROL (admin@reloop.vn / 123)
-        // =========================================================
-        if (email === ADMIN_EMAIL) {
-          if (currentAuthMode === "register") {
-            const msg =
-              "Tài khoản admin@reloop.vn thuộc quản trị hệ thống, không được phép đăng ký mới!";
-            showAuthError(msg);
-            showToast(msg, "warning");
-            return;
-          }
-
-          let backendRes = null;
-          try {
-            backendRes = await apiFetch("/api/auth/login", {
-              method: "POST",
-              body: JSON.stringify({ email: ADMIN_EMAIL, password }),
-            });
-          } catch (err) {
-            const msg =
-              err.status === 401
-                ? "Email hoặc mật khẩu quản trị viên không chính xác."
-                : err.message || "Không thể kết nối máy chủ xác thực.";
-            showAuthError(msg);
-            showToast(msg, "warning");
-            return;
-          }
-
-          const u = backendRes.user || {};
-          state.token = backendRes.access_token || backendRes.token || null;
-          if (!state.token) {
-            showAuthError("Máy chủ không trả về phiên đăng nhập hợp lệ.");
-            return;
-          }
-          state.user = {
-            id: u.id || "u-admin",
-            name: u.name || u.full_name || "Quản trị viên RE:LOOP",
-            email: u.email || ADMIN_EMAIL,
-            points: u.green_points ?? u.points ?? 9999,
-            height: u.height_cm || u.height || 170,
-            weight: u.weight_kg || u.weight || 60,
-            adminSecret: ADMIN_SESSION_SECRET,
-            isAdmin: true,
-          };
-          localStorage.setItem("reloop_token", state.token);
-          closeAuthModal();
-          showToast(
-            "Xác thực thành công! Chào mừng Quản trị viên RE:LOOP.",
-            "success",
-          );
-          await syncFromBackend(false);
-          return;
-        }
-
-        // =========================================================
-        // 2. ACCOUNT REGISTRATION FLOW (CHECK DUPLICATE EXISTENCE)
+        // ACCOUNT REGISTRATION FLOW
         // =========================================================
         if (currentAuthMode === "register") {
           if (!fullNameInput) {
@@ -7665,7 +7600,6 @@
             points: u.green_points ?? u.points ?? 100,
             height: u.height_cm || u.height || height,
             weight: u.weight_kg || u.weight || weight,
-            adminSecret: null,
             isAdmin: false,
           };
           localStorage.setItem("reloop_token", state.token);
@@ -7679,7 +7613,7 @@
         }
 
         // =========================================================
-        // 3. ACCOUNT LOGIN FLOW (MUST VERIFY EXISTENCE & PASSWORD)
+        // ACCOUNT LOGIN FLOW
         // =========================================================
         let backendLoginRes = null;
         try {
@@ -7732,8 +7666,7 @@
           points: u.green_points ?? u.points ?? 0,
           height: u.height_cm || u.height || 165,
           weight: u.weight_kg || u.weight || 55,
-          adminSecret: null,
-          isAdmin: false,
+          isAdmin: Boolean(u.is_admin),
         };
         localStorage.setItem("reloop_token", state.token);
         closeAuthModal();

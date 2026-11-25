@@ -48,6 +48,8 @@ from pydantic import BaseModel, Field
 # =============================================================================
 
 DB_PATH = os.getenv("RELOOP_DB_PATH", "reloop_circular.db")
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "").strip().lower()
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
 VILAO_API_KEY = (
     os.getenv("VILAO_API_KEY", "").strip()
     or os.getenv("KIMI_API_KEY", "").strip()
@@ -608,14 +610,33 @@ def init_db():
         ensure_admin_account(cursor)
 
 
+def _is_admin_user(user: Dict[str, Any]) -> bool:
+    return bool(ADMIN_EMAIL) and (user.get("email") or "").strip().lower() == ADMIN_EMAIL
+
+
 def ensure_admin_account(cursor: sqlite3.Cursor):
-    """Đảm bảo tài khoản admin@reloop.vn tồn tại trong SQLite với phiên đăng nhập thật."""
-    cursor.execute("SELECT id FROM users WHERE LOWER(email) = ?", ("admin@reloop.vn",))
-    if cursor.fetchone():
+    """Create or rotate the configured admin account; never seed default credentials."""
+    if not ADMIN_EMAIL or len(ADMIN_PASSWORD) < 12:
+        if ADMIN_EMAIL or ADMIN_PASSWORD:
+            logger.error("Admin account disabled: configure ADMIN_EMAIL and a 12+ character ADMIN_PASSWORD.")
         return
 
+    cursor.execute(
+        "SELECT id, password_hash, salt FROM users WHERE LOWER(email) = ?",
+        (ADMIN_EMAIL,),
+    )
+    existing = cursor.fetchone()
     now = datetime.utcnow().isoformat()
-    pwd_hash, salt = hash_password("123")
+    pwd_hash, salt = hash_password(ADMIN_PASSWORD)
+    if existing:
+        if not verify_password(ADMIN_PASSWORD, existing["password_hash"], existing["salt"]):
+            cursor.execute(
+                "UPDATE users SET password_hash = ?, salt = ? WHERE id = ?",
+                (pwd_hash, salt, existing["id"]),
+            )
+            cursor.execute("DELETE FROM sessions WHERE user_id = ?", (existing["id"],))
+        return
+
     cursor.execute("""
         INSERT INTO users (
             id, name, email, password_hash, salt, height, weight,
@@ -623,14 +644,14 @@ def ensure_admin_account(cursor: sqlite3.Cursor):
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
-        "u-admin",
+        f"u-admin-{uuid.uuid4().hex[:8]}",
         "Quản trị viên RE:LOOP",
-        "admin@reloop.vn",
+        ADMIN_EMAIL,
         pwd_hash,
         salt,
         170,
         60,
-        9999,
+        0,
         0.0,
         0,
         0,
@@ -922,6 +943,8 @@ def enrich_product_dict(row: sqlite3.Row) -> Dict[str, Any]:
 @app.post("/api/auth/register", summary="Tạo tài khoản thành viên mới (+100 Điểm Xanh)")
 def register_user(payload: RegisterRequest):
     email_clean = payload.email.strip().lower()
+    if ADMIN_EMAIL and email_clean == ADMIN_EMAIL:
+        raise HTTPException(status_code=403, detail="Email quản trị viên không thể đăng ký thông qua biểu mẫu công khai.")
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT id FROM users WHERE LOWER(email) = ?", (email_clean,))
@@ -959,7 +982,8 @@ def register_user(payload: RegisterRequest):
             "email": email_clean,
             "height": payload.height,
             "weight": payload.weight,
-            "green_points": 100
+            "green_points": 100,
+            "is_admin": False,
         }
     }
 
@@ -991,7 +1015,8 @@ def login_user(payload: LoginRequest):
             "green_points": user["green_points"],
             "co2_saved": user["co2_saved"],
             "water_saved": user["water_saved"],
-            "donated_vnd": user["donated_vnd"]
+            "donated_vnd": user["donated_vnd"],
+            "is_admin": _is_admin_user(dict(user)),
         }
     }
 
@@ -1032,6 +1057,7 @@ def get_me(user: Dict[str, Any] = Depends(get_current_user)):
     user_safe = {k: v for k, v in user.items() if k not in ("password_hash", "salt")}
     return {
         "user": user_safe,
+        "is_admin": _is_admin_user(user),
         "active_vouchers": vouchers,
         "points_history": ledger,
         "wardrobe": wardrobe,
@@ -1043,7 +1069,7 @@ def get_me(user: Dict[str, Any] = Depends(get_current_user)):
 
 @app.get("/api/admin/users", summary="Admin xem danh sách tài khoản đã đăng ký")
 def list_registered_users(user: Dict[str, Any] = Depends(get_current_user)):
-    if (user.get("email") or "").strip().lower() != "admin@reloop.vn":
+    if not _is_admin_user(user):
         raise HTTPException(
             status_code=403,
             detail="Chỉ tài khoản quản trị viên mới được xem danh sách tài khoản.",
@@ -1791,7 +1817,7 @@ def delete_marketplace_product(
     product_id: str,
     user: Dict[str, Any] = Depends(get_current_user)
 ):
-    if (user.get("email") or "").strip().lower() != "admin@reloop.vn":
+    if not _is_admin_user(user):
         raise HTTPException(status_code=403, detail="Chỉ tài khoản quản trị viên mới được xóa sản phẩm.")
 
     with get_db() as conn:
@@ -2444,13 +2470,15 @@ COMPLAINT_STATUSES = (
 
 
 def _is_complaint_admin(user: Dict[str, Any]) -> bool:
-    return (user.get("email") or "").strip().lower() == "admin@reloop.vn"
+    return _is_admin_user(user)
 
 
 def _complaint_admin_ids(cursor: sqlite3.Cursor) -> List[str]:
+    if not ADMIN_EMAIL:
+        return []
     cursor.execute(
         "SELECT id FROM users WHERE LOWER(email) = ?",
-        ("admin@reloop.vn",),
+        (ADMIN_EMAIL,),
     )
     return [row["id"] for row in cursor.fetchall()]
 
