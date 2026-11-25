@@ -6834,6 +6834,11 @@
         aiRecommendations: [],
         conversations: [],
         activeConversationId: null,
+        messagesRefreshTimer: null,
+        messagesRefreshInFlight: false,
+        messagesRefreshErrorLogged: false,
+        messagesRenderedConversationId: null,
+        messagesRenderedIds: "",
         messagesSocket: null,
         messagesSocketConnecting: false,
         messagesSocketConnectingToken: null,
@@ -7963,6 +7968,120 @@
         }
       }
 
+      async function refreshMessagesWhileOpen() {
+        const messagesSection = document.getElementById("section-messages");
+        if (
+          !state.token ||
+          isLocalAuthToken(state.token) ||
+          document.hidden ||
+          messagesSection.classList.contains("hidden") ||
+          state.messagesRefreshInFlight
+        ) {
+          return;
+        }
+        state.messagesRefreshInFlight = true;
+        try {
+          const result = await apiFetch("/api/conversations");
+          state.conversations = Array.isArray(result.items) ? result.items : [];
+          renderConversations();
+
+          const conversationId = state.activeConversationId;
+          const detailIsVisible =
+            conversationId &&
+            (!window.matchMedia("(max-width: 767px)").matches ||
+              messagesSection.classList.contains("messages-detail-open"));
+          if (detailIsVisible) {
+            const messagesResult = await apiFetch(
+              `/api/conversations/${encodeURIComponent(conversationId)}/messages`,
+            );
+            if (state.activeConversationId === conversationId) {
+              renderConversationMessages(
+                Array.isArray(messagesResult.items) ? messagesResult.items : [],
+              );
+            }
+          }
+          state.messagesRefreshErrorLogged = false;
+        } catch (error) {
+          if (!state.messagesRefreshErrorLogged) {
+            console.warn("Không thể đồng bộ tin nhắn nền:", error.message);
+            state.messagesRefreshErrorLogged = true;
+          }
+        } finally {
+          state.messagesRefreshInFlight = false;
+        }
+      }
+
+      function startMessagesRefresh() {
+        if (state.messagesRefreshTimer) return;
+        state.messagesRefreshTimer = setInterval(
+          refreshMessagesWhileOpen,
+          5000,
+        );
+      }
+
+      function renderConversationMessages(messages, force = false) {
+        const messageList = document.getElementById("conversation-messages");
+        if (!messageList) return;
+        const conversationId = state.activeConversationId;
+        const messageIds = messages.map((message) => message.id).join(",");
+        if (
+          !force &&
+          state.messagesRenderedConversationId === conversationId &&
+          state.messagesRenderedIds === messageIds
+        ) {
+          return;
+        }
+
+        const wasAtBottom =
+          messageList.scrollHeight -
+            messageList.scrollTop -
+            messageList.clientHeight <
+          80;
+        const oldScrollTop = messageList.scrollTop;
+        const typingIndicator = document.getElementById(
+          "conversation-typing-indicator",
+        );
+        const isTyping =
+          typingIndicator && !typingIndicator.classList.contains("hidden");
+        const renderedMessages = messages.map((message) => {
+          const isMine = message.sender_id === state.user.id;
+          return `
+            <div class="flex ${isMine ? "justify-end" : "justify-start"}">
+              <div class="max-w-[85%] rounded-2xl px-3 py-2 ${
+                isMine
+                  ? "bg-eco-600 text-white"
+                  : "bg-slate-100 text-ink-900"
+              }">
+                <p class="text-[10px] font-semibold opacity-75">${escapeHtml(isMine ? "Bạn" : message.sender_name)}</p>
+                <p class="text-sm whitespace-pre-wrap break-words">${escapeHtml(message.content)}</p>
+                <p class="mt-1 text-[10px] opacity-70">${escapeHtml(formatNotificationDate(message.created_at))}</p>
+              </div>
+            </div>`;
+        }).join("");
+        const emptyState = messages.length
+          ? ""
+          : '<p class="py-12 text-center text-xs text-ink-500">Hãy gửi lời nhắn đầu tiên để bắt đầu trao đổi.</p>';
+        const typingMarkup = `
+          <div
+            id="conversation-typing-indicator"
+            aria-live="polite"
+            class="${isTyping ? "flex" : "hidden"} items-center gap-2 text-xs text-ink-500"
+          >
+            <span>Đối phương đang nhập</span>
+            <span class="typing-indicator-dots" aria-hidden="true">
+              <span></span><span></span><span></span>
+            </span>
+          </div>`;
+        messageList.innerHTML = `${renderedMessages}${emptyState}${typingMarkup}`;
+        state.messagesRenderedConversationId = conversationId;
+        state.messagesRenderedIds = messageIds;
+        if (force || wasAtBottom) {
+          messageList.scrollTop = messageList.scrollHeight;
+        } else {
+          messageList.scrollTop = oldScrollTop;
+        }
+      }
+
       function isLocalAuthToken(token) {
         return /^(local-token-|offline-|api-token-)/.test(token || "");
       }
@@ -8146,7 +8265,7 @@
       async function handleMessagesSocketEvent(payload) {
         if (payload.type === "message") {
           if (payload.conversation_id === state.activeConversationId) {
-            await selectConversation(payload.conversation_id);
+            await refreshMessagesWhileOpen();
           } else {
             await loadConversations();
           }
@@ -8208,6 +8327,10 @@
       }
 
       function closeMessagesSocket() {
+        if (state.messagesRefreshTimer) {
+          clearInterval(state.messagesRefreshTimer);
+          state.messagesRefreshTimer = null;
+        }
         if (state.messagesReconnectTimer) {
           clearTimeout(state.messagesReconnectTimer);
           state.messagesReconnectTimer = null;
@@ -8276,6 +8399,8 @@
           .querySelector(".mobile-bottom-nav")
           ?.classList.add("mobile-nav-conversation-open");
         renderConversations();
+        state.messagesRenderedConversationId = null;
+        state.messagesRenderedIds = "";
         const thread = document.getElementById("conversation-thread");
         thread.innerHTML =
           '<p class="text-sm text-ink-500">Đang tải tin nhắn...</p>';
@@ -8283,6 +8408,7 @@
           const result = await apiFetch(
             `/api/conversations/${encodeURIComponent(conversationId)}/messages`,
           );
+          if (state.activeConversationId !== conversationId) return;
           const conversation = state.conversations.find(
             (item) => item.id === conversationId,
           );
@@ -8298,39 +8424,7 @@
                 <p class="text-[11px] text-ink-500 truncate">${escapeHtml(conversation.product_name)}</p>
               </div>
             </div>
-            <div id="conversation-messages" class="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
-              ${
-                messages.length
-                  ? messages
-                      .map((message) => {
-                        const isMine = message.sender_id === state.user.id;
-                        return `
-                          <div class="flex ${isMine ? "justify-end" : "justify-start"}">
-                            <div class="max-w-[85%] rounded-2xl px-3 py-2 ${
-                              isMine
-                                ? "bg-eco-600 text-white"
-                                : "bg-slate-100 text-ink-900"
-                            }">
-                              <p class="text-[10px] font-semibold opacity-75">${escapeHtml(isMine ? "Bạn" : message.sender_name)}</p>
-                              <p class="text-sm whitespace-pre-wrap break-words">${escapeHtml(message.content)}</p>
-                              <p class="mt-1 text-[10px] opacity-70">${escapeHtml(formatNotificationDate(message.created_at))}</p>
-                            </div>
-                          </div>`;
-                      })
-                      .join("")
-                  : '<p class="py-12 text-center text-xs text-ink-500">Hãy gửi lời nhắn đầu tiên để bắt đầu trao đổi.</p>'
-              }
-              <div
-                id="conversation-typing-indicator"
-                aria-live="polite"
-                class="hidden items-center gap-2 text-xs text-ink-500"
-              >
-                <span>Đối phương đang nhập</span>
-                <span class="typing-indicator-dots" aria-hidden="true">
-                  <span></span><span></span><span></span>
-                </span>
-              </div>
-            </div>
+            <div id="conversation-messages" class="flex-1 min-h-0 overflow-y-auto p-4 space-y-3"></div>
             <form onsubmit="sendConversationMessage(event)" class="flex items-end gap-2 p-3 border-t border-slate-100">
               <textarea
                 id="conversation-message-input"
@@ -8345,8 +8439,7 @@
                 Gửi
               </button>
             </form>`;
-          const messageList = document.getElementById("conversation-messages");
-          messageList.scrollTop = messageList.scrollHeight;
+          renderConversationMessages(messages, true);
           await loadConversations();
         } catch (err) {
           thread.innerHTML = `<p class="p-6 text-center text-sm text-rose-600">Không thể tải tin nhắn: ${escapeHtml(err.message)}</p>`;
@@ -11202,6 +11295,10 @@
         const mobileNav = document.querySelector(".mobile-bottom-nav");
         if (tabName !== "messages") {
           messagesSection.classList.remove("messages-detail-open");
+          if (state.messagesRefreshTimer) {
+            clearInterval(state.messagesRefreshTimer);
+            state.messagesRefreshTimer = null;
+          }
         }
         if (mobileNav) {
           mobileNav.classList.toggle(
@@ -11230,6 +11327,7 @@
         if (tabName === "messages") {
           loadConversations();
           connectMessagesSocket();
+          startMessagesRefresh();
         }
       }
 
