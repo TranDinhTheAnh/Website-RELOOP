@@ -521,6 +521,7 @@
       #section-sell,
       #section-wardrobe,
       #section-orders,
+      #section-complaints,
       #section-seller,
       #section-messages,
       #section-green {
@@ -873,6 +874,29 @@
       html[data-theme="dark"] .bg-eco-200,
       html[data-theme="dark"] [class~="bg-eco-50/40"] {
         background-color: #17241e !important;
+      }
+
+      html[data-theme="dark"] #section-complaints .bg-amber-50,
+      html[data-theme="dark"] #section-seller .bg-amber-50,
+      html[data-theme="dark"] #section-seller .bg-rose-50,
+      html[data-theme="dark"] #complaint-modal .bg-amber-50,
+      html[data-theme="dark"] #section-complaints .bg-sky-50,
+      html[data-theme="dark"] #section-complaints .bg-violet-50,
+      html[data-theme="dark"] #section-complaints .bg-rose-50,
+      html[data-theme="dark"] #section-complaints [class~="bg-amber-50/50"] {
+        background-color: #263229 !important;
+      }
+
+      html[data-theme="dark"] #section-complaints .text-amber-800,
+      html[data-theme="dark"] #section-seller .text-amber-800,
+      html[data-theme="dark"] #complaint-modal .text-amber-800,
+      html[data-theme="dark"] #section-complaints .text-sky-800,
+      html[data-theme="dark"] #section-complaints .text-violet-800,
+      html[data-theme="dark"] #section-complaints .text-rose-700,
+      html[data-theme="dark"] #section-seller .text-rose-700,
+      html[data-theme="dark"] #section-complaints .text-amber-900,
+      html[data-theme="dark"] #section-complaints .text-rose-800 {
+        color: #f0d7a4 !important;
       }
 
       html[data-theme="dark"] .bg-ink-900 {
@@ -3186,6 +3210,11 @@
         max-height: 92dvh;
       }
 
+      #complaint-modal > div {
+        max-height: 92vh;
+        max-height: 92dvh;
+      }
+
       @media (min-width: 1024px) {
         .store-filter-controls {
           width: max-content;
@@ -3334,6 +3363,7 @@
         #section-wardrobe,
         #section-sell,
         #section-orders,
+        #section-complaints,
         #section-seller,
         #section-green,
         #section-admin-users {
@@ -3673,6 +3703,7 @@
 
         #product-modal > div,
         #reconsign-modal > div,
+        #complaint-modal > div,
         #auth-modal > div,
         #certificate-modal > div {
           width: 100%;
@@ -3715,8 +3746,28 @@
         }
 
         #reconsign-modal > div,
+        #complaint-modal > div,
         #auth-modal > div {
           gap: 1rem;
+        }
+
+        #complaint-modal > div {
+          max-height: 92vh;
+          max-height: 92dvh;
+          border-radius: 1.5rem 1.5rem 0 0;
+          padding-bottom: max(1rem, env(safe-area-inset-bottom));
+        }
+
+        #complaint-form > button[type="submit"] {
+          position: sticky;
+          bottom: -1rem;
+          z-index: 2;
+          margin: 0 -1rem -1rem;
+          width: calc(100% + 2rem);
+          padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+          border-top: 1px solid var(--line);
+          border-radius: 0;
+          background: var(--eco-700);
         }
 
         #reconsign-modal > div > div:last-child {
@@ -3744,6 +3795,7 @@
 
         #product-modal [aria-label^="Đóng"],
         #reconsign-modal [aria-label^="Đóng"],
+        #complaint-modal [aria-label^="Đóng"],
         #auth-modal [aria-label^="Đóng"],
         #certificate-modal [aria-label^="Đóng"],
         #cart-drawer [aria-label^="Đóng"] {
@@ -4251,6 +4303,16 @@
                   class="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 flex items-center gap-2"
                 >
                   🛍️ Đã mua
+                </button>
+                <button
+                  onclick="
+                    switchTab('complaints');
+                    toggleUserDropdown(false);
+                  "
+                  class="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 flex items-center justify-between gap-2"
+                >
+                  <span>📝 Khiếu nại của tôi</span>
+                  <span id="complaint-open-count" class="hidden rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-800"></span>
                 </button>
                 <button
                   onclick="
@@ -5613,7 +5675,8 @@
             <p class="text-sm text-ink-600 mt-1">
               Khi đã mặc một thời gian, bạn chỉ cần bấm
               <strong>"Ký gửi lại"</strong> và tải 1–2 ảnh hiện trạng — AI tự
-              đồng bộ toàn bộ thông tin gốc từ vòng trước.
+              đồng bộ toàn bộ thông tin gốc từ vòng trước. Nếu sản phẩm không
+              giống mô tả, bạn có thể gửi khiếu nại trong thời hạn quy định.
             </p>
           </div>
           <span
@@ -5626,6 +5689,42 @@
         <div id="orders-list" class="space-y-4">
           <!-- Rendered by JS -->
         </div>
+      </section>
+
+      <!-- ========================================================= -->
+      <!-- TAB: KHIẾU NẠI ĐƠN HÀNG                                  -->
+      <!-- ========================================================= -->
+      <section id="section-complaints" class="hidden max-w-6xl mx-auto space-y-6">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-slate-100 pb-6">
+          <div>
+            <span class="text-xs font-semibold uppercase tracking-wider text-eco-700">Hỗ trợ sau mua</span>
+            <h2 class="text-3xl font-bold text-ink-900 mt-1">Khiếu nại đơn hàng</h2>
+            <p class="text-sm text-ink-600 mt-1">Theo dõi phản hồi người bán và kết quả phân xử từ RE:LOOP.</p>
+          </div>
+          <button type="button" onclick="loadComplaints()" class="min-h-11 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-slate-50">
+            ↻ Làm mới
+          </button>
+        </div>
+        <div id="complaints-offline-message" class="hidden rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" role="status"></div>
+        <div id="complaints-list-view" class="space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <p id="complaints-list-summary" class="text-sm text-ink-600">Các khiếu nại của bạn</p>
+            <label class="flex min-h-11 items-center gap-2 text-sm text-ink-700">
+              <span>Lọc trạng thái</span>
+              <select id="complaint-status-filter" onchange="setComplaintFilter(this.value)" class="min-h-11 rounded-xl border border-slate-200 bg-white px-3 py-2">
+                <option value="all">Tất cả</option>
+                <option value="open">Chờ người bán</option>
+                <option value="seller_responded">Đã phản hồi</option>
+                <option value="escalated">Chờ RE:LOOP</option>
+                <option value="resolved">Đã xử lý</option>
+                <option value="rejected">Bị từ chối</option>
+                <option value="cancelled">Đã hủy</option>
+              </select>
+            </label>
+          </div>
+          <div id="complaints-list" class="space-y-3" aria-live="polite"></div>
+        </div>
+        <div id="complaint-detail" class="hidden"></div>
       </section>
 
       <!-- ========================================================= -->
@@ -5684,6 +5783,13 @@
 
         <div id="seller-listings-content" class="space-y-3">
           <!-- Rendered by JS -->
+        </div>
+        <div class="space-y-3 border-t border-slate-100 pt-6">
+          <div>
+            <h3 class="text-xl font-bold text-ink-900">Khiếu nại nhận được</h3>
+            <p class="mt-1 text-sm text-ink-600">Phản hồi khách hàng trong hồ sơ khiếu nại.</p>
+          </div>
+          <div id="seller-complaints-content" class="space-y-3" aria-live="polite"></div>
         </div>
       </section>
 
@@ -6294,6 +6400,71 @@
     </div>
 
     <!-- ========================================================= -->
+    <!-- MODAL: TẠO KHIẾU NẠI ĐƠN HÀNG                            -->
+    <!-- ========================================================= -->
+    <div
+      id="complaint-modal"
+      class="modal-backdrop hidden fixed inset-0 z-50 bg-ink-900/50 backdrop-blur-xs flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="complaint-modal-title"
+      tabindex="-1"
+    >
+      <div class="w-full max-w-2xl max-h-[92dvh] overflow-y-auto rounded-3xl border border-slate-100 bg-white p-4 shadow-2xl sm:p-6">
+        <div class="flex items-start justify-between gap-3 border-b border-slate-100 pb-4">
+          <div>
+            <span class="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">Hỗ trợ sau mua</span>
+            <h2 id="complaint-modal-title" class="mt-2 text-xl font-bold text-ink-900">Tạo khiếu nại</h2>
+            <p class="mt-1 text-sm text-ink-600">Mô tả đúng sự khác biệt và gửi ảnh làm bằng chứng.</p>
+          </div>
+          <button type="button" onclick="closeComplaintModal()" class="min-h-11 min-w-11 rounded-xl text-ink-500 hover:bg-slate-100" aria-label="Đóng khiếu nại">✕</button>
+        </div>
+        <div id="complaint-product-summary" class="my-4"></div>
+        <form id="complaint-form" onsubmit="submitComplaint(event)" class="space-y-4">
+          <label class="block text-sm font-semibold text-ink-800">
+            Lý do khiếu nại
+            <select id="complaint-reason" required class="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
+              <option value="">Chọn lý do</option>
+              <option value="wrong_color">Màu sắc không đúng mô tả</option>
+              <option value="wrong_size">Kích cỡ không đúng mô tả</option>
+              <option value="wrong_material">Chất liệu không đúng mô tả</option>
+              <option value="condition_worse">Tình trạng kém hơn công bố</option>
+              <option value="missing_details">Thiếu chi tiết đã nêu</option>
+              <option value="undisclosed_damage">Hư hỏng không được thông báo</option>
+              <option value="other">Lý do khác</option>
+            </select>
+          </label>
+          <label class="block text-sm font-semibold text-ink-800">
+            Mô tả chi tiết
+            <textarea id="complaint-description" required minlength="20" maxlength="1000" rows="4" oninput="updateComplaintCharCount()" class="mt-1 min-h-28 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" placeholder="Nêu rõ điểm khác với mô tả trên tin đăng..."></textarea>
+            <span id="complaint-char-count" class="mt-1 block text-right text-xs font-normal text-ink-500">0 / 1000</span>
+          </label>
+          <label class="block text-sm font-semibold text-ink-800">
+            Mong muốn giải quyết
+            <select id="complaint-resolution" required class="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
+              <option value="refund">Hoàn tiền</option>
+              <option value="partial_refund">Hoàn tiền một phần</option>
+              <option value="exchange">Đổi sản phẩm</option>
+            </select>
+          </label>
+          <div>
+            <label for="complaint-evidence" class="block text-sm font-semibold text-ink-800">Ảnh bằng chứng (1–4 ảnh, JPG/PNG/WEBP, tối đa 3 MB mỗi ảnh)</label>
+            <input id="complaint-evidence" type="file" accept="image/jpeg,image/png,image/webp" multiple required onchange="handleComplaintEvidenceFiles(event)" class="mt-2 block min-h-11 w-full text-sm text-ink-700" />
+            <div id="complaint-evidence-preview" class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4"></div>
+          </div>
+          <label class="flex items-start gap-3 rounded-xl bg-sand-50 p-3 text-sm text-ink-700">
+            <input id="complaint-confirm" type="checkbox" required class="mt-1 h-4 w-4 rounded border-slate-300 text-eco-600 focus:ring-eco-500" />
+            <span>Tôi xác nhận thông tin và ảnh bằng chứng là đúng sự thật.</span>
+          </label>
+          <div id="complaint-form-error" class="hidden rounded-xl bg-rose-50 p-3 text-sm text-rose-700" role="alert"></div>
+          <button id="complaint-submit" type="submit" class="min-h-12 w-full rounded-xl bg-eco-700 px-4 py-3 text-sm font-bold text-white hover:bg-eco-800">
+            Gửi khiếu nại
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- ========================================================= -->
     <!-- MODAL 4: CHỨNG NHẬN SỐNG XANH                             -->
     <!-- ========================================================= -->
     <div
@@ -6639,6 +6810,20 @@
         cart: [],
         wardrobe: [],
         orders: [],
+        ordersLoading: false,
+        ordersError: null,
+        complaints: [],
+        complaintsLoading: false,
+        complaintsError: null,
+        complaintFilter: "all",
+        activeComplaint: null,
+        sellerComplaints: [],
+        sellerComplaintsLoading: false,
+        sellerComplaintsError: null,
+        pendingComplaintItem: null,
+        pendingComplaintFiles: [],
+        complaintSubmitting: false,
+        complaintBadgeLoadedAt: 0,
         sellerListings: [],
         sellerListingsLoading: false,
         sellerListingsError: null,
@@ -7152,21 +7337,10 @@
                     image_url: item.image_url,
                   }));
               }
-              if (Array.isArray(me.orders)) {
-                state.orders = state.wardrobe.filter((item) =>
-                  me.orders.some((order) => {
-                    try {
-                      return JSON.parse(order.items_json || "[]").includes(
-                        item.source_product_id,
-                      );
-                    } catch {
-                      return false;
-                    }
-                  }),
-                );
-              } else {
-                state.orders = [];
-              }
+              state.orders = [];
+              state.ordersError = null;
+              state.complaints = [];
+              state.complaintBadgeLoadedAt = 0;
               if (Array.isArray(me.vouchers)) state.vouchers = me.vouchers;
             } catch (e) {
               console.warn("Token expired or /api/auth/me format:", e.message);
@@ -7546,6 +7720,36 @@
         } else {
           el.classList.toggle("hidden");
         }
+        if (!el.classList.contains("hidden")) refreshComplaintBadge();
+      }
+
+      function updateComplaintBadge(items) {
+        const badge = document.getElementById("complaint-open-count");
+        if (!badge) return;
+        const activeCount = items.filter((item) =>
+          ["open", "seller_responded", "escalated"].includes(item.status),
+        ).length;
+        badge.textContent = activeCount > 99 ? "99+" : String(activeCount);
+        badge.classList.toggle("hidden", activeCount === 0);
+        state.complaintBadgeLoadedAt = Date.now();
+      }
+
+      async function refreshComplaintBadge() {
+        const badge = document.getElementById("complaint-open-count");
+        if (!badge || !state.token || isLocalAuthToken(state.token)) return;
+        if (Date.now() - state.complaintBadgeLoadedAt < 30000) return;
+        state.complaintBadgeLoadedAt = Date.now();
+        try {
+          const endpoint = checkIsAdmin(state.user)
+            ? "/api/admin/complaints"
+            : "/api/complaints/mine";
+          const response = await apiFetch(endpoint);
+          const items = Array.isArray(response.items) ? response.items : [];
+          updateComplaintBadge(items);
+        } catch (error) {
+          state.complaintBadgeLoadedAt = 0;
+          showToast(`Không tải được số khiếu nại: ${error.message}`, "error");
+        }
       }
 
       function toggleNotifications(force) {
@@ -7670,6 +7874,9 @@
 
         list.innerHTML = state.notifications
           .map((notification) => {
+            const isComplaintNotification =
+              notification.notification_type === "complaint_created" ||
+              notification.notification_type === "complaint_update";
             const buyerInfo = notification.buyer_name
               ? `<div class="mt-2 rounded-xl bg-slate-50 p-2.5 text-[11px] text-ink-600 space-y-0.5">
               <p><strong>Người mua:</strong> ${escapeHtml(notification.buyer_name)}</p>
@@ -7679,9 +7886,9 @@
             </div>`
               : "";
             return `
-          <button onclick="openNotification('${escapeHtml(notification.id)}')" class="w-full text-left p-3 rounded-xl hover:bg-slate-50 ${notification.is_read ? "" : "bg-eco-50/70"}">
+          <button type="button" data-notification-id="${escapeHtml(notification.id)}" onclick="openNotification(this.dataset.notificationId)" class="min-h-11 w-full text-left p-3 rounded-xl hover:bg-slate-50 ${notification.is_read ? "" : "bg-eco-50/70"}">
             <div class="flex items-start gap-2">
-              <span class="text-base">🛍️</span>
+              <span class="text-base">${isComplaintNotification ? "📝" : "🛍️"}</span>
               <div class="min-w-0 flex-1">
                 <p class="text-xs font-bold text-ink-900">${escapeHtml(notification.title)}</p>
                 <p class="mt-1 text-[11px] text-ink-600">${escapeHtml(notification.message)}</p>
@@ -8174,16 +8381,26 @@
         const notification = state.notifications.find(
           (item) => item.id === notificationId,
         );
-        if (!notification || notification.is_read) return;
-        try {
-          await apiFetch(
-            `/api/notifications/${encodeURIComponent(notificationId)}/read`,
-            { method: "POST" },
-          );
-          notification.is_read = 1;
-          renderNotifications();
-        } catch (err) {
-          showToast(`Không thể cập nhật thông báo: ${err.message}`, "error");
+        if (!notification) return;
+        if (!notification.is_read) {
+          try {
+            await apiFetch(
+              `/api/notifications/${encodeURIComponent(notificationId)}/read`,
+              { method: "POST" },
+            );
+            notification.is_read = 1;
+            renderNotifications();
+          } catch (err) {
+            showToast(`Không thể cập nhật thông báo: ${err.message}`, "error");
+          }
+        }
+        if (
+          (notification.notification_type === "complaint_created" ||
+            notification.notification_type === "complaint_update") &&
+          notification.complaint_id
+        ) {
+          toggleNotifications(false);
+          await openComplaintDetailFromOrder(notification.complaint_id);
         }
       }
 
@@ -9552,31 +9769,705 @@
             .join("");
         }
 
-        // Orders List
+        renderPurchasedOrders();
+      }
+
+      function renderPurchasedOrders() {
         const oList = document.getElementById("orders-list");
+        if (!oList) return;
+        if (!state.token) {
+          oList.innerHTML = `<div class="rounded-2xl bg-slate-50 p-8 text-center text-sm text-ink-600">Vui lòng đăng nhập để xem đơn hàng đã mua.</div>`;
+          return;
+        }
+        if (state.ordersLoading) {
+          oList.innerHTML = `<div class="rounded-2xl bg-slate-50 p-8 text-center text-sm text-ink-600" role="status">Đang tải đơn hàng...</div>`;
+          return;
+        }
+        if (state.ordersError) {
+          oList.innerHTML = `<div class="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700">Không tải được đơn hàng: ${escapeHtml(state.ordersError)} <button type="button" onclick="loadMyOrders()" class="ml-2 underline">Thử lại</button></div>`;
+          return;
+        }
+        if (state.orders.length === 0) {
+          oList.innerHTML = `<div class="rounded-2xl bg-slate-50 p-8 text-center text-sm text-ink-600">Bạn chưa có đơn hàng nào.</div>`;
+          return;
+        }
         oList.innerHTML = state.orders
-          .map(
-            (o) => `
-        <div class="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div class="flex items-center gap-4">
-            <img src="${o.image_url}" alt="${o.name}" loading="lazy" decoding="async" class="w-20 h-24 rounded-xl object-cover bg-sand-50 shrink-0" />
-            <div class="space-y-1">
-              <div class="flex flex-wrap items-center gap-2">
-                <span class="px-2.5 py-0.5 rounded-full bg-eco-50 text-eco-700 text-[11px] font-bold">Đã hoàn tất • Vòng đời #${o.cycle || 1}</span>
-                <span class="text-xs text-ink-400">Ngày mua: ${o.purchased_at || "Hôm nay"}</span>
-              </div>
-              <h4 class="font-bold text-base text-ink-900">${o.name}</h4>
-              <p class="text-xs text-ink-600">Chất liệu: ${o.material} • Màu: ${o.color} • Size ${o.size || "M"}</p>
-              <p class="text-sm font-bold text-ink-900">${formatVND(o.price)}</p>
-            </div>
-          </div>
-          <button onclick="openReconsignModal('${o.id}')" class="px-5 py-3 rounded-2xl bg-eco-600 hover:bg-eco-700 text-white text-xs font-bold shadow-xs shrink-0 transition">
-            ♻️ Ký gửi lại
-          </button>
-        </div>
-      `,
-          )
+          .map((o) => {
+            const complaintAction = o.complaint_id
+              ? `<button type="button" data-complaint-id="${escapeHtml(o.complaint_id)}" onclick="openComplaintDetailFromOrder(this.dataset.complaintId)" class="min-h-11 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">Xem khiếu nại</button>`
+              : o.can_complain
+                ? `<button type="button" data-order-id="${escapeHtml(o.order_id)}" data-product-id="${escapeHtml(o.product_id)}" onclick="openComplaintModal(this.dataset.orderId,this.dataset.productId)" class="min-h-11 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 hover:bg-amber-100">⚠️ Khiếu nại</button>`
+                : `<button type="button" disabled title="${escapeHtml(o.complaint_blocked_reason || "Không thể khiếu nại sản phẩm này.")}" class="min-h-11 cursor-not-allowed rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-xs font-semibold text-ink-500">⚠️ Khiếu nại</button>`;
+            const reconsignAction = o.wardrobe_item_id && !o.reconsigned
+              ? `<button type="button" data-wardrobe-id="${escapeHtml(o.wardrobe_item_id)}" onclick="openReconsignModal(this.dataset.wardrobeId)" class="min-h-11 rounded-xl bg-eco-600 px-4 py-2 text-xs font-bold text-white shadow-xs transition hover:bg-eco-700">♻️ Ký gửi lại</button>`
+              : `<button type="button" disabled title="Món đồ không còn đủ điều kiện ký gửi lại." class="min-h-11 cursor-not-allowed rounded-xl bg-slate-100 px-4 py-2 text-xs font-semibold text-ink-500">♻️ Ký gửi lại</button>`;
+            return `
+              <article class="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+                <div class="flex min-w-0 items-center gap-4">
+                  <img src="${escapeHtml(o.image_url)}" alt="${escapeHtml(o.title)}" loading="lazy" decoding="async" class="h-24 w-20 shrink-0 rounded-xl bg-sand-50 object-cover" />
+                  <div class="min-w-0 space-y-1">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <span class="rounded-full bg-eco-50 px-2.5 py-1 text-[11px] font-bold text-eco-700">Đơn #${escapeHtml(o.order_id)}</span>
+                      <span class="text-xs text-ink-400">Ngày mua: ${escapeHtml(formatNotificationDate(o.created_at))}</span>
+                    </div>
+                    <h3 class="break-words font-bold text-base text-ink-900">${escapeHtml(o.title)}</h3>
+                    <p class="text-xs text-ink-600">Chất liệu: ${escapeHtml(o.material)} • Màu: ${escapeHtml(o.color)} • Size ${escapeHtml(o.size || "—")}</p>
+                    <p class="text-sm font-bold text-ink-900">${formatVND(o.price)}</p>
+                  </div>
+                </div>
+                <div class="flex flex-wrap gap-2 sm:shrink-0">${reconsignAction}${complaintAction}</div>
+              </article>`;
+          })
           .join("");
+      }
+
+      async function loadMyOrders() {
+        if (!state.token) {
+          state.orders = [];
+          state.ordersError = "Vui lòng đăng nhập để xem đơn hàng.";
+          renderPurchasedOrders();
+          return;
+        }
+        if (isLocalAuthToken(state.token)) {
+          state.orders = [];
+          state.ordersError = "Đơn hàng và khiếu nại cần kết nối máy chủ. Hãy đăng nhập khi dịch vụ trực tuyến.";
+          renderPurchasedOrders();
+          showToast(state.ordersError, "warning");
+          return;
+        }
+        state.ordersLoading = true;
+        state.ordersError = null;
+        renderPurchasedOrders();
+        try {
+          const response = await apiFetch("/api/orders/me");
+          if (!Array.isArray(response.items)) {
+            throw new Error("Máy chủ trả về danh sách đơn hàng không hợp lệ.");
+          }
+          state.orders = response.items.flatMap((order) =>
+            (Array.isArray(order.items) ? order.items : []).map((item) => ({
+              ...item,
+              id: item.wardrobe_item_id,
+              name: item.title,
+              order_id: order.order_id,
+              created_at: order.created_at,
+              order_status: order.order_status,
+            })),
+          );
+        } catch (error) {
+          state.orders = [];
+          state.ordersError = error.message || "Không kết nối được máy chủ.";
+          showToast(`Không tải được đơn hàng: ${state.ordersError}`, "error");
+        } finally {
+          state.ordersLoading = false;
+          renderPurchasedOrders();
+        }
+      }
+
+      const complaintStatusLabels = {
+        open: "Chờ người bán phản hồi",
+        seller_responded: "Người bán đã phản hồi",
+        escalated: "Đang chờ RE:LOOP",
+        resolved: "Đã xử lý",
+        rejected: "Không được chấp nhận",
+        cancelled: "Đã hủy",
+      };
+      const complaintReasonLabels = {
+        wrong_color: "Màu sắc không đúng mô tả",
+        wrong_size: "Kích cỡ không đúng mô tả",
+        wrong_material: "Chất liệu không đúng mô tả",
+        condition_worse: "Tình trạng kém hơn công bố",
+        missing_details: "Thiếu chi tiết đã nêu",
+        undisclosed_damage: "Hư hỏng không được thông báo",
+        other: "Lý do khác",
+      };
+      const complaintResolutionLabels = {
+        refund: "Hoàn tiền",
+        partial_refund: "Hoàn tiền một phần",
+        exchange: "Đổi sản phẩm",
+        rejected: "Không chấp nhận khiếu nại",
+      };
+
+      function complaintStatusBadge(status) {
+        const colors = {
+          open: "bg-amber-50 text-amber-800",
+          seller_responded: "bg-sky-50 text-sky-800",
+          escalated: "bg-violet-50 text-violet-800",
+          resolved: "bg-eco-50 text-eco-800",
+          rejected: "bg-rose-50 text-rose-800",
+          cancelled: "bg-slate-100 text-ink-600",
+        };
+        return `<span class="inline-flex rounded-full px-3 py-1 text-xs font-bold ${colors[status] || "bg-slate-100 text-ink-700"}">${escapeHtml(complaintStatusLabels[status] || "Không xác định")}</span>`;
+      }
+
+      async function loadComplaints() {
+        const offlineMessage = document.getElementById("complaints-offline-message");
+        if (!state.token || !state.user) {
+          state.complaints = [];
+          state.complaintsError = "Vui lòng đăng nhập để xem khiếu nại.";
+          offlineMessage.textContent = state.complaintsError;
+          offlineMessage.classList.remove("hidden");
+          renderComplaintList();
+          return;
+        }
+        if (isLocalAuthToken(state.token)) {
+          state.complaints = [];
+          state.complaintsError = "Khiếu nại cần kết nối máy chủ. Hãy đăng nhập bằng tài khoản trực tuyến để tiếp tục.";
+          offlineMessage.textContent = state.complaintsError;
+          offlineMessage.classList.remove("hidden");
+          renderComplaintList();
+          showToast(state.complaintsError, "warning");
+          return;
+        }
+
+        offlineMessage.classList.add("hidden");
+        state.complaintsLoading = true;
+        state.complaintsError = null;
+        renderComplaintList();
+        try {
+          const endpoint = checkIsAdmin(state.user)
+            ? "/api/admin/complaints"
+            : "/api/complaints/mine";
+          const response = await apiFetch(endpoint);
+          if (!Array.isArray(response.items)) {
+            throw new Error("Máy chủ trả về danh sách khiếu nại không hợp lệ.");
+          }
+          state.complaints = response.items;
+          updateComplaintBadge(state.complaints);
+        } catch (error) {
+          state.complaints = [];
+          state.complaintsError = error.message || "Không kết nối được máy chủ.";
+          offlineMessage.textContent = `Không tải được khiếu nại: ${state.complaintsError}`;
+          offlineMessage.classList.remove("hidden");
+          showToast(`Không tải được khiếu nại: ${state.complaintsError}`, "error");
+        } finally {
+          state.complaintsLoading = false;
+          renderComplaintList();
+        }
+      }
+
+      function setComplaintFilter(status) {
+        const allowed = ["all", ...Object.keys(complaintStatusLabels)];
+        if (!allowed.includes(status)) return;
+        state.complaintFilter = status;
+        renderComplaintList();
+      }
+
+      function renderComplaintList() {
+        const list = document.getElementById("complaints-list");
+        const summary = document.getElementById("complaints-list-summary");
+        if (!list || !summary) return;
+        if (state.complaintsLoading) {
+          list.innerHTML = `<div class="rounded-2xl bg-slate-50 p-8 text-center text-sm text-ink-600" role="status">Đang tải khiếu nại...</div>`;
+          return;
+        }
+        if (state.complaintsError) {
+          list.innerHTML = `<div class="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700">${escapeHtml(state.complaintsError)} <button type="button" onclick="loadComplaints()" class="ml-2 underline">Thử lại</button></div>`;
+          return;
+        }
+        const filtered = state.complaintFilter === "all"
+          ? state.complaints
+          : state.complaints.filter((item) => item.status === state.complaintFilter);
+        summary.textContent = checkIsAdmin(state.user)
+          ? `Tất cả khiếu nại (${state.complaints.length})`
+          : `Khiếu nại của tôi (${state.complaints.length})`;
+        if (filtered.length === 0) {
+          list.innerHTML = `<div class="rounded-2xl bg-slate-50 p-8 text-center text-sm text-ink-600">Không có khiếu nại phù hợp. Mở mục “Đã mua” để gửi khiếu nại cho sản phẩm đủ điều kiện.</div>`;
+          return;
+        }
+        list.innerHTML = filtered.map((item) => {
+          const snapshot = item.product_snapshot || {};
+          return `
+            <article class="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div class="min-w-0">
+                <div class="flex flex-wrap items-center gap-2">${complaintStatusBadge(item.status)}<span class="text-xs text-ink-500">#${escapeHtml(item.id)}</span></div>
+                <h3 class="mt-2 break-words font-bold text-ink-900">${escapeHtml(snapshot.title || "Sản phẩm đã mua")}</h3>
+                <p class="mt-1 text-sm text-ink-600">${escapeHtml(complaintReasonLabels[item.reason_code] || item.reason_code)}</p>
+                <p class="mt-1 text-xs text-ink-500">Cập nhật: ${escapeHtml(formatNotificationDate(item.updated_at))}</p>
+              </div>
+              <button type="button" data-complaint-id="${escapeHtml(item.id)}" onclick="openComplaintDetail(this.dataset.complaintId)" class="min-h-11 shrink-0 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-slate-50">Xem tiến trình</button>
+            </article>`;
+        }).join("");
+      }
+
+      function closeComplaintDetail() {
+        state.activeComplaint = null;
+        document.getElementById("complaint-detail").classList.add("hidden");
+        document.getElementById("complaints-list-view").classList.remove("hidden");
+      }
+
+      async function openComplaintDetailFromOrder(complaintId) {
+        switchTab("complaints");
+        await openComplaintDetail(complaintId);
+      }
+
+      async function openComplaintDetailFromSeller(complaintId) {
+        switchTab("complaints");
+        await openComplaintDetail(complaintId);
+      }
+
+      async function openComplaintDetail(complaintId) {
+        if (!state.token || isLocalAuthToken(state.token)) {
+          showToast("Chi tiết khiếu nại cần kết nối máy chủ.", "warning");
+          return;
+        }
+        const panel = document.getElementById("complaint-detail");
+        document.getElementById("complaints-list-view").classList.add("hidden");
+        panel.classList.remove("hidden");
+        panel.innerHTML = `<div class="rounded-2xl bg-slate-50 p-8 text-center text-sm text-ink-600" role="status">Đang tải chi tiết khiếu nại...</div>`;
+        try {
+          state.activeComplaint = await apiFetch(
+            `/api/complaints/${encodeURIComponent(complaintId)}`,
+          );
+          renderComplaintDetail();
+        } catch (error) {
+          state.activeComplaint = null;
+          panel.innerHTML = `<div class="space-y-3 rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700">${escapeHtml(error.message)}<button type="button" data-complaint-id="${escapeHtml(complaintId)}" onclick="openComplaintDetail(this.dataset.complaintId)" class="ml-2 underline">Thử lại</button><button type="button" onclick="closeComplaintDetail()" class="ml-2 underline">Quay lại danh sách</button></div>`;
+          showToast(`Không tải được chi tiết khiếu nại: ${error.message}`, "error");
+        }
+      }
+
+      function renderComplaintDetail() {
+        const complaint = state.activeComplaint;
+        const panel = document.getElementById("complaint-detail");
+        if (!complaint || !panel) return;
+        const snapshot = complaint.product_snapshot || {};
+        const canAct = ["open", "seller_responded", "escalated"].includes(complaint.status);
+        const evidence = (complaint.evidence_images || []).map((image, index) => `
+          <a href="${escapeHtml(image)}" target="_blank" rel="noopener noreferrer" class="block overflow-hidden rounded-xl border border-slate-200">
+            <img src="${escapeHtml(image)}" alt="Ảnh bằng chứng ${index + 1}" loading="lazy" decoding="async" class="aspect-square w-full object-cover" />
+          </a>`).join("");
+        const events = (complaint.events || []).map((event) => `
+          <li class="relative border-l-2 border-eco-200 pb-5 pl-4 last:pb-0">
+            <span class="absolute -left-[5px] top-1 h-2 w-2 rounded-full bg-eco-600"></span>
+            <p class="text-sm font-semibold text-ink-900">${escapeHtml(String(event.event_type || "").replace(/_/g, " "))}</p>
+            <p class="mt-1 whitespace-pre-wrap break-words text-sm text-ink-600">${escapeHtml(event.note)}</p>
+            <p class="mt-1 text-xs text-ink-500">${escapeHtml(event.actor_role)} • ${escapeHtml(formatNotificationDate(event.created_at))}</p>
+          </li>`).join("");
+        let actions = "";
+        if (complaint.viewer_role === "buyer" && complaint.status === "open") {
+          actions = `<button type="button" onclick="cancelActiveComplaint()" class="min-h-11 rounded-xl border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50">Hủy khiếu nại</button>`;
+        } else if (complaint.viewer_role === "buyer" && complaint.status === "seller_responded") {
+          actions = `<button type="button" onclick="escalateActiveComplaint()" class="min-h-11 rounded-xl bg-eco-700 px-4 py-2 text-sm font-semibold text-white hover:bg-eco-800">Nhờ RE:LOOP can thiệp</button>`;
+        } else if (complaint.viewer_role === "seller" && complaint.status === "open") {
+          actions = `
+            <div class="w-full space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <label class="block text-sm font-semibold text-ink-800">Phản hồi (10–1.000 ký tự)
+                <textarea id="seller-complaint-response" minlength="10" maxlength="1000" rows="3" class="mt-1 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm" placeholder="Nêu rõ quan điểm và phương án của bạn..."></textarea>
+              </label>
+              <div class="flex flex-wrap gap-2">
+                <button type="button" onclick="respondToActiveComplaint(true)" class="min-h-11 rounded-xl bg-eco-700 px-4 py-2 text-sm font-semibold text-white">Chấp nhận</button>
+                <button type="button" onclick="respondToActiveComplaint(false)" class="min-h-11 rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-ink-700">Phản biện</button>
+              </div>
+            </div>`;
+        } else if (complaint.viewer_role === "admin" && canAct) {
+          actions = `
+            <div class="w-full space-y-3 rounded-2xl border border-violet-200 bg-violet-50 p-4">
+              <h3 class="font-bold text-ink-900">Phân xử khiếu nại</h3>
+              <label class="block text-sm font-semibold text-ink-800">Kết quả
+                <select id="admin-complaint-resolution" class="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 py-2">
+                  <option value="refund">Hoàn tiền</option>
+                  <option value="partial_refund">Hoàn tiền một phần</option>
+                  <option value="exchange">Đổi sản phẩm</option>
+                  <option value="rejected">Không chấp nhận khiếu nại</option>
+                </select>
+              </label>
+              <label class="block text-sm font-semibold text-ink-800">Ghi chú kết luận (10–1.000 ký tự)
+                <textarea id="admin-complaint-note" minlength="10" maxlength="1000" rows="3" class="mt-1 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm" placeholder="Giải thích căn cứ và kết quả xử lý..."></textarea>
+              </label>
+              <button type="button" onclick="resolveActiveComplaint()" class="min-h-11 rounded-xl bg-violet-700 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-800">Lưu quyết định</button>
+            </div>`;
+        }
+        panel.innerHTML = `
+          <div class="space-y-5">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <button type="button" onclick="closeComplaintDetail()" class="min-h-11 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-ink-700">← Danh sách khiếu nại</button>
+              <div class="flex items-center gap-2">${complaintStatusBadge(complaint.status)}<span class="text-xs text-ink-500">#${escapeHtml(complaint.id)}</span></div>
+            </div>
+            <div class="grid gap-4 lg:grid-cols-2">
+              <section class="rounded-2xl border border-slate-200 bg-white p-4">
+                <h3 class="font-bold text-ink-900">Mô tả trên tin đăng</h3>
+                <dl class="mt-3 grid grid-cols-2 gap-3 text-sm">
+                  <div><dt class="text-xs text-ink-500">Sản phẩm</dt><dd class="break-words font-semibold text-ink-900">${escapeHtml(snapshot.title)}</dd></div>
+                  <div><dt class="text-xs text-ink-500">Giá</dt><dd class="font-semibold text-ink-900">${formatVND(snapshot.price)}</dd></div>
+                  <div><dt class="text-xs text-ink-500">Màu / Size</dt><dd class="text-ink-800">${escapeHtml(snapshot.color)} / ${escapeHtml(snapshot.size)}</dd></div>
+                  <div><dt class="text-xs text-ink-500">Chất liệu</dt><dd class="text-ink-800">${escapeHtml(snapshot.material)}</dd></div>
+                  <div><dt class="text-xs text-ink-500">Độ mới</dt><dd class="text-ink-800">${escapeHtml(snapshot.condition_label || "—")} ${snapshot.condition_score == null ? "" : `(${escapeHtml(snapshot.condition_score)}%)`}</dd></div>
+                  <div><dt class="text-xs text-ink-500">Danh mục</dt><dd class="text-ink-800">${escapeHtml(snapshot.category)}</dd></div>
+                </dl>
+                <p class="mt-3 whitespace-pre-wrap break-words rounded-xl bg-sand-50 p-3 text-sm text-ink-700">${escapeHtml(snapshot.ai_note || "Không có ghi chú trên tin đăng.")}</p>
+              </section>
+              <section class="rounded-2xl border border-amber-200 bg-amber-50/50 p-4">
+                <h3 class="font-bold text-ink-900">Nội dung khiếu nại</h3>
+                <p class="mt-2 text-sm text-ink-600">${escapeHtml(complaintReasonLabels[complaint.reason_code] || complaint.reason_code)} • ${escapeHtml(complaintResolutionLabels[complaint.desired_resolution] || complaint.desired_resolution)}</p>
+                <p class="mt-3 whitespace-pre-wrap break-words text-sm text-ink-800">${escapeHtml(complaint.description)}</p>
+                <div class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">${evidence || `<p class="col-span-full text-sm text-ink-500">Không có ảnh bằng chứng.</p>`}</div>
+              </section>
+            </div>
+            ${complaint.seller_response ? `<section class="rounded-2xl border border-sky-200 bg-sky-50 p-4"><h3 class="font-bold text-ink-900">Phản hồi người bán</h3><p class="mt-2 whitespace-pre-wrap break-words text-sm text-ink-700">${escapeHtml(complaint.seller_response)}</p><p class="mt-1 text-xs text-ink-500">${escapeHtml(formatNotificationDate(complaint.seller_responded_at))}</p></section>` : ""}
+            ${complaint.resolution_note ? `<section class="rounded-2xl border border-eco-200 bg-eco-50 p-4"><h3 class="font-bold text-ink-900">Kết quả RE:LOOP • ${escapeHtml(complaintResolutionLabels[complaint.resolution_type] || complaint.resolution_type)}</h3><p class="mt-2 whitespace-pre-wrap break-words text-sm text-ink-700">${escapeHtml(complaint.resolution_note)}</p></section>` : ""}
+            ${actions}
+            <section class="rounded-2xl border border-slate-200 bg-white p-4">
+              <h3 class="font-bold text-ink-900">Tiến trình xử lý</h3>
+              <ol class="mt-4">${events || `<li class="text-sm text-ink-500">Chưa có cập nhật.</li>`}</ol>
+            </section>
+          </div>`;
+      }
+
+      async function runActiveComplaintAction(request, successMessage) {
+        if (!state.activeComplaint || state.complaintSubmitting) return;
+        if (isLocalAuthToken(state.token)) {
+          showToast("Thao tác khiếu nại cần kết nối máy chủ.", "warning");
+          return;
+        }
+        const complaintId = state.activeComplaint.id;
+        const buttons = [
+          ...document.querySelectorAll("#complaint-detail button"),
+        ];
+        state.complaintSubmitting = true;
+        buttons.forEach((button) => (button.disabled = true));
+        try {
+          await request(complaintId);
+          showToast(successMessage, "success");
+          await loadComplaints();
+          await openComplaintDetail(complaintId);
+          await refreshComplaintBadge();
+        } catch (error) {
+          showToast(`Không thể cập nhật khiếu nại: ${error.message}`, "error");
+        } finally {
+          state.complaintSubmitting = false;
+          buttons.forEach((button) => (button.disabled = false));
+        }
+      }
+
+      function cancelActiveComplaint() {
+        return runActiveComplaintAction(
+          (id) => apiFetch(`/api/complaints/${encodeURIComponent(id)}/cancel`, { method: "POST" }),
+          "Đã hủy khiếu nại.",
+        );
+      }
+
+      function escalateActiveComplaint() {
+        return runActiveComplaintAction(
+          (id) => apiFetch(`/api/complaints/${encodeURIComponent(id)}/escalate`, { method: "POST" }),
+          "Đã chuyển khiếu nại cho RE:LOOP.",
+        );
+      }
+
+      function respondToActiveComplaint(accepted) {
+        const note = document.getElementById("seller-complaint-response")?.value.trim();
+        if (!note || note.length < 10 || note.length > 1000) {
+          showToast("Phản hồi cần có từ 10 đến 1.000 ký tự.", "warning");
+          return;
+        }
+        return runActiveComplaintAction(
+          (id) => apiFetch(`/api/complaints/${encodeURIComponent(id)}/seller-response`, {
+            method: "POST",
+            body: JSON.stringify({ accepted, note }),
+          }),
+          "Đã gửi phản hồi cho khách hàng.",
+        );
+      }
+
+      function resolveActiveComplaint() {
+        const resolution = document.getElementById("admin-complaint-resolution")?.value;
+        const note = document.getElementById("admin-complaint-note")?.value.trim();
+        if (!note || note.length < 10 || note.length > 1000) {
+          showToast("Ghi chú kết luận cần có từ 10 đến 1.000 ký tự.", "warning");
+          return;
+        }
+        return runActiveComplaintAction(
+          (id) => apiFetch(`/api/admin/complaints/${encodeURIComponent(id)}/resolve`, {
+            method: "POST",
+            body: JSON.stringify({ resolution_type: resolution, resolution_note: note }),
+          }),
+          "Đã lưu quyết định xử lý khiếu nại.",
+        );
+      }
+
+      async function loadSellerComplaints() {
+        const content = document.getElementById("seller-complaints-content");
+        if (!content) return;
+        if (!state.token || !state.user) {
+          state.sellerComplaints = [];
+          content.innerHTML = `<div class="rounded-2xl bg-slate-50 p-5 text-sm text-ink-600">Vui lòng đăng nhập để kiểm tra khiếu nại nhận được.</div>`;
+          return;
+        }
+        if (isLocalAuthToken(state.token)) {
+          state.sellerComplaints = [];
+          content.innerHTML = `<div class="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">Khiếu nại cần kết nối máy chủ; dữ liệu offline không được giả lập.</div>`;
+          return;
+        }
+        state.sellerComplaintsLoading = true;
+        state.sellerComplaintsError = null;
+        renderSellerComplaints();
+        try {
+          const response = await apiFetch("/api/seller/complaints");
+          if (!Array.isArray(response.items)) {
+            throw new Error("Máy chủ trả về danh sách khiếu nại không hợp lệ.");
+          }
+          state.sellerComplaints = response.items;
+        } catch (error) {
+          state.sellerComplaintsError = error.message || "Không kết nối được máy chủ.";
+        } finally {
+          state.sellerComplaintsLoading = false;
+          renderSellerComplaints();
+        }
+      }
+
+      function renderSellerComplaints() {
+        const content = document.getElementById("seller-complaints-content");
+        if (!content) return;
+        if (state.sellerComplaintsLoading) {
+          content.innerHTML = `<div class="rounded-2xl bg-slate-50 p-5 text-center text-sm text-ink-600" role="status">Đang tải khiếu nại...</div>`;
+          return;
+        }
+        if (state.sellerComplaintsError) {
+          content.innerHTML = `<div class="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700">${escapeHtml(state.sellerComplaintsError)} <button type="button" onclick="loadSellerComplaints()" class="ml-2 underline">Thử lại</button></div>`;
+          return;
+        }
+        if (!state.sellerComplaints.length) {
+          content.innerHTML = `<div class="rounded-2xl bg-slate-50 p-5 text-center text-sm text-ink-600">Bạn chưa nhận được khiếu nại nào.</div>`;
+          return;
+        }
+        content.innerHTML = state.sellerComplaints.map((item) => {
+          const snapshot = item.product_snapshot || {};
+          const responseForm = item.status === "open" ? `
+            <label class="mt-3 block text-sm font-semibold text-ink-800">Phản hồi (10–1.000 ký tự)
+              <textarea minlength="10" maxlength="1000" rows="3" class="seller-complaint-note mt-1 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm" placeholder="Nêu rõ quan điểm và phương án..."></textarea>
+            </label>
+            <div class="mt-2 flex flex-wrap gap-2">
+              <button type="button" data-complaint-id="${escapeHtml(item.id)}" onclick="respondToSellerComplaint(this,true)" class="min-h-11 rounded-xl bg-eco-700 px-4 py-2 text-sm font-semibold text-white">Chấp nhận</button>
+              <button type="button" data-complaint-id="${escapeHtml(item.id)}" onclick="respondToSellerComplaint(this,false)" class="min-h-11 rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-ink-700">Phản biện</button>
+            </div>` : "";
+          return `
+            <article data-seller-complaint class="rounded-2xl border border-slate-200 bg-white p-4">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                ${complaintStatusBadge(item.status)}
+                <button type="button" data-complaint-id="${escapeHtml(item.id)}" onclick="openComplaintDetailFromSeller(this.dataset.complaintId)" class="min-h-11 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-ink-700">Xem chi tiết</button>
+              </div>
+              <h4 class="mt-2 font-bold text-ink-900">${escapeHtml(snapshot.title || "Sản phẩm đã mua")}</h4>
+              <p class="mt-1 text-sm text-ink-600">${escapeHtml(complaintReasonLabels[item.reason_code] || item.reason_code)}</p>
+              <p class="mt-2 whitespace-pre-wrap break-words text-sm text-ink-700">${escapeHtml(item.description)}</p>
+              ${responseForm}
+            </article>`;
+        }).join("");
+      }
+
+      async function respondToSellerComplaint(button, accepted) {
+        const note = button.closest("[data-seller-complaint]")?.querySelector(".seller-complaint-note")?.value.trim();
+        const complaintId = button.dataset.complaintId;
+        if (!note || note.length < 10 || note.length > 1000) {
+          showToast("Phản hồi cần có từ 10 đến 1.000 ký tự.", "warning");
+          return;
+        }
+        if (isLocalAuthToken(state.token)) {
+          showToast("Phản hồi khiếu nại cần kết nối máy chủ.", "warning");
+          return;
+        }
+        button.disabled = true;
+        try {
+          await apiFetch(`/api/complaints/${encodeURIComponent(complaintId)}/seller-response`, {
+            method: "POST",
+            body: JSON.stringify({ accepted, note }),
+          });
+          showToast("Đã gửi phản hồi cho khách hàng.", "success");
+          await loadSellerComplaints();
+          state.complaintBadgeLoadedAt = 0;
+          await refreshComplaintBadge();
+        } catch (error) {
+          button.disabled = false;
+          showToast(`Không thể gửi phản hồi: ${error.message}`, "error");
+        }
+      }
+
+      function openComplaintModal(orderId, productId) {
+        if (!state.user || !state.token || isLocalAuthToken(state.token)) {
+          showToast("Gửi khiếu nại cần đăng nhập trực tuyến.", "warning");
+          return;
+        }
+        const item = state.orders.find(
+          (order) => order.order_id === orderId && order.product_id === productId,
+        );
+        if (!item || !item.can_complain) {
+          showToast(item?.complaint_blocked_reason || "Sản phẩm không đủ điều kiện khiếu nại.", "warning");
+          return;
+        }
+        state.pendingComplaintItem = item;
+        state.pendingComplaintFiles = [];
+        document.getElementById("complaint-form").reset();
+        document.getElementById("complaint-char-count").textContent = "0 / 1000";
+        document.getElementById("complaint-form-error").classList.add("hidden");
+        document.getElementById("complaint-evidence-preview").replaceChildren();
+        const score = item.condition_score == null
+          ? "Chưa có thông tin"
+          : `${escapeHtml(item.condition_label || "")} ${escapeHtml(item.condition_score)}%`;
+        document.getElementById("complaint-product-summary").innerHTML = `
+          <div class="rounded-2xl border border-slate-200 bg-sand-50 p-4">
+            <div class="flex items-start gap-3">
+              <img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.title)}" class="h-24 w-20 shrink-0 rounded-xl bg-white object-cover" />
+              <div class="min-w-0">
+                <h3 class="break-words font-bold text-ink-900">${escapeHtml(item.title)}</h3>
+                <p class="mt-1 text-xs text-ink-600">Đơn #${escapeHtml(orderId)} • ${escapeHtml(item.category)}</p>
+                <p class="mt-1 text-sm text-ink-700">Màu: ${escapeHtml(item.color)} • Size: ${escapeHtml(item.size)}</p>
+                <p class="text-sm text-ink-700">Chất liệu: ${escapeHtml(item.material)}</p>
+                <p class="text-sm text-ink-700">Độ mới công bố: ${score}</p>
+                <p class="mt-2 whitespace-pre-wrap break-words text-xs text-ink-600">${escapeHtml(item.ai_note || "Không có ghi chú trên tin đăng.")}</p>
+              </div>
+            </div>
+          </div>`;
+        document.getElementById("complaint-modal").classList.remove("hidden");
+      }
+
+      function closeComplaintModal() {
+        if (state.complaintSubmitting) return;
+        document.getElementById("complaint-modal").classList.add("hidden");
+        document.getElementById("complaint-form").reset();
+        document.getElementById("complaint-product-summary").replaceChildren();
+        document.getElementById("complaint-evidence-preview").replaceChildren();
+        document.getElementById("complaint-form-error").classList.add("hidden");
+        state.pendingComplaintItem = null;
+        state.pendingComplaintFiles = [];
+      }
+
+      function updateComplaintCharCount() {
+        const input = document.getElementById("complaint-description");
+        document.getElementById("complaint-char-count").textContent =
+          `${input.value.length} / 1000`;
+      }
+
+      function handleComplaintEvidenceFiles(event) {
+        const files = Array.from(event.target.files || []);
+        const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+        if (files.length < 1 || files.length > 4) {
+          state.pendingComplaintFiles = [];
+          event.target.value = "";
+          showToast("Vui lòng chọn từ 1 đến 4 ảnh bằng chứng.", "warning");
+          renderComplaintEvidencePreview();
+          return;
+        }
+        const invalid = files.find(
+          (file) => !allowedTypes.includes(file.type) || file.size > 3 * 1024 * 1024,
+        );
+        if (invalid) {
+          state.pendingComplaintFiles = [];
+          event.target.value = "";
+          const reason = !allowedTypes.includes(invalid.type)
+            ? "Chỉ hỗ trợ ảnh JPG, PNG hoặc WEBP."
+            : "Mỗi ảnh bằng chứng không được vượt quá 3 MB.";
+          showToast(reason, "warning");
+          renderComplaintEvidencePreview();
+          return;
+        }
+        state.pendingComplaintFiles = files;
+        renderComplaintEvidencePreview();
+      }
+
+      function renderComplaintEvidencePreview() {
+        const preview = document.getElementById("complaint-evidence-preview");
+        preview.replaceChildren();
+        state.pendingComplaintFiles.forEach((file) => {
+          const card = document.createElement("div");
+          card.className = "overflow-hidden rounded-xl border border-slate-200 bg-white";
+          const image = document.createElement("img");
+          image.alt = `Ảnh bằng chứng: ${file.name}`;
+          image.className = "aspect-square w-full object-cover";
+          image.loading = "lazy";
+          const caption = document.createElement("p");
+          caption.className = "truncate p-2 text-xs text-ink-600";
+          caption.textContent = file.name;
+          card.append(image, caption);
+          preview.append(card);
+          const reader = new FileReader();
+          reader.onload = () => {
+            if (typeof reader.result === "string") image.src = reader.result;
+          };
+          reader.onerror = () => {
+            showToast(`Không đọc được ảnh ${file.name}.`, "error");
+          };
+          reader.readAsDataURL(file);
+        });
+      }
+
+      function readComplaintEvidence(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            if (typeof reader.result !== "string") {
+              reject(new Error("Không thể đọc ảnh bằng chứng."));
+              return;
+            }
+            resolve(reader.result);
+          };
+          reader.onerror = () =>
+            reject(reader.error || new Error("Không thể đọc ảnh bằng chứng."));
+          reader.readAsDataURL(file);
+        });
+      }
+
+      async function submitComplaint(event) {
+        event.preventDefault();
+        if (state.complaintSubmitting) return;
+        const item = state.pendingComplaintItem;
+        const description = document.getElementById("complaint-description").value.trim();
+        const errorBox = document.getElementById("complaint-form-error");
+        if (!item || !item.can_complain) {
+          showToast("Không tìm thấy đơn hàng đủ điều kiện khiếu nại.", "warning");
+          return;
+        }
+        if (isLocalAuthToken(state.token)) {
+          showToast("Gửi khiếu nại cần kết nối máy chủ.", "warning");
+          return;
+        }
+        if (description.length < 20 || description.length > 1000) {
+          showToast("Mô tả cần có từ 20 đến 1.000 ký tự.", "warning");
+          return;
+        }
+        if (state.pendingComplaintFiles.length < 1 || state.pendingComplaintFiles.length > 4) {
+          showToast("Vui lòng đính kèm từ 1 đến 4 ảnh bằng chứng.", "warning");
+          return;
+        }
+        if (!document.getElementById("complaint-confirm").checked) {
+          showToast("Vui lòng xác nhận thông tin là đúng sự thật.", "warning");
+          return;
+        }
+
+        const button = document.getElementById("complaint-submit");
+        state.complaintSubmitting = true;
+        button.disabled = true;
+        button.textContent = "Đang gửi khiếu nại...";
+        errorBox.classList.add("hidden");
+        try {
+          const evidenceImages = await Promise.all(
+            state.pendingComplaintFiles.map(readComplaintEvidence),
+          );
+          const response = await apiFetch("/api/complaints", {
+            method: "POST",
+            body: JSON.stringify({
+              order_id: item.order_id,
+              product_id: item.product_id,
+              reason_code: document.getElementById("complaint-reason").value,
+              description,
+              desired_resolution: document.getElementById("complaint-resolution").value,
+              evidence_images: evidenceImages,
+            }),
+          });
+          state.complaintSubmitting = false;
+          closeComplaintModal();
+          showToast(response.message || "Đã gửi khiếu nại.", "success");
+          await loadMyOrders();
+          state.complaintBadgeLoadedAt = 0;
+          await refreshComplaintBadge();
+        } catch (error) {
+          errorBox.textContent = error.message || "Không gửi được khiếu nại.";
+          errorBox.classList.remove("hidden");
+          showToast(`Không gửi được khiếu nại: ${errorBox.textContent}`, "error");
+        } finally {
+          state.complaintSubmitting = false;
+          if (button.isConnected) {
+            button.disabled = false;
+            button.textContent = "Gửi khiếu nại";
+          }
+        }
       }
 
       function setSellerListingFilter(status) {
@@ -10273,12 +11164,19 @@
           );
           return;
         }
+        if (tabName === "complaints" && (!state.user || !state.token)) {
+          showToast("Vui lòng đăng nhập để xem và gửi khiếu nại.", "info");
+          openAuthModal("login");
+          return;
+        }
+        if (tabName === "complaints") closeComplaintDetail();
         [
           "intro",
           "store",
           "sell",
           "wardrobe",
           "orders",
+          "complaints",
           "seller",
           "messages",
           "green",
@@ -10325,7 +11223,10 @@
           window.destroyIntro?.();
         }
         if (tabName === "wardrobe") generateAIOutfits(false);
+        if (tabName === "orders") loadMyOrders();
         if (tabName === "seller") loadSellerListings();
+        if (tabName === "seller") loadSellerComplaints();
+        if (tabName === "complaints") loadComplaints();
         if (tabName === "messages") {
           loadConversations();
           connectMessagesSocket();
@@ -10429,6 +11330,7 @@
           "sell",
           "wardrobe",
           "orders",
+          "complaints",
           "seller",
           "messages",
           "green",
@@ -11154,6 +12056,7 @@
         const modalIds = [
           "product-modal",
           "reconsign-modal",
+          "complaint-modal",
           "auth-modal",
           "certificate-modal",
           "cart-drawer",
@@ -11195,6 +12098,7 @@
           modal.addEventListener("click", (event) => {
             if (event.target !== modal) return;
             if (modal.id === "reconsign-modal") closeReconsignModal();
+            else if (modal.id === "complaint-modal") closeComplaintModal();
             else if (modal.id === "auth-modal") closeAuthModal();
             else if (modal.id === "cart-drawer") toggleCart(false);
             else modal.classList.add("hidden");
@@ -11206,6 +12110,7 @@
           if (event.key === "Escape") {
             event.preventDefault();
             if (activeModal.id === "reconsign-modal") closeReconsignModal();
+            else if (activeModal.id === "complaint-modal") closeComplaintModal();
             else if (activeModal.id === "auth-modal") closeAuthModal();
             else if (activeModal.id === "cart-drawer") toggleCart(false);
             else activeModal.classList.add("hidden");

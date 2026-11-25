@@ -24,7 +24,7 @@ import html
 import logging
 import urllib.error
 import urllib.request
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any, Literal
 from contextlib import contextmanager
 
@@ -58,6 +58,7 @@ VILAO_API_BASE_URL = (
 )
 KIMI_MODEL = os.getenv("KIMI_MODEL", "").strip() or "kimi-2.7"
 MAX_GARMENT_IMAGE_BYTES = 10 * 1024 * 1024
+COMPLAINT_WINDOW_DAYS = 7  # Tính từ orders.created_at; đổi sang mốc giao hàng khi có trạng thái giao hàng.
 CIRCULAR_BADGE_TEXT = "Sản phẩm chính hãng thuộc hệ tuần hoàn, đã được kiểm định từ vòng trước"
 logger = logging.getLogger(__name__)
 
@@ -442,6 +443,79 @@ def init_db():
                 FOREIGN KEY (user_id) REFERENCES users(id)
             )
         """)
+        try:
+            cursor.execute("ALTER TABLE notifications ADD COLUMN complaint_id TEXT")
+        except sqlite3.OperationalError:
+            pass
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS complaints (
+                id TEXT PRIMARY KEY,
+                order_id TEXT NOT NULL,
+                product_id TEXT NOT NULL,
+                buyer_id TEXT NOT NULL,
+                seller_id TEXT,
+                reason_code TEXT NOT NULL,
+                description TEXT NOT NULL,
+                desired_resolution TEXT NOT NULL,
+                evidence_json TEXT NOT NULL,
+                product_snapshot_json TEXT NOT NULL,
+                status TEXT NOT NULL,
+                seller_response TEXT,
+                seller_responded_at TEXT,
+                resolution_type TEXT,
+                resolution_note TEXT,
+                resolved_by TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                resolved_at TEXT,
+                CHECK (reason_code IN (
+                    'wrong_color', 'wrong_size', 'wrong_material',
+                    'condition_worse', 'missing_details', 'undisclosed_damage', 'other'
+                )),
+                CHECK (desired_resolution IN ('refund', 'partial_refund', 'exchange')),
+                CHECK (status IN (
+                    'open', 'seller_responded', 'escalated',
+                    'resolved', 'rejected', 'cancelled'
+                )),
+                CHECK (resolution_type IS NULL OR resolution_type IN (
+                    'refund', 'partial_refund', 'exchange', 'rejected'
+                ))
+            )
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_complaints_buyer_created
+            ON complaints (buyer_id, created_at DESC)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_complaints_seller_created
+            ON complaints (seller_id, created_at DESC)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_complaints_status_created
+            ON complaints (status, created_at DESC)
+        """)
+        cursor.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_complaints_active_order_product
+            ON complaints (order_id, product_id)
+            WHERE status IN ('open', 'seller_responded', 'escalated')
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS complaint_events (
+                id TEXT PRIMARY KEY,
+                complaint_id TEXT NOT NULL,
+                actor_id TEXT NOT NULL,
+                actor_role TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                note TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (complaint_id) REFERENCES complaints(id)
+            )
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_complaint_events_timeline
+            ON complaint_events (complaint_id, created_at, id)
+        """)
 
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS conversations (
@@ -694,6 +768,33 @@ class CheckoutRequest(BaseModel):
     phone: str = Field(..., min_length=8, max_length=20)
     shipping_address: str = Field(..., min_length=10, max_length=500)
     payment_method: str = Field(default="COD", pattern="^(COD|BANK_TRANSFER|E_WALLET)$")
+
+
+class CreateComplaintRequest(BaseModel):
+    order_id: str = Field(..., min_length=1, max_length=100)
+    product_id: str = Field(..., min_length=1, max_length=100)
+    reason_code: Literal[
+        "wrong_color",
+        "wrong_size",
+        "wrong_material",
+        "condition_worse",
+        "missing_details",
+        "undisclosed_damage",
+        "other",
+    ]
+    description: str = Field(..., min_length=20, max_length=1000)
+    desired_resolution: Literal["refund", "partial_refund", "exchange"]
+    evidence_images: List[str] = Field(..., min_length=1, max_length=4)
+
+
+class SellerComplaintResponseRequest(BaseModel):
+    accepted: bool
+    note: str = Field(..., min_length=10, max_length=1000)
+
+
+class ResolveComplaintRequest(BaseModel):
+    resolution_type: Literal["refund", "partial_refund", "exchange", "rejected"]
+    resolution_note: str = Field(..., min_length=10, max_length=1000)
 
 
 class RecommendProductsRequest(BaseModel):
@@ -1929,6 +2030,167 @@ def ai_stylist_recommendations(
 # 10. THANH TOÁN GIỎ HÀNG & TỰ ĐỘNG LƯU VÀO TỦ ĐỒ CÁ NHÂN
 # =============================================================================
 
+def _utc_naive_datetime(value: Optional[str]) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    if parsed.tzinfo is not None:
+        return parsed.astimezone(timezone.utc).replace(tzinfo=None)
+    return parsed
+
+
+def _parse_json_list(value: Optional[str]) -> List[Any]:
+    try:
+        data = json.loads(value or "[]")
+    except json.JSONDecodeError:
+        return []
+    return data if isinstance(data, list) else []
+
+
+def _validate_complaint_evidence(images: List[str]) -> List[str]:
+    allowed_types = {
+        "data:image/jpeg;base64": b"\xff\xd8\xff",
+        "data:image/png;base64": b"\x89PNG\r\n\x1a\n",
+    }
+    validated = []
+    for image in images:
+        header, separator, encoded = image.partition(",")
+        if not separator:
+            raise HTTPException(status_code=415, detail="Ảnh bằng chứng phải là JPG, PNG hoặc WEBP.")
+        if header == "data:image/webp;base64":
+            expected_signature = None
+        else:
+            expected_signature = allowed_types.get(header)
+        if header not in allowed_types and header != "data:image/webp;base64":
+            raise HTTPException(status_code=415, detail="Ảnh bằng chứng chỉ hỗ trợ JPG, PNG hoặc WEBP.")
+        if len(encoded) > 4 * 1024 * 1024 + 8:
+            raise HTTPException(status_code=413, detail="Mỗi ảnh bằng chứng không được vượt quá 3 MB.")
+        try:
+            raw_bytes = base64.b64decode(encoded, validate=True)
+        except (ValueError, base64.binascii.Error) as error:
+            raise HTTPException(status_code=400, detail="Ảnh bằng chứng có dữ liệu base64 không hợp lệ.") from error
+        if not raw_bytes:
+            raise HTTPException(status_code=400, detail="Ảnh bằng chứng không được để trống.")
+        if len(raw_bytes) > 3 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="Mỗi ảnh bằng chứng không được vượt quá 3 MB.")
+        if expected_signature and not raw_bytes.startswith(expected_signature):
+            raise HTTPException(status_code=415, detail="Nội dung ảnh không khớp định dạng đã chọn.")
+        if header == "data:image/webp;base64" and (
+            len(raw_bytes) < 12
+            or raw_bytes[:4] != b"RIFF"
+            or raw_bytes[8:12] != b"WEBP"
+        ):
+            raise HTTPException(status_code=415, detail="Nội dung ảnh WEBP không hợp lệ.")
+        validated.append(image)
+    return validated
+
+
+@app.get("/api/orders/me", summary="Danh sách đơn hàng và sản phẩm đã mua")
+def get_my_orders(user: Dict[str, Any] = Depends(get_current_user)):
+    now = datetime.utcnow()
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC",
+            (user["id"],),
+        )
+        order_rows = [dict(row) for row in cursor.fetchall()]
+        orders = []
+        for order in order_rows:
+            product_items = []
+            for product_id in _parse_json_list(order.get("items_json")):
+                if not isinstance(product_id, str):
+                    continue
+                cursor.execute(
+                    "SELECT * FROM products WHERE id = ?",
+                    (product_id,),
+                )
+                product_row = cursor.fetchone()
+                product = dict(product_row) if product_row else {}
+                cursor.execute(
+                    """
+                    SELECT * FROM wardrobe_items
+                    WHERE user_id = ? AND source_product_id = ?
+                    ORDER BY purchased_at DESC LIMIT 1
+                    """,
+                    (user["id"], product_id),
+                )
+                wardrobe_row = cursor.fetchone()
+                wardrobe_item = dict(wardrobe_row) if wardrobe_row else {}
+                cursor.execute(
+                    """
+                    SELECT id, status FROM complaints
+                    WHERE order_id = ? AND product_id = ? AND buyer_id = ?
+                    ORDER BY created_at DESC LIMIT 1
+                    """,
+                    (order["id"], product_id, user["id"]),
+                )
+                complaint_row = cursor.fetchone()
+                complaint = dict(complaint_row) if complaint_row else None
+                created_at = _utc_naive_datetime(order.get("created_at"))
+                within_window = bool(
+                    created_at
+                    and now <= created_at + timedelta(days=COMPLAINT_WINDOW_DAYS)
+                )
+                reconsigned = bool(wardrobe_item.get("reconsigned"))
+                seller_id = product.get("seller_id")
+                product_exists = bool(product)
+                can_complain = bool(
+                    within_window
+                    and not reconsigned
+                    and not complaint
+                    and product_exists
+                    and seller_id != user["id"]
+                )
+                if complaint:
+                    blocked_reason = "Đơn hàng này đã có khiếu nại."
+                elif not within_window:
+                    blocked_reason = f"Đã quá thời hạn khiếu nại {COMPLAINT_WINDOW_DAYS} ngày."
+                elif reconsigned:
+                    blocked_reason = "Sản phẩm đã được ký gửi lại."
+                elif not product_exists:
+                    blocked_reason = "Không còn dữ liệu tin đăng để lập khiếu nại."
+                elif seller_id == user["id"]:
+                    blocked_reason = "Bạn không thể khiếu nại sản phẩm của chính mình."
+                else:
+                    blocked_reason = None
+                product_items.append(
+                    {
+                        "product_id": product_id,
+                        "wardrobe_item_id": wardrobe_item.get("id"),
+                        "title": product.get("title") or wardrobe_item.get("title") or "Sản phẩm đã mua",
+                        "image_url": product.get("image_url") or wardrobe_item.get("image_url") or "",
+                        "category": product.get("category") or wardrobe_item.get("category") or "",
+                        "size": product.get("size") or wardrobe_item.get("size") or "",
+                        "color": product.get("color") or wardrobe_item.get("color") or "",
+                        "material": product.get("material") or wardrobe_item.get("material") or "",
+                        "price": wardrobe_item.get("paid_price", product.get("price", 0)),
+                        "condition_score": product.get("condition_score"),
+                        "condition_label": product.get("condition_label"),
+                        "ai_note": product.get("ai_note") or "",
+                        "cycle": product.get("cycle") or wardrobe_item.get("cycle") or 1,
+                        "seller_id": seller_id,
+                        "reconsigned": reconsigned,
+                        "can_complain": can_complain,
+                        "complaint_blocked_reason": blocked_reason,
+                        "complaint_id": complaint["id"] if complaint else None,
+                        "complaint_status": complaint["status"] if complaint else None,
+                    }
+                )
+            orders.append(
+                {
+                    "order_id": order["id"],
+                    "created_at": order["created_at"],
+                    "order_status": order.get("order_status") or "confirmed",
+                    "items": product_items,
+                }
+            )
+    return {"items": orders}
+
+
 @app.post("/api/orders/checkout", summary="Thanh toán & Tự động lưu sản phẩm vào Tủ đồ số AI")
 def checkout_order(
     payload: CheckoutRequest,
@@ -2065,7 +2327,637 @@ def checkout_order(
 
 
 # =============================================================================
-# 11. TÍNH NĂNG 6: ĐỔI ĐIỂM XANH (VOUCHER & QUY ĐỔI HIỆN KIM GÓP QUỸ XANH)
+# 11. QUẢN LÝ KHIẾU NẠI ĐƠN HÀNG
+# =============================================================================
+
+COMPLAINT_ACTIVE_STATUSES = ("open", "seller_responded", "escalated")
+COMPLAINT_STATUSES = (
+    "open",
+    "seller_responded",
+    "escalated",
+    "resolved",
+    "rejected",
+    "cancelled",
+)
+
+
+def _is_complaint_admin(user: Dict[str, Any]) -> bool:
+    return (user.get("email") or "").strip().lower() == "admin@reloop.vn"
+
+
+def _complaint_admin_ids(cursor: sqlite3.Cursor) -> List[str]:
+    cursor.execute(
+        "SELECT id FROM users WHERE LOWER(email) = ?",
+        ("admin@reloop.vn",),
+    )
+    return [row["id"] for row in cursor.fetchall()]
+
+
+def _insert_complaint_event(
+    cursor: sqlite3.Cursor,
+    complaint_id: str,
+    actor_id: str,
+    actor_role: str,
+    event_type: str,
+    note: str,
+    created_at: str,
+) -> None:
+    cursor.execute(
+        """
+        INSERT INTO complaint_events (
+            id, complaint_id, actor_id, actor_role, event_type, note, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            f"ce-{uuid.uuid4().hex[:12]}",
+            complaint_id,
+            actor_id,
+            actor_role,
+            event_type,
+            note,
+            created_at,
+        ),
+    )
+
+
+def _insert_complaint_notification(
+    cursor: sqlite3.Cursor,
+    recipient_id: Optional[str],
+    notification_type: str,
+    title: str,
+    message: str,
+    complaint: Dict[str, Any],
+    created_at: str,
+) -> None:
+    if not recipient_id:
+        return
+    cursor.execute("SELECT id FROM users WHERE id = ?", (recipient_id,))
+    if not cursor.fetchone():
+        return
+    cursor.execute(
+        """
+        INSERT INTO notifications (
+            id, user_id, notification_type, title, message,
+            product_id, order_id, complaint_id, is_read, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+        """,
+        (
+            f"noti-{uuid.uuid4().hex[:8]}",
+            recipient_id,
+            notification_type,
+            title,
+            message,
+            complaint["product_id"],
+            complaint["order_id"],
+            complaint["id"],
+            created_at,
+        ),
+    )
+
+
+def _notify_complaint_users(
+    cursor: sqlite3.Cursor,
+    recipient_ids: List[Optional[str]],
+    notification_type: str,
+    title: str,
+    message: str,
+    complaint: Dict[str, Any],
+    created_at: str,
+) -> None:
+    for recipient_id in dict.fromkeys(
+        recipient for recipient in recipient_ids if recipient
+    ):
+        _insert_complaint_notification(
+            cursor,
+            recipient_id,
+            notification_type,
+            title,
+            message,
+            complaint,
+            created_at,
+        )
+
+
+def _serialize_complaint(
+    complaint_row: sqlite3.Row,
+    *,
+    include_evidence: bool = False,
+) -> Dict[str, Any]:
+    complaint = dict(complaint_row)
+    try:
+        complaint["product_snapshot"] = json.loads(
+            complaint.pop("product_snapshot_json")
+        )
+    except (KeyError, json.JSONDecodeError):
+        complaint["product_snapshot"] = {}
+    evidence_json = complaint.pop("evidence_json", "[]")
+    if include_evidence:
+        try:
+            complaint["evidence_images"] = json.loads(evidence_json)
+        except json.JSONDecodeError:
+            complaint["evidence_images"] = []
+    return complaint
+
+
+def _get_complaint_or_404(
+    cursor: sqlite3.Cursor,
+    complaint_id: str,
+) -> Dict[str, Any]:
+    cursor.execute("SELECT * FROM complaints WHERE id = ?", (complaint_id,))
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Không tìm thấy khiếu nại.")
+    return dict(row)
+
+
+def _require_complaint_admin(user: Dict[str, Any]) -> None:
+    if not _is_complaint_admin(user):
+        raise HTTPException(
+            status_code=403,
+            detail="Chỉ quản trị viên RE:LOOP mới được xử lý khiếu nại.",
+        )
+
+
+@app.get("/api/complaints/mine", summary="Danh sách khiếu nại của người mua")
+def get_my_complaints(user: Dict[str, Any] = Depends(get_current_user)):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT * FROM complaints
+            WHERE buyer_id = ?
+            ORDER BY updated_at DESC
+            """,
+            (user["id"],),
+        )
+        items = [_serialize_complaint(row) for row in cursor.fetchall()]
+    return {"items": items}
+
+
+@app.get("/api/seller/complaints", summary="Danh sách khiếu nại người bán nhận được")
+def get_seller_complaints(user: Dict[str, Any] = Depends(get_current_user)):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT * FROM complaints
+            WHERE seller_id = ?
+            ORDER BY updated_at DESC
+            """,
+            (user["id"],),
+        )
+        items = [_serialize_complaint(row) for row in cursor.fetchall()]
+    return {"items": items}
+
+
+@app.get("/api/admin/complaints", summary="Danh sách khiếu nại dành cho quản trị viên")
+def get_admin_complaints(
+    status: Optional[str] = Query(None),
+    user: Dict[str, Any] = Depends(get_current_user),
+):
+    _require_complaint_admin(user)
+    if status and status not in COMPLAINT_STATUSES:
+        raise HTTPException(status_code=400, detail="Trạng thái khiếu nại không hợp lệ.")
+    with get_db() as conn:
+        cursor = conn.cursor()
+        if status:
+            cursor.execute(
+                "SELECT * FROM complaints WHERE status = ? ORDER BY updated_at DESC",
+                (status,),
+            )
+        else:
+            cursor.execute("SELECT * FROM complaints ORDER BY updated_at DESC")
+        items = [_serialize_complaint(row) for row in cursor.fetchall()]
+    return {"items": items}
+
+
+@app.get("/api/complaints/{complaint_id}", summary="Chi tiết khiếu nại")
+def get_complaint(
+    complaint_id: str,
+    user: Dict[str, Any] = Depends(get_current_user),
+):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        complaint = _get_complaint_or_404(cursor, complaint_id)
+        if (
+            complaint["buyer_id"] != user["id"]
+            and complaint.get("seller_id") != user["id"]
+            and not _is_complaint_admin(user)
+        ):
+            raise HTTPException(status_code=403, detail="Bạn không có quyền xem khiếu nại này.")
+        cursor.execute(
+            """
+            SELECT * FROM complaint_events
+            WHERE complaint_id = ?
+            ORDER BY created_at ASC, id ASC
+            """,
+            (complaint_id,),
+        )
+        events = [dict(row) for row in cursor.fetchall()]
+        cursor.execute(
+            """
+            SELECT name, email FROM users WHERE id = ?
+            """,
+            (complaint["buyer_id"],),
+        )
+        buyer = cursor.fetchone()
+    result = _serialize_complaint(complaint, include_evidence=True)
+    result["events"] = events
+    result["buyer"] = dict(buyer) if buyer else None
+    result["viewer_role"] = (
+        "admin"
+        if _is_complaint_admin(user)
+        else "buyer"
+        if complaint["buyer_id"] == user["id"]
+        else "seller"
+    )
+    return result
+
+
+@app.post("/api/complaints", summary="Người mua gửi khiếu nại đơn hàng")
+def create_complaint(
+    payload: CreateComplaintRequest,
+    user: Dict[str, Any] = Depends(get_current_user),
+):
+    description = payload.description.strip()
+    if not 20 <= len(description) <= 1000:
+        raise HTTPException(
+            status_code=422,
+            detail="Mô tả khiếu nại cần có từ 20 đến 1.000 ký tự.",
+        )
+    evidence_images = _validate_complaint_evidence(payload.evidence_images)
+    now = datetime.utcnow().isoformat()
+    complaint_id = f"cmp-{uuid.uuid4().hex[:8]}"
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM orders WHERE id = ?", (payload.order_id,))
+        order_row = cursor.fetchone()
+        if not order_row:
+            raise HTTPException(status_code=404, detail="Không tìm thấy đơn hàng.")
+        order = dict(order_row)
+        if order["user_id"] != user["id"]:
+            raise HTTPException(status_code=403, detail="Bạn không có quyền khiếu nại đơn hàng này.")
+        if payload.product_id not in _parse_json_list(order.get("items_json")):
+            raise HTTPException(status_code=400, detail="Sản phẩm không thuộc đơn hàng đã chọn.")
+
+        created_at = _utc_naive_datetime(order.get("created_at"))
+        if not created_at or datetime.utcnow() > created_at + timedelta(days=COMPLAINT_WINDOW_DAYS):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Đã quá thời hạn khiếu nại {COMPLAINT_WINDOW_DAYS} ngày tính từ ngày tạo đơn.",
+            )
+
+        cursor.execute("SELECT * FROM products WHERE id = ?", (payload.product_id,))
+        product_row = cursor.fetchone()
+        cursor.execute(
+            """
+            SELECT * FROM wardrobe_items
+            WHERE user_id = ? AND source_product_id = ?
+            ORDER BY purchased_at DESC LIMIT 1
+            """,
+            (user["id"], payload.product_id),
+        )
+        wardrobe_row = cursor.fetchone()
+        wardrobe_item = dict(wardrobe_row) if wardrobe_row else {}
+        if wardrobe_item.get("reconsigned"):
+            raise HTTPException(status_code=400, detail="Không thể khiếu nại món đồ đã ký gửi lại.")
+        if not product_row and not wardrobe_item:
+            raise HTTPException(
+                status_code=409,
+                detail="Tin đăng đã bị xóa và không còn dữ liệu để lập khiếu nại.",
+            )
+        product = dict(product_row) if product_row else {}
+        seller_id = product.get("seller_id")
+        if seller_id == user["id"]:
+            raise HTTPException(status_code=400, detail="Bạn không thể khiếu nại sản phẩm của chính mình.")
+        if seller_id and seller_id != "u-system":
+            cursor.execute("SELECT id FROM users WHERE id = ?", (seller_id,))
+            if not cursor.fetchone():
+                seller_id = None
+
+        cursor.execute(
+            """
+            SELECT id FROM complaints
+            WHERE order_id = ? AND product_id = ?
+              AND status IN ('open', 'seller_responded', 'escalated')
+            """,
+            (payload.order_id, payload.product_id),
+        )
+        if cursor.fetchone():
+            raise HTTPException(status_code=409, detail="Đơn hàng này đã có khiếu nại đang xử lý.")
+
+        snapshot = {
+            "title": product.get("title") or wardrobe_item.get("title") or "Sản phẩm đã mua",
+            "image_url": product.get("image_url") or wardrobe_item.get("image_url") or "",
+            "category": product.get("category") or wardrobe_item.get("category") or "",
+            "size": product.get("size") or wardrobe_item.get("size") or "",
+            "color": product.get("color") or wardrobe_item.get("color") or "",
+            "material": product.get("material") or wardrobe_item.get("material") or "",
+            "price": wardrobe_item.get("paid_price", product.get("price", 0)),
+            "original_price": product.get("original_price") or wardrobe_item.get("original_price"),
+            "condition_score": product.get("condition_score"),
+            "condition_label": product.get("condition_label"),
+            "ai_note": product.get("ai_note") or "",
+            "cycle": product.get("cycle") or wardrobe_item.get("cycle") or 1,
+        }
+        direct_to_admin = not seller_id or seller_id == "u-system"
+        status = "escalated" if direct_to_admin else "open"
+        complaint = {
+            "id": complaint_id,
+            "order_id": payload.order_id,
+            "product_id": payload.product_id,
+            "buyer_id": user["id"],
+            "seller_id": seller_id,
+        }
+        try:
+            cursor.execute(
+                """
+                INSERT INTO complaints (
+                    id, order_id, product_id, buyer_id, seller_id, reason_code,
+                    description, desired_resolution, evidence_json,
+                    product_snapshot_json, status, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    complaint_id,
+                    payload.order_id,
+                    payload.product_id,
+                    user["id"],
+                    seller_id,
+                    payload.reason_code,
+                    description,
+                    payload.desired_resolution,
+                    json.dumps(evidence_images),
+                    json.dumps(snapshot, ensure_ascii=False),
+                    status,
+                    now,
+                    now,
+                ),
+            )
+        except sqlite3.IntegrityError as error:
+            if "complaints.order_id, complaints.product_id" not in str(error):
+                raise
+            raise HTTPException(
+                status_code=409,
+                detail="Đơn hàng này đã có khiếu nại đang xử lý.",
+            ) from error
+        _insert_complaint_event(
+            cursor,
+            complaint_id,
+            user["id"],
+            "buyer",
+            "created",
+            "Người mua đã gửi khiếu nại.",
+            now,
+        )
+        if direct_to_admin:
+            _insert_complaint_event(
+                cursor,
+                complaint_id,
+                "system",
+                "system",
+                "routed_to_admin",
+                "Tin đăng thuộc RE:LOOP; khiếu nại được chuyển thẳng cho quản trị viên.",
+                now,
+            )
+            recipients = _complaint_admin_ids(cursor)
+            title = "Khiếu nại cần RE:LOOP xử lý"
+        else:
+            recipients = [seller_id]
+            title = "Bạn nhận được khiếu nại đơn hàng"
+        _notify_complaint_users(
+            cursor,
+            recipients,
+            "complaint_created",
+            title,
+            f"Khách hàng khiếu nại sản phẩm {snapshot['title']} trong đơn #{payload.order_id}.",
+            complaint,
+            now,
+        )
+
+    return {
+        "message": "Đã gửi khiếu nại. Bạn có thể theo dõi tiến trình trong hồ sơ.",
+        "complaint_id": complaint_id,
+        "status": status,
+    }
+
+
+@app.post("/api/complaints/{complaint_id}/cancel", summary="Người mua hủy khiếu nại đang mở")
+def cancel_complaint(
+    complaint_id: str,
+    user: Dict[str, Any] = Depends(get_current_user),
+):
+    now = datetime.utcnow().isoformat()
+    with get_db() as conn:
+        cursor = conn.cursor()
+        complaint = _get_complaint_or_404(cursor, complaint_id)
+        if complaint["buyer_id"] != user["id"]:
+            raise HTTPException(status_code=403, detail="Bạn không có quyền hủy khiếu nại này.")
+        if complaint["status"] != "open":
+            raise HTTPException(status_code=409, detail="Chỉ có thể hủy khiếu nại đang chờ người bán phản hồi.")
+        cursor.execute(
+            """
+            UPDATE complaints SET status = 'cancelled', updated_at = ?
+            WHERE id = ? AND status = 'open'
+            """,
+            (now, complaint_id),
+        )
+        if cursor.rowcount != 1:
+            raise HTTPException(status_code=409, detail="Khiếu nại đã được cập nhật.")
+        _insert_complaint_event(
+            cursor, complaint_id, user["id"], "buyer", "cancelled", "Người mua đã hủy khiếu nại.", now
+        )
+        recipients = [complaint.get("seller_id")]
+        if not complaint.get("seller_id") or complaint.get("seller_id") == "u-system":
+            recipients = _complaint_admin_ids(cursor)
+        _notify_complaint_users(
+            cursor,
+            recipients,
+            "complaint_update",
+            "Khiếu nại đã được hủy",
+            f"Khiếu nại #{complaint_id} đã được người mua hủy.",
+            complaint,
+            now,
+        )
+    return {"message": "Đã hủy khiếu nại.", "status": "cancelled"}
+
+
+@app.post(
+    "/api/complaints/{complaint_id}/seller-response",
+    summary="Người bán phản hồi khiếu nại",
+)
+def respond_to_complaint(
+    complaint_id: str,
+    payload: SellerComplaintResponseRequest,
+    user: Dict[str, Any] = Depends(get_current_user),
+):
+    note = payload.note.strip()
+    if not 10 <= len(note) <= 1000:
+        raise HTTPException(status_code=422, detail="Phản hồi cần có từ 10 đến 1.000 ký tự.")
+    now = datetime.utcnow().isoformat()
+    event_type = "seller_accepted" if payload.accepted else "seller_disputed"
+    with get_db() as conn:
+        cursor = conn.cursor()
+        complaint = _get_complaint_or_404(cursor, complaint_id)
+        if complaint.get("seller_id") != user["id"]:
+            raise HTTPException(status_code=403, detail="Bạn không có quyền phản hồi khiếu nại này.")
+        if complaint["status"] != "open":
+            raise HTTPException(status_code=409, detail="Khiếu nại không còn chờ phản hồi.")
+        cursor.execute(
+            """
+            UPDATE complaints
+            SET status = 'seller_responded', seller_response = ?,
+                seller_responded_at = ?, updated_at = ?
+            WHERE id = ? AND status = 'open'
+            """,
+            (note, now, now, complaint_id),
+        )
+        if cursor.rowcount != 1:
+            raise HTTPException(status_code=409, detail="Khiếu nại đã được cập nhật.")
+        _insert_complaint_event(
+            cursor,
+            complaint_id,
+            user["id"],
+            "seller",
+            event_type,
+            note,
+            now,
+        )
+        _notify_complaint_users(
+            cursor,
+            [complaint["buyer_id"]],
+            "complaint_update",
+            "Người bán đã phản hồi khiếu nại",
+            f"Người bán đã {'chấp nhận' if payload.accepted else 'phản biện'} khiếu nại #{complaint_id}.",
+            complaint,
+            now,
+        )
+    return {"message": "Đã gửi phản hồi.", "status": "seller_responded"}
+
+
+@app.post(
+    "/api/complaints/{complaint_id}/escalate",
+    summary="Người mua nhờ RE:LOOP can thiệp",
+)
+def escalate_complaint(
+    complaint_id: str,
+    user: Dict[str, Any] = Depends(get_current_user),
+):
+    now = datetime.utcnow().isoformat()
+    with get_db() as conn:
+        cursor = conn.cursor()
+        complaint = _get_complaint_or_404(cursor, complaint_id)
+        if complaint["buyer_id"] != user["id"]:
+            raise HTTPException(status_code=403, detail="Bạn không có quyền chuyển khiếu nại này.")
+        if complaint["status"] != "seller_responded":
+            raise HTTPException(
+                status_code=409,
+                detail="Chỉ có thể nhờ RE:LOOP can thiệp sau khi người bán phản hồi.",
+            )
+        cursor.execute(
+            """
+            UPDATE complaints SET status = 'escalated', updated_at = ?
+            WHERE id = ? AND status = 'seller_responded'
+            """,
+            (now, complaint_id),
+        )
+        if cursor.rowcount != 1:
+            raise HTTPException(status_code=409, detail="Khiếu nại đã được cập nhật.")
+        _insert_complaint_event(
+            cursor,
+            complaint_id,
+            user["id"],
+            "buyer",
+            "escalated",
+            "Người mua đề nghị RE:LOOP phân xử.",
+            now,
+        )
+        _notify_complaint_users(
+            cursor,
+            _complaint_admin_ids(cursor),
+            "complaint_update",
+            "Khiếu nại cần RE:LOOP can thiệp",
+            f"Người mua đã yêu cầu phân xử khiếu nại #{complaint_id}.",
+            complaint,
+            now,
+        )
+        if complaint.get("seller_id"):
+            _notify_complaint_users(
+                cursor,
+                [complaint["seller_id"]],
+                "complaint_update",
+                "Khiếu nại đã được chuyển cho RE:LOOP",
+                f"Khiếu nại #{complaint_id} đang được RE:LOOP xem xét.",
+                complaint,
+                now,
+            )
+    return {"message": "Đã chuyển khiếu nại cho RE:LOOP.", "status": "escalated"}
+
+
+@app.post(
+    "/api/admin/complaints/{complaint_id}/resolve",
+    summary="Quản trị viên phân xử khiếu nại",
+)
+def resolve_complaint(
+    complaint_id: str,
+    payload: ResolveComplaintRequest,
+    user: Dict[str, Any] = Depends(get_current_user),
+):
+    _require_complaint_admin(user)
+    note = payload.resolution_note.strip()
+    if not 10 <= len(note) <= 1000:
+        raise HTTPException(status_code=422, detail="Kết luận cần có từ 10 đến 1.000 ký tự.")
+    status = "rejected" if payload.resolution_type == "rejected" else "resolved"
+    now = datetime.utcnow().isoformat()
+    with get_db() as conn:
+        cursor = conn.cursor()
+        complaint = _get_complaint_or_404(cursor, complaint_id)
+        if complaint["status"] not in COMPLAINT_ACTIVE_STATUSES:
+            raise HTTPException(status_code=409, detail="Khiếu nại đã được đóng.")
+        cursor.execute(
+            """
+            UPDATE complaints
+            SET status = ?, resolution_type = ?, resolution_note = ?,
+                resolved_by = ?, resolved_at = ?, updated_at = ?
+            WHERE id = ? AND status IN ('open', 'seller_responded', 'escalated')
+            """,
+            (status, payload.resolution_type, note, user["id"], now, now, complaint_id),
+        )
+        if cursor.rowcount != 1:
+            raise HTTPException(status_code=409, detail="Khiếu nại đã được cập nhật.")
+        _insert_complaint_event(
+            cursor,
+            complaint_id,
+            user["id"],
+            "admin",
+            "resolved",
+            note,
+            now,
+        )
+        _notify_complaint_users(
+            cursor,
+            [complaint["buyer_id"]],
+            "complaint_update",
+            "RE:LOOP đã xử lý khiếu nại",
+            f"Khiếu nại #{complaint_id} đã có kết quả: {note}",
+            complaint,
+            now,
+        )
+        _notify_complaint_users(
+            cursor,
+            [complaint.get("seller_id")],
+            "complaint_update",
+            "RE:LOOP đã xử lý khiếu nại",
+            f"Khiếu nại #{complaint_id} đã được quản trị viên xử lý.",
+            complaint,
+            now,
+        )
+    return {"message": "Đã lưu kết quả xử lý.", "status": status}
+
+
+# =============================================================================
+# 12. TÍNH NĂNG 6: ĐỔI ĐIỂM XANH (VOUCHER & QUY ĐỔI HIỆN KIM GÓP QUỸ XANH)
 # =============================================================================
 
 @app.post("/api/points/redeem-voucher", summary="Đổi Điểm Xanh lấy mã giảm giá đơn hàng")
