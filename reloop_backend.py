@@ -879,9 +879,9 @@ class SendMessageRequest(BaseModel):
 
 
 class RedeemVoucherRequest(BaseModel):
-    points_cost: int
-    discount_amount: int
-    code_prefix: str = "GREEN"
+    points_cost: int = Field(..., ge=1, le=500)
+    discount_amount: int = Field(..., ge=1, le=150000)
+    code_prefix: str = Field(default="GREEN", min_length=1, max_length=12, pattern="^[A-Z0-9]+$")
 
 
 class DonateCharityRequest(BaseModel):
@@ -3095,8 +3095,9 @@ def redeem_points_for_voucher(
     payload: RedeemVoucherRequest,
     user: Dict[str, Any] = Depends(get_current_user)
 ):
-    if user["green_points"] < payload.points_cost:
-        raise HTTPException(status_code=400, detail="Số dư Điểm Xanh của bạn chưa đủ để đổi ưu đãi này.")
+    voucher_tiers = {100: 20000, 250: 60000, 500: 150000}
+    if voucher_tiers.get(payload.points_cost) != payload.discount_amount:
+        raise HTTPException(status_code=422, detail="Mức đổi voucher không hợp lệ.")
 
     now = datetime.utcnow().isoformat()
     voucher_id = f"v-{uuid.uuid4().hex[:8]}"
@@ -3105,7 +3106,16 @@ def redeem_points_for_voucher(
 
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("UPDATE users SET green_points = green_points - ? WHERE id = ?", (payload.points_cost, user["id"]))
+        cursor.execute(
+            """
+            UPDATE users
+            SET green_points = green_points - ?
+            WHERE id = ? AND green_points >= ?
+            """,
+            (payload.points_cost, user["id"], payload.points_cost),
+        )
+        if cursor.rowcount != 1:
+            raise HTTPException(status_code=400, detail="Số dư Điểm Xanh của bạn chưa đủ để đổi ưu đãi này.")
         cursor.execute("""
             INSERT INTO vouchers (id, user_id, code, discount_amount, min_order, is_used, created_at)
             VALUES (?, ?, ?, ?, ?, 0, ?)
