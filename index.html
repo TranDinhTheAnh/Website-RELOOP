@@ -3462,6 +3462,16 @@
                     <span>🔄</span>
                     <span>Đồng bộ dữ liệu Backend</span>
                   </button>
+                  <button
+                    onclick="
+                      openAdminUsers();
+                      toggleUserDropdown(false);
+                    "
+                    class="w-full py-1.5 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-ink-900 text-xs font-semibold transition flex items-center justify-center gap-1.5"
+                  >
+                    <span>👥</span>
+                    <span>Danh sách tài khoản</span>
+                  </button>
                 </div>
 
                 <div class="border-t border-slate-100 mt-1 pt-1">
@@ -4948,6 +4958,65 @@
             <div id="charity-projects-list" class="space-y-4">
               <!-- Rendered by JS -->
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section
+        id="section-admin-users"
+        class="hidden max-w-6xl mx-auto space-y-6"
+      >
+        <div
+          class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-6"
+        >
+          <div>
+            <span class="text-xs font-semibold uppercase tracking-wider text-eco-700">
+              Khu vực quản trị
+            </span>
+            <h2 class="text-3xl font-bold text-ink-900 mt-1">
+              Tài khoản đã đăng ký
+            </h2>
+            <p class="text-sm text-ink-600 mt-1">
+              Danh sách lấy từ cơ sở dữ liệu backend. Mật khẩu và dữ liệu nhạy cảm không được hiển thị.
+            </p>
+          </div>
+          <button
+            type="button"
+            onclick="loadAdminUsers()"
+            class="px-4 py-2.5 rounded-xl bg-ink-900 hover:bg-ink-700 text-white text-xs font-semibold transition"
+          >
+            ↻ Làm mới
+          </button>
+        </div>
+
+        <div class="rounded-2xl bg-white border border-slate-200 overflow-hidden">
+          <div class="px-4 py-3 border-b border-slate-100">
+            <p
+              id="admin-users-status"
+              class="text-xs font-semibold text-ink-600"
+              role="status"
+              aria-live="polite"
+            >
+              Chưa tải danh sách.
+            </p>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full min-w-[640px] text-left text-sm">
+              <thead class="bg-slate-50 text-xs text-ink-500">
+                <tr>
+                  <th scope="col" class="px-4 py-3 font-semibold">Họ và tên</th>
+                  <th scope="col" class="px-4 py-3 font-semibold">Email</th>
+                  <th scope="col" class="px-4 py-3 font-semibold">Ngày đăng ký</th>
+                </tr>
+              </thead>
+              <tbody id="admin-users-list" class="divide-y divide-slate-100">
+                <tr>
+                  <td colspan="3" class="px-4 py-8 text-center text-xs text-ink-500">
+                    Chọn “Danh sách tài khoản” trong menu Admin để tải dữ liệu.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </section>
@@ -6668,6 +6737,76 @@
         return Number.isNaN(date.getTime())
           ? value
           : date.toLocaleString("vi-VN");
+      }
+
+      async function openAdminUsers() {
+        if (!checkIsAdmin(state.user)) {
+          showToast(
+            "Chức năng này chỉ dành cho tài khoản Quản trị viên.",
+            "warning",
+          );
+          return;
+        }
+        switchTab("admin-users");
+        await loadAdminUsers();
+      }
+
+      async function loadAdminUsers() {
+        if (!checkIsAdmin(state.user)) {
+          showToast(
+            "Chức năng này chỉ dành cho tài khoản Quản trị viên.",
+            "warning",
+          );
+          switchTab("store");
+          return;
+        }
+
+        const status = document.getElementById("admin-users-status");
+        const list = document.getElementById("admin-users-list");
+        status.textContent = "Đang tải danh sách tài khoản...";
+        list.innerHTML = `
+          <tr>
+            <td colspan="3" class="px-4 py-8 text-center text-xs text-ink-500">
+              Đang tải...
+            </td>
+          </tr>`;
+
+        try {
+          const response = await apiFetch("/api/admin/users");
+          if (!Array.isArray(response.items)) {
+            throw new Error("Máy chủ trả về danh sách tài khoản không hợp lệ.");
+          }
+          status.textContent = `Tổng cộng ${response.items.length.toLocaleString("vi-VN")} tài khoản`;
+          if (response.items.length === 0) {
+            list.innerHTML = `
+              <tr>
+                <td colspan="3" class="px-4 py-8 text-center text-xs text-ink-500">
+                  Chưa có tài khoản nào.
+                </td>
+              </tr>`;
+            return;
+          }
+
+          list.innerHTML = response.items
+            .map(
+              (account) => `
+                <tr>
+                  <td class="px-4 py-3 font-medium text-ink-900">${escapeHtml(account.name || "—")}</td>
+                  <td class="px-4 py-3 text-ink-700">${escapeHtml(account.email || "—")}</td>
+                  <td class="px-4 py-3 text-ink-600">${escapeHtml(account.created_at ? formatNotificationDate(account.created_at) : "—")}</td>
+                </tr>`,
+            )
+            .join("");
+        } catch (error) {
+          status.textContent = "Không tải được danh sách tài khoản.";
+          list.innerHTML = `
+            <tr>
+              <td colspan="3" class="px-4 py-8 text-center text-xs text-rose-700">
+                ${escapeHtml(error.message || "Đã xảy ra lỗi khi tải dữ liệu.")}
+              </td>
+            </tr>`;
+          showToast(`Không tải được tài khoản: ${error.message}`, "error");
+        }
       }
 
       function escapeHtml(value) {
@@ -8674,6 +8813,13 @@
       // NAVIGATION & UI HELPERS
       // =========================================================
       function switchTab(tabName) {
+        if (tabName === "admin-users" && !checkIsAdmin(state.user)) {
+          showToast(
+            "Chức năng này chỉ dành cho tài khoản Quản trị viên.",
+            "warning",
+          );
+          return;
+        }
         if (tabName === "messages" && (!state.user || !state.token)) {
           showToast("Vui lòng đăng nhập để sử dụng hộp thư.", "info");
           openAuthModal("login");
@@ -8695,6 +8841,7 @@
           "seller",
           "messages",
           "green",
+          "admin-users",
         ].forEach((t) => {
           document
             .getElementById(`section-${t}`)

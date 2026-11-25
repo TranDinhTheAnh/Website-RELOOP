@@ -888,6 +888,26 @@ def get_me(user: Dict[str, Any] = Depends(get_current_user)):
     }
 
 
+@app.get("/api/admin/users", summary="Admin xem danh sách tài khoản đã đăng ký")
+def list_registered_users(user: Dict[str, Any] = Depends(get_current_user)):
+    if (user.get("email") or "").strip().lower() != "admin@reloop.vn":
+        raise HTTPException(
+            status_code=403,
+            detail="Chỉ tài khoản quản trị viên mới được xem danh sách tài khoản.",
+        )
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT name, email, created_at
+            FROM users
+            ORDER BY created_at DESC, id
+        """)
+        users = [dict(row) for row in cursor.fetchall()]
+
+    return {"items": users, "total": len(users)}
+
+
 @app.get("/api/notifications", summary="Danh sách thông báo của người dùng")
 def list_notifications(user: Dict[str, Any] = Depends(get_current_user)):
     with get_db() as conn:
