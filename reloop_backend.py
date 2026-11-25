@@ -59,6 +59,7 @@ VILAO_API_BASE_URL = (
 KIMI_MODEL = os.getenv("KIMI_MODEL", "").strip() or "kimi-2.7"
 MAX_GARMENT_IMAGE_BYTES = 10 * 1024 * 1024
 COMPLAINT_WINDOW_DAYS = 7  # Tính từ orders.created_at; đổi sang mốc giao hàng khi có trạng thái giao hàng.
+MESSAGE_ONLINE_THRESHOLD_SECONDS = 75
 CIRCULAR_BADGE_TEXT = "Sản phẩm chính hãng thuộc hệ tuần hoàn, đã được kiểm định từ vòng trước"
 logger = logging.getLogger(__name__)
 
@@ -257,6 +258,33 @@ class MessageConnectionManager:
 
 
 message_connections = MessageConnectionManager()
+
+
+def _mark_message_user_active(user_id: str) -> None:
+    now = datetime.utcnow().isoformat()
+    with get_db() as conn:
+        conn.execute(
+            """
+            INSERT INTO message_presence (user_id, last_seen_at)
+            VALUES (?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET last_seen_at = excluded.last_seen_at
+            """,
+            (user_id, now),
+        )
+
+
+def _is_message_user_online(last_seen_at: Optional[str]) -> bool:
+    if not last_seen_at:
+        return False
+    try:
+        last_seen = datetime.fromisoformat(last_seen_at.replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return False
+    if last_seen.tzinfo is not None:
+        last_seen = last_seen.astimezone(timezone.utc).replace(tzinfo=None)
+    return datetime.utcnow() - last_seen <= timedelta(
+        seconds=MESSAGE_ONLINE_THRESHOLD_SECONDS
+    )
 
 
 def hash_password(password: str, salt: Optional[str] = None) -> tuple[str, str]:
@@ -548,6 +576,13 @@ def init_db():
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_messages_conversation_created
             ON messages (conversation_id, created_at)
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS message_presence (
+                user_id TEXT PRIMARY KEY,
+                last_seen_at TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
         """)
 
         # Nạp dữ liệu mẫu nếu database còn trống
@@ -1308,6 +1343,7 @@ async def messages_websocket(
     user_id = ticket_data[0]
     await message_connections.connect(user_id, websocket)
     try:
+        _mark_message_user_active(user_id)
         while True:
             try:
                 event = await websocket.receive_json()
@@ -1318,6 +1354,7 @@ async def messages_websocket(
             if not isinstance(event, dict):
                 continue
             if event.get("type") == "ping":
+                _mark_message_user_active(user_id)
                 await websocket.send_json({"type": "pong"})
                 continue
             if event.get("type") != "typing":
@@ -1363,6 +1400,8 @@ def list_conversations(user: Dict[str, Any] = Depends(get_current_user)):
                 buyer.name AS buyer_name,
                 conversations.seller_id,
                 seller.name AS seller_name,
+                buyer_presence.last_seen_at AS buyer_last_seen_at,
+                seller_presence.last_seen_at AS seller_last_seen_at,
                 conversations.updated_at,
                 (SELECT content FROM messages
                  WHERE conversation_id = conversations.id
@@ -1374,6 +1413,10 @@ def list_conversations(user: Dict[str, Any] = Depends(get_current_user)):
             JOIN products ON products.id = conversations.product_id
             JOIN users AS buyer ON buyer.id = conversations.buyer_id
             JOIN users AS seller ON seller.id = conversations.seller_id
+            LEFT JOIN message_presence AS buyer_presence
+                ON buyer_presence.user_id = conversations.buyer_id
+            LEFT JOIN message_presence AS seller_presence
+                ON seller_presence.user_id = conversations.seller_id
             WHERE conversations.buyer_id = ? OR conversations.seller_id = ?
             ORDER BY conversations.updated_at DESC
         """, (user["id"], user["id"], user["id"]))
@@ -1389,6 +1432,14 @@ def list_conversations(user: Dict[str, Any] = Depends(get_current_user)):
         conversation["other_user_name"] = (
             conversation["seller_name"] if is_buyer else conversation["buyer_name"]
         )
+        last_seen_at = (
+            conversation["seller_last_seen_at"]
+            if is_buyer
+            else conversation["buyer_last_seen_at"]
+        )
+        conversation["other_user_online"] = _is_message_user_online(last_seen_at)
+        conversation.pop("buyer_last_seen_at", None)
+        conversation.pop("seller_last_seen_at", None)
         conversations.append(conversation)
 
     return {"items": conversations}

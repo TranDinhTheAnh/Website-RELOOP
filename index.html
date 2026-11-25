@@ -7909,17 +7909,34 @@
       function renderConversations() {
         const list = document.getElementById("conversations-list");
         if (!list) return;
+        const signature = JSON.stringify([
+          state.activeConversationId,
+          state.conversations.map((conversation) => [
+            conversation.id,
+            conversation.other_user_name,
+            conversation.product_name,
+            conversation.last_message,
+            conversation.unread_count,
+            Boolean(conversation.other_user_online),
+          ]),
+        ]);
+        if (list.dataset.renderSignature === signature) return;
+
         if (state.conversations.length === 0) {
           list.innerHTML = `
             <p class="px-4 py-8 text-center text-xs text-ink-500">
               Chưa có hội thoại. Mở một sản phẩm và nhắn tin cho người bán để bắt đầu.
             </p>`;
+          list.dataset.renderSignature = signature;
           return;
         }
 
         list.innerHTML = state.conversations
-          .map(
-            (conversation) => `
+          .map((conversation) => {
+            const presence = conversation.other_user_online
+              ? `<span class="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-eco-700"><span class="h-2 w-2 rounded-full bg-eco-600" aria-hidden="true"></span>Đang hoạt động</span>`
+              : "";
+            return `
               <button
                 onclick="selectConversation('${escapeHtml(conversation.id)}')"
                 class="w-full text-left px-4 py-3 border-b border-slate-100 hover:bg-slate-50 ${
@@ -7938,15 +7955,25 @@
                       : ""
                   }
                 </div>
-                <p class="mt-1 text-[11px] text-ink-500 truncate">
-                  ${escapeHtml(conversation.product_name)}
+                <p class="mt-1 flex items-center justify-between gap-2 text-[11px] text-ink-500">
+                  <span class="min-w-0 truncate">${escapeHtml(conversation.product_name)}</span>
+                  ${presence}
                 </p>
                 <p class="mt-1 text-xs text-ink-700 truncate">
                   ${escapeHtml(conversation.last_message || "Bắt đầu trao đổi")}
                 </p>
-              </button>`,
-          )
+              </button>`;
+          })
           .join("");
+        list.dataset.renderSignature = signature;
+      }
+
+      function updateConversationPresence(conversation) {
+        const presence = document.getElementById("conversation-presence");
+        if (!presence) return;
+        const isOnline = Boolean(conversation?.other_user_online);
+        presence.classList.toggle("hidden", !isOnline);
+        presence.textContent = isOnline ? "● Đang hoạt động" : "";
       }
 
       async function loadConversations() {
@@ -7984,6 +8011,11 @@
           const result = await apiFetch("/api/conversations");
           state.conversations = Array.isArray(result.items) ? result.items : [];
           renderConversations();
+          updateConversationPresence(
+            state.conversations.find(
+              (item) => item.id === state.activeConversationId,
+            ),
+          );
 
           const conversationId = state.activeConversationId;
           const detailIsVisible =
@@ -8422,6 +8454,7 @@
               <div class="min-w-0">
                 <p class="text-sm font-bold text-ink-900 truncate">${escapeHtml(conversation.other_user_name)}</p>
                 <p class="text-[11px] text-ink-500 truncate">${escapeHtml(conversation.product_name)}</p>
+                <p id="conversation-presence" class="${conversation.other_user_online ? "text-eco-700" : "hidden"} text-[11px] font-medium">${conversation.other_user_online ? "● Đang hoạt động" : ""}</p>
               </div>
             </div>
             <div id="conversation-messages" class="flex-1 min-h-0 overflow-y-auto p-4 space-y-3"></div>
@@ -11383,6 +11416,9 @@
 
           adminBadge.classList.toggle("hidden", !isAdmin);
           adminDropdown.classList.toggle("hidden", !isAdmin);
+          if (state.token && !isLocalAuthToken(state.token)) {
+            connectMessagesSocket();
+          }
         } else {
           guestArea.classList.remove("hidden");
           userArea.classList.add("hidden");
