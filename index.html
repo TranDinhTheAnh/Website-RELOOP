@@ -2,12 +2,12 @@
 <html lang="vi">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>RE:LOOP — Thời Trang Tuần Hoàn Tích Hợp AI</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..700&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&subset=vietnamese&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..700&family=IBM+Plex+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&subset=vietnamese&display=swap"
       rel="stylesheet"
     />
     <script src="https://cdn.tailwindcss.com"></script>
@@ -511,8 +511,10 @@
         transition: transform 550ms var(--ease-smooth);
       }
 
-      .hero-panel button:hover::after {
-        transform: translateX(120%);
+      @media (hover: hover) {
+        .hero-panel button:hover::after {
+          transform: translateX(120%);
+        }
       }
 
       #section-store,
@@ -532,10 +534,12 @@
           opacity 280ms var(--ease-smooth);
       }
 
-      .card-hover:hover {
-        transform: translateY(-5px);
-        border-color: rgba(16, 185, 129, 0.3);
-        box-shadow: var(--shadow-float);
+      @media (hover: hover) {
+        .card-hover:hover {
+          transform: translateY(-5px);
+          border-color: rgba(16, 185, 129, 0.3);
+          box-shadow: var(--shadow-float);
+        }
       }
 
       #products-grid > article,
@@ -549,12 +553,14 @@
           opacity var(--duration-ui) var(--ease-smooth);
       }
 
-      #wardrobe-grid > div:hover,
-      #ai-outfits-grid > div:hover,
-      #seller-listings-content article:hover,
-      #charity-projects-list > div:hover {
-        transform: translateY(-3px);
-        box-shadow: var(--shadow-float);
+      @media (hover: hover) {
+        #wardrobe-grid > div:hover,
+        #ai-outfits-grid > div:hover,
+        #seller-listings-content article:hover,
+        #charity-projects-list > div:hover {
+          transform: translateY(-3px);
+          box-shadow: var(--shadow-float);
+        }
       }
 
       #products-grid > article {
@@ -577,8 +583,10 @@
         transition: transform 650ms var(--ease-smooth);
       }
 
-      #products-grid > article:hover img {
-        transform: scale(1.045);
+      @media (hover: hover) {
+        #products-grid > article:hover img {
+          transform: scale(1.045);
+        }
       }
 
       .quick-view-button {
@@ -602,14 +610,20 @@
           transform 220ms var(--ease-smooth);
       }
 
-      #products-grid article:hover .quick-view-button,
       #products-grid article:focus-within .quick-view-button {
         opacity: 1;
         transform: translateY(0);
       }
 
-      .quick-view-button:hover {
-        background: #ffffff;
+      @media (hover: hover) {
+        #products-grid article:hover .quick-view-button {
+          opacity: 1;
+          transform: translateY(0);
+        }
+
+        .quick-view-button:hover {
+          background: #ffffff;
+        }
       }
 
       .product-skeleton {
@@ -712,8 +726,10 @@
         box-shadow: 0 10px 32px rgba(6, 78, 59, 0.28);
       }
 
-      .chat-trigger:hover {
-        transform: translateY(-3px);
+      @media (hover: hover) {
+        .chat-trigger:hover {
+          transform: translateY(-3px);
+        }
       }
 
       .toast-notification {
@@ -3120,6 +3136,811 @@
           display: none;
         }
       }
+
+      /* Tailwind CDN is retained for this single-file app; replace with a purgeable build when a frontend build pipeline exists. */
+      .mobile-bottom-nav {
+        display: none;
+      }
+
+      .mobile-bottom-nav .nav-tab.bg-eco-600 {
+        background: var(--eco-600);
+        color: #ffffff;
+      }
+
+      .mobile-bottom-nav .nav-tab.bg-slate-100 {
+        background: transparent;
+        color: var(--ink-500);
+      }
+
+      .cart-scroll-content {
+        display: contents;
+      }
+
+      .mobile-filter-sheet {
+        display: contents;
+      }
+
+      .mobile-filter-sheet-panel {
+        display: contents;
+      }
+
+      .mobile-filter-trigger {
+        display: none;
+      }
+
+      .mobile-filter-close {
+        display: none;
+      }
+
+      .cart-checkout-form > details > summary {
+        display: none;
+      }
+
+      #product-modal > div {
+        max-height: 90vh;
+        max-height: 90dvh;
+      }
+
+      #reconsign-modal > div {
+        max-height: 92vh;
+        max-height: 92dvh;
+      }
+
+      @media (min-width: 1024px) {
+        .store-filter-controls {
+          width: max-content;
+          flex: 0 0 auto;
+          flex-wrap: nowrap;
+        }
+      }
+
+      @media (max-width: 1023px) {
+        html,
+        body {
+          overflow-x: clip;
+        }
+
+        .mobile-tab-rail {
+          display: none !important;
+        }
+
+        .mobile-bottom-nav {
+          position: fixed;
+          right: 0;
+          bottom: 0;
+          left: 0;
+          z-index: 45;
+          display: grid;
+          grid-template-columns: repeat(5, minmax(0, 1fr));
+          padding: 0.35rem max(0.35rem, env(safe-area-inset-left))
+            calc(0.35rem + env(safe-area-inset-bottom))
+            max(0.35rem, env(safe-area-inset-right));
+          border-top: 1px solid var(--line);
+          background: var(--surface);
+          box-shadow: 0 -8px 24px rgba(17, 24, 39, 0.08);
+        }
+
+        .mobile-bottom-nav button {
+          display: flex;
+          min-width: 0;
+          min-height: 3.25rem;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 0.15rem;
+          border-radius: 0.8rem;
+          color: var(--ink-500);
+          font-size: 0.68rem;
+          line-height: 1.15;
+        }
+
+        .mobile-bottom-nav button[data-active="true"] {
+          background: var(--eco-50);
+          color: var(--eco-700);
+          font-weight: 700;
+        }
+
+        .mobile-bottom-nav .mobile-nav-icon {
+          font-size: 1.1rem;
+          line-height: 1;
+        }
+
+        html[data-theme="dark"] .mobile-bottom-nav button[data-active="true"] {
+          background: #173c2e;
+          color: #a7f3d0;
+        }
+
+        main {
+          padding-bottom: calc(6.5rem + env(safe-area-inset-bottom)) !important;
+        }
+      }
+
+      @media (max-width: 640px) {
+        html,
+        body {
+          min-height: 100%;
+        }
+
+        .site-header {
+          padding-top: env(safe-area-inset-top);
+        }
+
+        .site-header > div {
+          padding-right: max(0.75rem, env(safe-area-inset-right));
+          padding-left: max(0.75rem, env(safe-area-inset-left));
+        }
+
+        .site-header .header-row {
+          height: 3.4375rem;
+          min-height: 3.4375rem;
+          gap: 0.35rem;
+        }
+
+        .site-header .header-logo > div:first-child {
+          width: 2rem;
+          height: 2rem;
+        }
+
+        .site-header .header-logo > div:first-child svg {
+          width: 1.2rem;
+          height: 1.2rem;
+        }
+
+        .site-header .header-logo > div:last-child > span:first-child {
+          font-size: 1rem;
+        }
+
+        #auth-guest-area {
+          gap: 0.15rem;
+        }
+
+        #auth-guest-area button {
+          min-height: 2.75rem;
+          padding: 0.35rem 0.45rem;
+          font-size: 0.68rem;
+        }
+
+        .theme-toggle {
+          width: 2.75rem;
+          height: 2.75rem;
+        }
+
+        main {
+          padding-right: 0.75rem !important;
+          padding-left: 0.75rem !important;
+          padding-top: 1rem !important;
+        }
+
+        button,
+        a[href],
+        [role="button"] {
+          min-height: 2.75rem;
+        }
+
+        input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+        select,
+        textarea {
+          min-height: 2.75rem;
+          font-size: 16px !important;
+        }
+
+        .text-\\[9px\\],
+        .text-\\[10px\\],
+        .text-\\[11px\\] {
+          font-size: 0.75rem !important;
+        }
+
+        #section-store,
+        #section-wardrobe,
+        #section-sell,
+        #section-orders,
+        #section-seller,
+        #section-green,
+        #section-admin-users {
+          min-width: 0;
+        }
+
+        #products-grid,
+        #wardrobe-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 0.75rem;
+        }
+
+        #products-grid > article,
+        #wardrobe-grid > div {
+          min-width: 0;
+          border-radius: 1rem;
+        }
+
+        #products-grid > article .p-4,
+        #wardrobe-grid > div .p-4 {
+          padding: 0.65rem;
+        }
+
+        #products-grid > article h3,
+        #wardrobe-grid > div h4 {
+          display: -webkit-box;
+          overflow: hidden;
+          -webkit-box-orient: vertical;
+          -webkit-line-clamp: 2;
+          font-size: 0.875rem;
+          line-height: 1.25rem;
+        }
+
+        #products-grid > article .px-4.pb-4,
+        #wardrobe-grid > div .px-4.pb-4 {
+          padding: 0 0.65rem 0.65rem;
+        }
+
+        #products-grid > article .px-4.pb-4 button,
+        #wardrobe-grid > div .px-4.pb-4 button {
+          min-width: 2.75rem;
+          min-height: 2.75rem;
+          padding-right: 0.5rem;
+          padding-left: 0.5rem;
+          font-size: 0.7rem;
+        }
+
+        #section-store .hero-panel:first-child {
+          padding: 1rem;
+          border-radius: 1.25rem;
+        }
+
+        #section-store .hero-panel:first-child .max-w-2xl > div:last-child {
+          align-items: stretch;
+          flex-direction: column;
+        }
+
+        #section-store .hero-panel:first-child .max-w-2xl > div:last-child button {
+          width: 100%;
+        }
+
+        .store-category-pills {
+          position: relative;
+          width: 100%;
+          min-width: 0;
+          max-width: 100%;
+          padding-bottom: 0.25rem;
+          -webkit-overflow-scrolling: touch;
+        }
+
+        .store-filter-controls {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto;
+          gap: 0.5rem;
+          width: 100%;
+        }
+
+        #search-input {
+          width: 100%;
+          min-width: 0;
+          grid-column: 1 / -1;
+        }
+
+        .mobile-filter-sheet {
+          display: block;
+          width: auto;
+          flex: initial;
+        }
+
+        .mobile-filter-trigger {
+          display: flex;
+          width: 100%;
+          min-height: 2.75rem;
+          align-items: center;
+          justify-content: center;
+          padding: 0.5rem 1rem;
+          border: 1px solid var(--line);
+          border-radius: 0.75rem;
+          background: var(--surface);
+          color: var(--ink-900);
+          font-size: 0.875rem;
+          font-weight: 600;
+          cursor: pointer;
+        }
+
+        .mobile-filter-sheet.is-open::before {
+          position: fixed;
+          z-index: 48;
+          inset: 0;
+          background: rgba(8, 24, 18, 0.48);
+          content: "";
+        }
+
+        .mobile-filter-sheet-panel {
+          position: fixed;
+          z-index: 49;
+          right: 0;
+          bottom: 0;
+          left: 0;
+          display: none;
+          gap: 1rem;
+          padding: 1.25rem 1rem calc(1rem + env(safe-area-inset-bottom));
+          border-radius: 1.5rem 1.5rem 0 0;
+          background: var(--surface);
+          box-shadow: 0 -12px 36px rgba(0, 0, 0, 0.18);
+        }
+
+        .mobile-filter-sheet.is-open .mobile-filter-sheet-panel {
+          display: grid;
+        }
+
+        .mobile-filter-sheet-panel select {
+          width: 100%;
+        }
+
+        .mobile-filter-close {
+          display: block;
+          width: 100%;
+          min-height: 2.75rem;
+          border-radius: 0.75rem;
+          background: var(--surface-muted);
+          color: var(--ink-900);
+          font-size: 0.875rem;
+          font-weight: 600;
+        }
+
+        #cart-drawer {
+          padding: 0;
+          padding-right: env(safe-area-inset-right);
+          padding-bottom: 0;
+          padding-left: env(safe-area-inset-left);
+        }
+
+        #cart-drawer > div {
+          width: 100%;
+          max-width: none;
+          height: 100vh;
+          height: 100dvh;
+          min-height: 0;
+          justify-content: flex-start;
+        }
+
+        #cart-drawer > div > div:first-child {
+          flex: 0 0 auto;
+          padding: 0.75rem 1rem;
+          padding-top: max(0.75rem, env(safe-area-inset-top));
+        }
+
+        #cart-drawer > div > div:first-child h3 {
+          font-size: 1rem;
+        }
+
+        .cart-scroll-content {
+          display: flex;
+          flex-direction: column;
+          min-height: 0;
+          flex: 1 1 auto;
+          overflow-y: auto;
+          overscroll-behavior: contain;
+          -webkit-overflow-scrolling: touch;
+          padding: 1rem;
+        }
+
+        #cart-items-container {
+          flex: 0 0 auto;
+          overflow: visible;
+          padding: 0 0 1rem;
+        }
+
+        .cart-checkout-form {
+          padding: 1rem;
+          border-top: 1px solid var(--line);
+          background: var(--surface);
+          box-shadow: none;
+          border-radius: 0;
+        }
+
+        .cart-checkout-form > details > summary {
+          cursor: pointer;
+          display: flex;
+          min-height: 2.75rem;
+          align-items: center;
+          list-style: none;
+          justify-content: space-between;
+          gap: 1rem;
+          font-size: 0.875rem;
+          font-weight: 700;
+          color: var(--ink-900);
+        }
+
+        .cart-checkout-form > details > summary::-webkit-details-marker {
+          display: none;
+        }
+
+        .cart-checkout-form > details > summary::after {
+          margin-left: auto;
+          content: "＋";
+        }
+
+        .cart-checkout-form > details[open] > summary::after {
+          content: "−";
+        }
+
+        .cart-checkout-fields {
+          padding-top: 0.75rem;
+        }
+
+        .cart-total-footer {
+          flex: 0 0 auto;
+          padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom));
+          border-top: 1px solid var(--line);
+        }
+
+        .cart-total-footer .checkout-total {
+          font-size: 1.05rem;
+          font-weight: 700;
+        }
+
+        .cart-total-footer button {
+          min-height: 3rem;
+        }
+
+        .chat-shell {
+          position: fixed;
+          z-index: 60;
+          inset: 0;
+          width: 100%;
+          padding: 0;
+          pointer-events: none;
+        }
+
+        .chat-shell.fixed {
+          z-index: 70;
+        }
+
+        .chat-shell #ai-chat-window:not(.hidden) {
+          position: fixed;
+          right: 0;
+          bottom: var(--visual-viewport-bottom, 0px);
+          left: 0;
+          z-index: 61;
+          width: 100%;
+          max-width: none;
+          height: 85vh;
+          height: min(85dvh, var(--visual-viewport-height, 85dvh));
+          max-height: 100dvh;
+          margin: 0;
+          padding-bottom: env(safe-area-inset-bottom);
+          border-radius: 1.5rem 1.5rem 0 0;
+          pointer-events: auto;
+        }
+
+        #ai-chat-window > div:first-child {
+          flex: 0 0 auto;
+          min-height: 4.5rem;
+          padding: 0.75rem 1rem;
+          padding-top: max(0.75rem, env(safe-area-inset-top));
+        }
+
+        #ai-chat-window > div:nth-child(3),
+        #ai-chat-window form {
+          flex: 0 0 auto;
+        }
+
+        #ai-chat-window > div:first-child button {
+          min-width: 2.75rem;
+          min-height: 2.75rem;
+          color: #fff;
+          font-size: 1.25rem;
+        }
+
+        #chat-messages {
+          height: auto;
+          min-height: 0;
+          flex: 1 1 0%;
+          overscroll-behavior: contain;
+          -webkit-overflow-scrolling: touch;
+        }
+
+        #ai-chat-window form {
+          padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+        }
+
+        .chat-shell .chat-trigger {
+          position: fixed;
+          right: max(0.75rem, env(safe-area-inset-right));
+          bottom: calc(4.5rem + env(safe-area-inset-bottom));
+          display: flex;
+          width: 3.25rem;
+          height: 3.25rem;
+          min-height: 3.25rem;
+          align-items: center;
+          justify-content: center;
+          padding: 0;
+          border-radius: 999px;
+          pointer-events: auto;
+        }
+
+        .intro-back-to-top {
+          bottom: calc(4.5rem + env(safe-area-inset-bottom) + 4rem);
+        }
+
+        .chat-trigger-label {
+          display: none;
+        }
+
+        .mobile-nav-conversation-open {
+          display: none !important;
+        }
+
+        .modal-backdrop:not(#cart-drawer) {
+          align-items: flex-end;
+          padding: 0;
+          padding-left: env(safe-area-inset-left);
+          padding-right: env(safe-area-inset-right);
+        }
+
+        #product-modal > div,
+        #reconsign-modal > div,
+        #auth-modal > div,
+        #certificate-modal > div {
+          width: 100%;
+          max-width: none;
+          max-height: 92vh;
+          max-height: 92dvh;
+          overflow-y: auto;
+          overscroll-behavior: contain;
+          padding: 1rem;
+          padding-bottom: max(1rem, env(safe-area-inset-bottom));
+          border-radius: 1.5rem 1.5rem 0 0;
+          -webkit-overflow-scrolling: touch;
+        }
+
+        #product-modal > div {
+          display: flex;
+          height: 92vh;
+          height: 92dvh;
+          flex-direction: column;
+          padding: 0;
+          overflow: hidden;
+        }
+
+        #product-modal-content {
+          min-height: 0;
+          flex: 1 1 auto;
+          overflow-y: auto;
+          padding: 1rem;
+          -webkit-overflow-scrolling: touch;
+        }
+
+        #product-modal-content .product-modal-actions {
+          position: sticky;
+          bottom: -1rem;
+          z-index: 2;
+          margin: 0 -1rem -1rem;
+          padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom));
+          border-top: 1px solid var(--line);
+          background: var(--surface);
+        }
+
+        #reconsign-modal > div,
+        #auth-modal > div {
+          gap: 1rem;
+        }
+
+        #reconsign-modal > div > div:last-child {
+          position: sticky;
+          bottom: -1rem;
+          z-index: 2;
+          margin: 0 -1rem -1rem;
+          padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom));
+          border-top: 1px solid var(--line);
+          background: var(--surface);
+        }
+
+        #auth-form #auth-submit-btn {
+          position: sticky;
+          bottom: 0;
+          z-index: 2;
+        }
+
+        #certificate-modal > div > div:last-child {
+          position: sticky;
+          bottom: -1rem;
+          padding: 0.75rem 0 calc(0.75rem + env(safe-area-inset-bottom));
+          background: var(--surface);
+        }
+
+        #product-modal [aria-label^="Đóng"],
+        #reconsign-modal [aria-label^="Đóng"],
+        #auth-modal [aria-label^="Đóng"],
+        #certificate-modal [aria-label^="Đóng"],
+        #cart-drawer [aria-label^="Đóng"] {
+          min-width: 2.75rem;
+          min-height: 2.75rem;
+        }
+
+        #toast-container {
+          top: calc(4.25rem + env(safe-area-inset-top));
+          right: max(0.75rem, env(safe-area-inset-right));
+          left: max(0.75rem, env(safe-area-inset-left));
+          max-width: calc(100vw - 1.5rem);
+        }
+
+        #toast-container > * {
+          max-width: 100%;
+        }
+
+        #notifications-panel,
+        #user-dropdown {
+          position: fixed;
+          top: calc(3.75rem + env(safe-area-inset-top));
+          right: 0.5rem;
+          left: auto;
+          max-width: calc(100vw - 1rem);
+        }
+
+        #user-dropdown {
+          width: min(18rem, calc(100vw - 1rem));
+        }
+
+        #conversation-thread {
+          min-width: 0;
+        }
+
+        #section-messages.messages-detail-open {
+          position: fixed;
+          z-index: 44;
+          inset: calc(3.5rem + env(safe-area-inset-top)) 0 0;
+          display: block !important;
+          overflow: hidden;
+          margin: 0;
+          padding: 0;
+          background: var(--page-bg);
+        }
+
+        #section-messages.messages-detail-open > div:first-child,
+        #section-messages.messages-detail-open .conversation-list-panel {
+          display: none;
+        }
+
+        #section-messages.messages-detail-open > .messages-columns {
+          display: block;
+          height: 100%;
+          margin: 0 !important;
+          opacity: 1 !important;
+          transform: none !important;
+        }
+
+        #conversation-thread {
+          height: 100%;
+          min-height: 0;
+          border: 0;
+          border-radius: 0;
+          padding: 0;
+          text-align: left;
+        }
+
+        #conversation-thread .conversation-thread-header {
+          position: sticky;
+          top: 0;
+          z-index: 2;
+          display: flex;
+          min-height: 3.75rem;
+          align-items: center;
+          gap: 0.75rem;
+          padding: 0.5rem 0.75rem;
+          background: var(--surface);
+          border-bottom: 1px solid var(--line);
+        }
+
+        #conversation-thread #conversation-messages {
+          max-height: none;
+          min-height: 0;
+          padding: 0.75rem;
+        }
+
+        #conversation-thread form {
+          position: sticky;
+          bottom: 0;
+          flex: 0 0 auto;
+          padding: 0.5rem 0.75rem calc(0.5rem + env(safe-area-inset-bottom));
+          background: var(--surface);
+        }
+
+        #conversation-message-input {
+          min-height: 2.75rem;
+          max-height: 7.5rem;
+          font-size: 16px !important;
+        }
+
+        #section-admin-users .overflow-x-auto {
+          overflow: visible;
+        }
+
+        #section-admin-users table {
+          min-width: 0;
+        }
+
+        #section-admin-users thead {
+          position: absolute;
+          width: 1px;
+          height: 1px;
+          overflow: hidden;
+          clip: rect(0, 0, 0, 0);
+          white-space: nowrap;
+          clip-path: inset(50%);
+        }
+
+        #admin-users-list tr {
+          display: grid;
+          gap: 0.25rem;
+          padding: 0.75rem;
+          border-bottom: 1px solid var(--line);
+        }
+
+        #admin-users-list td {
+          display: block;
+          padding: 0.15rem 0.25rem;
+          overflow-wrap: anywhere;
+        }
+
+        #admin-users-list td:not([colspan]):nth-child(1)::before {
+          content: "Họ và tên: ";
+          font-weight: 600;
+        }
+
+        #admin-users-list td:not([colspan]):nth-child(2)::before {
+          content: "Email: ";
+          font-weight: 600;
+        }
+
+        #admin-users-list td:not([colspan]):nth-child(3)::before {
+          content: "Ngày đăng ký: ";
+          font-weight: 600;
+        }
+
+        .mobile-filter-sheet.is-open .mobile-filter-sheet-panel {
+          max-height: min(70vh, 32rem);
+          overflow-y: auto;
+        }
+      }
+
+      @media (hover: hover) {
+        .chat-trigger:hover {
+          transform: translateY(-3px);
+        }
+
+        .card-hover:hover {
+          transform: translateY(-5px);
+        }
+      }
+
+      @media (hover: none) {
+        .chat-trigger:active,
+        button:active,
+        a[href]:active {
+          filter: brightness(0.96);
+        }
+      }
+
+      @media (max-width: 420px) {
+        #auth-guest-area button:last-child {
+          display: inline-flex;
+        }
+      }
+
+      @media (max-width: 640px) {
+        button:focus-visible,
+        a[href]:focus-visible,
+        [role="button"]:focus-visible {
+          outline: 2px solid var(--eco-600);
+          outline-offset: 2px;
+        }
+
+        .card-hover:active,
+        #products-grid > article:active,
+        #wardrobe-grid > div:active {
+          transform: scale(0.99);
+        }
+      }
+
+      @media (hover: none) and (max-width: 640px) {
+        #products-grid > article img:hover {
+          transform: none;
+        }
+      }
     </style>
   </head>
   <body
@@ -3306,15 +4127,19 @@
             <div id="auth-guest-area" class="flex items-center gap-2">
               <button
                 onclick="openAuthModal('login')"
+                aria-label="Đăng nhập"
                 class="whitespace-nowrap px-2 lg:px-3.5 py-2 rounded-xl text-xs lg:text-sm font-semibold text-ink-700 hover:bg-slate-100 transition"
               >
-                Đăng nhập
+                <span class="hidden sm:inline">Đăng nhập</span>
+                <span class="sm:hidden">Vào</span>
               </button>
               <button
                 onclick="openAuthModal('register')"
+                aria-label="Tạo tài khoản"
                 class="whitespace-nowrap px-2 lg:px-3.5 py-2 rounded-xl text-xs lg:text-sm font-semibold bg-ink-900 text-white hover:bg-ink-700 transition shadow-sm"
               >
-                Tạo tài khoản
+                <span class="hidden sm:inline">Tạo tài khoản</span>
+                <span class="sm:hidden">Đăng ký</span>
               </button>
             </div>
 
@@ -3425,7 +4250,16 @@
                   "
                   class="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 flex items-center gap-2"
                 >
-                  ♻️ Ký gửi lại 1 chạm
+                  🛍️ Đã mua
+                </button>
+                <button
+                  onclick="
+                    switchTab('seller');
+                    toggleUserDropdown(false);
+                  "
+                  class="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 flex items-center gap-2"
+                >
+                  📦 Đơn bán
                 </button>
                 <button
                   onclick="
@@ -3543,6 +4377,24 @@
         </div>
       </div>
     </header>
+
+    <div class="mobile-bottom-nav" role="navigation" aria-label="Điều hướng chính">
+      <button onclick="switchTab('store')" data-tab="store" class="nav-tab" aria-label="Khám phá">
+        <span class="mobile-nav-icon" aria-hidden="true">⌕</span><span>Khám phá</span>
+      </button>
+      <button onclick="switchTab('sell')" data-tab="sell" class="nav-tab" aria-label="Đăng bán">
+        <span class="mobile-nav-icon" aria-hidden="true">＋</span><span>Đăng bán</span>
+      </button>
+      <button onclick="switchTab('wardrobe')" data-tab="wardrobe" class="nav-tab" aria-label="Tủ đồ">
+        <span class="mobile-nav-icon" aria-hidden="true">♧</span><span>Tủ đồ</span>
+      </button>
+      <button onclick="switchTab('messages')" data-tab="messages" class="nav-tab" aria-label="Tin nhắn">
+        <span class="mobile-nav-icon" aria-hidden="true">✉</span><span>Tin nhắn</span>
+      </button>
+      <button onclick="switchTab('green')" data-tab="green" class="nav-tab" aria-label="Tài khoản và Điểm Xanh">
+        <span class="mobile-nav-icon" aria-hidden="true">🌱</span><span>Tài khoản</span>
+      </button>
+    </div>
 
     <!-- MAIN CONTENT CONTAINER -->
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10">
@@ -4194,7 +5046,7 @@
           class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100"
         >
           <!-- Category Pills -->
-          <div class="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
+          <div class="store-category-pills flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
             <button
               onclick="filterCategory('Tất cả')"
               class="cat-pill px-4 py-2 rounded-xl text-xs font-semibold bg-ink-900 text-white shrink-0"
@@ -4234,7 +5086,26 @@
           </div>
 
           <!-- Search, Circular Toggle & Sort -->
-          <div class="flex flex-wrap items-center gap-2.5">
+          <div class="store-filter-controls flex flex-wrap items-center gap-2.5">
+            <input
+              type="text"
+              id="search-input"
+              oninput="renderProducts()"
+              placeholder="Tìm tên áo, chất liệu, màu..."
+              class="px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-xs w-48 focus:outline-none focus:border-eco-500"
+            />
+            <div class="mobile-filter-sheet">
+              <button
+                type="button"
+                class="mobile-filter-trigger"
+                aria-expanded="false"
+                aria-label="Mở bộ lọc sản phẩm"
+                onclick="toggleProductFilters()"
+              >☷ Lọc</button>
+              <div class="mobile-filter-sheet-panel" role="dialog" aria-label="Bộ lọc sản phẩm">
+            <button type="button" class="mobile-filter-close" onclick="toggleProductFilters(false)">
+              Đóng bộ lọc
+            </button>
             <label
               class="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-medium cursor-pointer select-none"
             >
@@ -4247,14 +5118,6 @@
               <span>Chỉ đồ kiểm định vòng ≥ 2</span>
             </label>
 
-            <input
-              type="text"
-              id="search-input"
-              oninput="renderProducts()"
-              placeholder="Tìm tên áo, chất liệu, màu..."
-              class="px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-xs w-48 focus:outline-none focus:border-eco-500"
-            />
-
             <select
               id="sort-select"
               onchange="renderProducts()"
@@ -4266,6 +5129,8 @@
               <option value="price-desc">Giá: Cao → Thấp</option>
               <option value="cycle">Nhiều vòng đời nhất</option>
             </select>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -4437,6 +5302,8 @@
                     src="https://images.unsplash.com/photo-1596755094514-f87e34085b2c?auto=format&fit=crop&w=400&q=80"
                     class="w-full h-16 object-cover"
                     alt="Sơ mi Linen"
+                    loading="lazy"
+                    decoding="async"
                   />
                   <span class="block p-1.5 text-[11px] font-medium truncate"
                     >Sơ mi Linen Trắng</span
@@ -4451,6 +5318,8 @@
                     src="https://images.unsplash.com/photo-1591047139829-d91aecb6caea?auto=format&fit=crop&w=400&q=80"
                     class="w-full h-16 object-cover"
                     alt="Blazer Be"
+                    loading="lazy"
+                    decoding="async"
                   />
                   <span class="block p-1.5 text-[11px] font-medium truncate"
                     >Blazer Dáng Suông</span
@@ -4465,6 +5334,8 @@
                     src="https://images.unsplash.com/photo-1541099649105-f69ad21f3246?auto=format&fit=crop&w=400&q=80"
                     class="w-full h-16 object-cover"
                     alt="Quần Jeans"
+                    loading="lazy"
+                    decoding="async"
                   />
                   <span class="block p-1.5 text-[11px] font-medium truncate"
                     >Quần Jeans Vintage</span
@@ -4837,8 +5708,8 @@
             ↻ Làm mới
           </button>
         </div>
-        <div class="grid grid-cols-1 md:grid-cols-[minmax(220px,0.8fr)_minmax(0,1.6fr)] gap-4">
-          <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+        <div class="messages-columns grid grid-cols-1 md:grid-cols-[minmax(220px,0.8fr)_minmax(0,1.6fr)] gap-4">
+          <div class="conversation-list-panel bg-white rounded-2xl border border-slate-200 overflow-hidden">
             <h3 class="px-4 py-3 text-sm font-bold border-b border-slate-100">
               Hội thoại
             </h3>
@@ -5088,7 +5959,7 @@
       tabindex="-1"
     >
       <div
-        class="bg-white rounded-3xl max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-100"
+        class="bg-white rounded-3xl max-w-3xl w-full max-h-[90dvh] overflow-y-auto shadow-2xl border border-slate-100"
       >
         <div id="product-modal-content" class="p-6 sm:p-8">
           <!-- Rendered by JS -->
@@ -5108,7 +5979,7 @@
       tabindex="-1"
     >
       <div
-        class="bg-white rounded-3xl max-w-2xl w-full max-h-[92vh] overflow-y-auto shadow-2xl border border-slate-100 p-6 sm:p-8 space-y-6"
+        class="bg-white rounded-3xl max-w-2xl w-full max-h-[92dvh] overflow-y-auto shadow-2xl border border-slate-100 p-6 sm:p-8 space-y-6"
       >
         <div
           class="flex items-start justify-between gap-4 border-b border-slate-100 pb-4"
@@ -5509,15 +6380,18 @@
           </button>
         </div>
 
-        <div
-          id="cart-items-container"
-          class="flex-1 overflow-y-auto p-6 space-y-4"
-        >
-          <!-- Rendered by JS -->
-        </div>
+        <div class="cart-scroll-content">
+          <div
+            id="cart-items-container"
+            class="flex-1 overflow-y-auto p-6 space-y-4"
+          >
+            <!-- Rendered by JS -->
+          </div>
 
-        <div class="p-6 border-t border-slate-100 bg-slate-50 space-y-4">
-          <div class="space-y-3">
+          <div class="cart-checkout-form p-6 border-t border-slate-100 bg-slate-50 space-y-4">
+            <details class="space-y-3" open>
+              <summary>Thông tin giao hàng và thanh toán</summary>
+              <div class="cart-checkout-fields space-y-3">
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label class="block text-xs font-semibold text-ink-700 mb-1"
@@ -5595,13 +6469,15 @@
               <span>Giảm giá Điểm Xanh:</span
               ><span id="cart-discount">-0đ</span>
             </div>
-            <div
-              class="flex justify-between text-base font-bold text-ink-900 pt-2 border-t border-slate-200"
-            >
-              <span>Tổng thanh toán:</span><span id="cart-total">0đ</span>
-            </div>
           </div>
+            </details>
+          </div>
+        </div>
 
+        <div class="cart-total-footer p-6 border-t border-slate-100 bg-slate-50 space-y-4">
+          <div class="checkout-total flex justify-between text-base font-bold text-ink-900">
+            <span>Tổng thanh toán:</span><span id="cart-total">0đ</span>
+          </div>
           <button
             onclick="checkoutCart()"
             class="w-full py-3.5 rounded-2xl bg-eco-600 hover:bg-eco-700 text-white text-sm font-bold shadow-sm transition"
@@ -5615,7 +6491,7 @@
     <!-- ========================================================= -->
     <!-- FLOATING AI CHATBOT ASSISTANT                             -->
     <!-- ========================================================= -->
-    <div class="fixed bottom-5 right-5 z-40">
+    <div class="chat-shell fixed bottom-5 right-5 z-40">
       <!-- Chat Window -->
       <div
         id="ai-chat-window"
@@ -5641,7 +6517,7 @@
           </div>
           <button
             onclick="toggleChat(false)"
-            class="text-slate-400 hover:text-white"
+            class="min-w-11 min-h-11 rounded-xl text-slate-400 hover:text-white"
             aria-label="Đóng trợ lý AI"
           >
             ✕
@@ -5730,8 +6606,8 @@
         class="chat-trigger ml-auto flex items-center gap-2 px-4 py-3 rounded-full bg-ink-900 hover:bg-ink-800 text-white text-xs font-semibold shadow-xl transition"
         aria-label="Mở trợ lý AI"
       >
-        <span class="w-2.5 h-2.5 rounded-full bg-eco-400 animate-ping"></span>
-        <span>💬 Hỏi Trợ lý AI</span>
+        <span aria-hidden="true">💬</span>
+        <span class="chat-trigger-label">Hỏi Trợ lý AI</span>
       </button>
     </div>
 
@@ -7172,8 +8048,23 @@
         }
       }
 
+      function showConversationList() {
+        document
+          .getElementById("section-messages")
+          .classList.remove("messages-detail-open");
+        document
+          .querySelector(".mobile-bottom-nav")
+          ?.classList.remove("mobile-nav-conversation-open");
+      }
+
       async function selectConversation(conversationId) {
         state.activeConversationId = conversationId;
+        document
+          .getElementById("section-messages")
+          .classList.add("messages-detail-open");
+        document
+          .querySelector(".mobile-bottom-nav")
+          ?.classList.add("mobile-nav-conversation-open");
         renderConversations();
         const thread = document.getElementById("conversation-thread");
         thread.innerHTML =
@@ -7190,11 +8081,14 @@
           thread.className =
             "min-h-[360px] bg-white rounded-2xl border border-slate-200 flex flex-col overflow-hidden";
           thread.innerHTML = `
-            <div class="px-4 py-3 border-b border-slate-100">
-              <p class="text-sm font-bold text-ink-900">${escapeHtml(conversation.other_user_name)}</p>
-              <p class="text-[11px] text-ink-500">${escapeHtml(conversation.product_name)}</p>
+            <div class="conversation-thread-header px-4 py-3 border-b border-slate-100">
+              <button type="button" onclick="showConversationList()" class="min-w-11 min-h-11 shrink-0 rounded-xl border border-slate-200 px-2 text-sm font-semibold text-ink-700 md:hidden" aria-label="Quay lại danh sách hội thoại">← Quay lại</button>
+              <div class="min-w-0">
+                <p class="text-sm font-bold text-ink-900 truncate">${escapeHtml(conversation.other_user_name)}</p>
+                <p class="text-[11px] text-ink-500 truncate">${escapeHtml(conversation.product_name)}</p>
+              </div>
             </div>
-            <div id="conversation-messages" class="flex-1 max-h-[420px] min-h-[220px] overflow-y-auto p-4 space-y-3">
+            <div id="conversation-messages" class="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
               ${
                 messages.length
                   ? messages
@@ -7230,10 +8124,10 @@
             <form onsubmit="sendConversationMessage(event)" class="flex items-end gap-2 p-3 border-t border-slate-100">
               <textarea
                 id="conversation-message-input"
-                rows="2"
+                rows="1"
                 maxlength="2000"
                 required
-                oninput="notifyMessageTyping()"
+                oninput="notifyMessageTyping(); this.style.height='auto'; this.style.height=Math.min(this.scrollHeight,120)+'px'"
                 placeholder="Nhập tin nhắn..."
                 class="flex-1 resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-eco-500"
               ></textarea>
@@ -7319,6 +8213,17 @@
       // =========================================================
       function formatVND(num) {
         return Number(num || 0).toLocaleString("vi-VN") + "đ";
+      }
+
+      function toggleProductFilters(force) {
+        const sheet = document.querySelector(".mobile-filter-sheet");
+        const trigger = sheet.querySelector(".mobile-filter-trigger");
+        const open =
+          typeof force === "boolean"
+            ? force
+            : !sheet.classList.contains("is-open");
+        sheet.classList.toggle("is-open", open);
+        trigger.setAttribute("aria-expanded", String(open));
       }
 
       function filterCategory(cat) {
@@ -7414,7 +8319,7 @@
         <article class="bg-white rounded-3xl border border-slate-100 overflow-hidden shadow-2xs card-hover flex flex-col justify-between">
           <div>
             <div class="relative aspect-[4/5] bg-sand-50 overflow-hidden cursor-pointer" onclick="openProductModal('${p.id}')">
-              <img src="${p.image_url}" alt="${p.name}" loading="lazy" onerror="handleImageFallback(this)" class="w-full h-full object-cover hover:scale-105 transition duration-500" />
+              <img src="${p.image_url}" alt="${p.name}" loading="lazy" decoding="async" onerror="handleImageFallback(this)" class="w-full h-full object-cover hover:scale-105 transition duration-500" />
               <div class="absolute top-3 left-3 flex flex-col gap-1.5">
                 <span class="px-2.5 py-1 rounded-full bg-white/95 backdrop-blur text-eco-700 text-[11px] font-bold shadow-xs">
                   Độ mới ${p.condition_percent}%
@@ -7941,7 +8846,7 @@
                 ({ product, score, reason }) => `
                   <article class="rounded-2xl border border-sand-200 bg-white p-3 shadow-sm">
                     <div class="flex gap-3">
-                      <img src="${escapeHtml(normalizeProductImage(product.image_url))}" alt="${escapeHtml(product.name)}" onerror="handleImageFallback(this)" class="h-24 w-20 shrink-0 rounded-xl bg-sand-50 object-cover" />
+                      <img src="${escapeHtml(normalizeProductImage(product.image_url))}" alt="${escapeHtml(product.name)}" loading="lazy" decoding="async" onerror="handleImageFallback(this)" class="h-24 w-20 shrink-0 rounded-xl bg-sand-50 object-cover" />
                       <div class="min-w-0 flex-1">
                         <div class="flex items-center justify-between gap-2">
                           <span class="rounded-full bg-eco-50 px-2 py-1 text-[11px] font-bold text-eco-700">Khớp ${score}%</span>
@@ -8139,7 +9044,7 @@
                 : ""
             }
 
-            <div class="flex flex-col sm:flex-row gap-2.5 pt-2">
+            <div class="product-modal-actions flex flex-col sm:flex-row gap-2.5 pt-2">
               ${
                 checkIsAdmin(state.user)
                   ? `
@@ -8619,7 +9524,7 @@
           <div class="bg-white rounded-3xl border border-slate-200 overflow-hidden flex flex-col justify-between">
             <div>
               <div class="relative aspect-[4/5] bg-sand-50">
-                <img src="${w.image_url}" alt="${w.name}" class="w-full h-full object-cover" />
+                <img src="${w.image_url}" alt="${w.name}" loading="lazy" decoding="async" class="w-full h-full object-cover" />
                 <span class="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-ink-900/80 text-white text-[11px] font-semibold">
                   Vòng đời #${w.cycle || 1}
                 </span>
@@ -8651,7 +9556,7 @@
             (o) => `
         <div class="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div class="flex items-center gap-4">
-            <img src="${o.image_url}" alt="${o.name}" class="w-20 h-24 rounded-xl object-cover bg-sand-50 shrink-0" />
+            <img src="${o.image_url}" alt="${o.name}" loading="lazy" decoding="async" class="w-20 h-24 rounded-xl object-cover bg-sand-50 shrink-0" />
             <div class="space-y-1">
               <div class="flex flex-wrap items-center gap-2">
                 <span class="px-2.5 py-0.5 rounded-full bg-eco-50 text-eco-700 text-[11px] font-bold">Đã hoàn tất • Vòng đời #${o.cycle || 1}</span>
@@ -8783,7 +9688,7 @@
                 : `<span class="text-xs font-semibold ${listing.status === "sold" ? "text-eco-700" : "text-ink-500"}">${statusLabels[listing.status] || "Không xác định"}</span>`;
             return `
               <article class="flex flex-col sm:flex-row sm:items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4">
-                <img src="${escapeHtml(listing.image_url)}" alt="${escapeHtml(listing.name)}" class="h-28 w-24 rounded-xl bg-sand-50 object-cover" />
+                <img src="${escapeHtml(listing.image_url)}" alt="${escapeHtml(listing.name)}" loading="lazy" decoding="async" class="h-28 w-24 rounded-xl bg-sand-50 object-cover" />
                 <div class="min-w-0 flex-1">
                   <div class="flex flex-wrap items-center gap-2">
                     <span class="rounded-full bg-eco-50 px-2.5 py-1 text-[11px] font-semibold text-eco-700">${statusLabels[listing.status] || "Không xác định"}</span>
@@ -8955,12 +9860,12 @@
           <div class="grid grid-cols-2 gap-3">
             <div class="rounded-2xl bg-sand-50 p-3 border border-sand-200 space-y-2">
               <span class="inline-block px-2 py-0.5 rounded-md bg-ink-900 text-white text-[10px] font-bold">✓ Có sẵn trong Tủ đồ</span>
-              <img src="${set.owned.image_url}" class="w-full h-32 object-cover rounded-xl" />
+              <img src="${set.owned.image_url}" loading="lazy" decoding="async" class="w-full h-32 object-cover rounded-xl" />
               <p class="text-xs font-bold text-ink-900 line-clamp-1">${set.owned.name}</p>
             </div>
             <div class="rounded-2xl bg-eco-50/40 p-3 border border-eco-200 space-y-2">
               <span class="inline-block px-2 py-0.5 rounded-md bg-eco-600 text-white text-[10px] font-bold">+ Đang bán trên sàn</span>
-              <img src="${set.storeItem.image_url}" class="w-full h-32 object-cover rounded-xl" />
+              <img src="${set.storeItem.image_url}" loading="lazy" decoding="async" class="w-full h-32 object-cover rounded-xl" />
               <p class="text-xs font-bold text-ink-900 line-clamp-1">${set.storeItem.name}</p>
               <p class="text-xs font-bold text-eco-700">${formatVND(set.storeItem.price)}</p>
             </div>
@@ -9017,7 +9922,7 @@
             .map(
               (item) => `
           <div class="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 border border-slate-100">
-            <img src="${item.image_url}" class="w-16 h-20 rounded-xl object-cover shrink-0" />
+            <img src="${item.image_url}" loading="lazy" decoding="async" class="w-16 h-20 rounded-xl object-cover shrink-0" />
             <div class="flex-1 min-w-0">
               <h4 class="text-xs font-bold text-ink-900 truncate">${item.name}</h4>
               <p class="text-[11px] text-ink-500">Size ${item.size} • Độ mới ${item.condition_percent}%</p>
@@ -9392,6 +10297,18 @@
               : "nav-tab whitespace-nowrap shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-100 text-ink-700";
           }
         });
+        const messagesSection = document.getElementById("section-messages");
+        const mobileNav = document.querySelector(".mobile-bottom-nav");
+        if (tabName !== "messages") {
+          messagesSection.classList.remove("messages-detail-open");
+        }
+        if (mobileNav) {
+          mobileNav.classList.toggle(
+            "mobile-nav-conversation-open",
+            tabName === "messages" &&
+              messagesSection.classList.contains("messages-detail-open"),
+          );
+        }
         window.scrollTo({
           top: 0,
           behavior: window.matchMedia("(prefers-reduced-motion: reduce)")
@@ -9483,6 +10400,26 @@
 
       // Boot Application
       window.addEventListener("DOMContentLoaded", () => {
+        const syncVisualViewport = () => {
+          if (!window.matchMedia("(max-width: 640px)").matches) return;
+          const viewport = window.visualViewport;
+          const visibleHeight = viewport?.height || window.innerHeight;
+          const visibleBottom =
+            window.innerHeight - ((viewport?.offsetTop || 0) + visibleHeight);
+          document.documentElement.style.setProperty(
+            "--visual-viewport-height",
+            `${visibleHeight}px`,
+          );
+          document.documentElement.style.setProperty(
+            "--visual-viewport-bottom",
+            `${Math.max(0, visibleBottom)}px`,
+          );
+        };
+        syncVisualViewport();
+        window.visualViewport?.addEventListener("resize", syncVisualViewport);
+        window.visualViewport?.addEventListener("scroll", syncVisualViewport);
+        window.addEventListener("resize", syncVisualViewport, { passive: true });
+
         const validTabs = [
           "intro",
           "store",
