@@ -256,6 +256,9 @@ class MessageConnectionManager:
                 except (WebSocketDisconnect, RuntimeError):
                     self.disconnect(user_id, websocket)
 
+    async def broadcast_all(self, event: Dict[str, Any]):
+        await self.broadcast(list(self.connections), event)
+
 
 message_connections = MessageConnectionManager()
 
@@ -1723,7 +1726,7 @@ async def ai_analyze_garment(
 
 
 @app.post("/api/products", summary="Đăng bán sản phẩm mới lên sàn (+120 Điểm Xanh)")
-def create_marketplace_listing(
+async def create_marketplace_listing(
     payload: CreateListingRequest,
     user: Dict[str, Any] = Depends(get_current_user)
 ):
@@ -1757,6 +1760,13 @@ def create_marketplace_listing(
             INSERT INTO points_ledger (id, user_id, title, delta, entry_type, created_at)
             VALUES (?, ?, ?, ?, 'earn', ?)
         """, (f"l-{uuid.uuid4().hex[:8]}", user["id"], f"Đăng bán AI: {payload.title}", points_earned, now))
+
+    await message_connections.broadcast_all({
+        "type": "product_created",
+        "product_id": product_id,
+        "seller_id": user["id"],
+        "title": payload.title,
+    })
 
     return {
         "message": f"Đăng bán thành công! Bạn được cộng +{points_earned} Điểm Xanh.",

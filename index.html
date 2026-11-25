@@ -727,6 +727,42 @@
         box-shadow: 0 10px 32px rgba(6, 78, 59, 0.28);
       }
 
+      .messages-columns {
+        height: min(68vh, 42rem);
+        height: min(68dvh, 42rem);
+        min-height: 24rem;
+        grid-template-rows: minmax(0, 1fr);
+      }
+
+      .conversation-list-panel {
+        display: flex;
+        min-height: 0;
+        flex-direction: column;
+      }
+
+      #conversations-list {
+        min-height: 0;
+        max-height: none;
+        flex: 1 1 0%;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      #conversation-thread {
+        height: 100%;
+        min-height: 0;
+        min-width: 0;
+      }
+
+      #conversation-thread #conversation-messages {
+        min-height: 0;
+        flex: 1 1 0%;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+      }
+
       @media (hover: hover) {
         .chat-trigger:hover {
           transform: translateY(-3px);
@@ -3975,39 +4011,11 @@
 
       @media (max-width: 767px) {
         .messages-columns {
-          height: min(68vh, 42rem);
-          height: min(68dvh, 42rem);
-          min-height: 24rem;
           grid-template-rows: minmax(8rem, 0.8fr) minmax(0, 1.2fr);
-        }
-
-        .conversation-list-panel {
-          display: flex;
-          min-height: 0;
-          flex-direction: column;
-        }
-
-        #conversations-list {
-          min-height: 0;
-          max-height: none;
-          flex: 1 1 0%;
-          overflow-y: auto;
-          overscroll-behavior: contain;
-          -webkit-overflow-scrolling: touch;
         }
 
         #conversation-thread {
           height: 100%;
-          min-height: 0;
-          min-width: 0;
-        }
-
-        #conversation-thread #conversation-messages {
-          min-height: 0;
-          flex: 1 1 0%;
-          overflow-y: auto;
-          overscroll-behavior: contain;
-          -webkit-overflow-scrolling: touch;
         }
       }
 
@@ -8311,11 +8319,13 @@
                 }
               } else {
                 sendHeartbeat();
+                refreshNotifications();
               }
             };
             state.messagesVisibilityHandler = visibilityHandler;
             document.addEventListener("visibilitychange", visibilityHandler);
             state.messagesHeartbeatTimer = setInterval(sendHeartbeat, 25000);
+            refreshNotifications();
           };
           socket.onmessage = (event) => {
             if (state.messagesSocket !== socket) return;
@@ -8388,6 +8398,23 @@
       }
 
       async function handleMessagesSocketEvent(payload) {
+        if (payload.type === "product_created") {
+          if (payload.seller_id === state.user?.id) return;
+          const alreadyLoaded = state.products.some(
+            (product) => product.id === payload.product_id,
+          );
+          await syncFromBackend(false);
+          if (
+            !alreadyLoaded &&
+            state.products.some((product) => product.id === payload.product_id)
+          ) {
+            showToast(
+              `Sản phẩm mới vừa được đăng: ${payload.title || "Sản phẩm mới"}.`,
+              "info",
+            );
+          }
+          return;
+        }
         if (payload.type === "message") {
           const messagesSection =
             document.getElementById("section-messages");
