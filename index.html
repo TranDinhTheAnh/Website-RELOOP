@@ -6558,17 +6558,10 @@
           };
           localStorage.setItem("reloop_token", state.token);
           closeAuthModal();
-          if (backendRes?.email_sent === false) {
-            showToast(
-              `Tài khoản đã tạo, nhưng ${backendRes.email_notice || "email chào mừng chưa gửi được."}`,
-              "warning",
-            );
-          } else {
-            showToast(
-              `Tạo tài khoản thành công! Chào mừng ${state.user.name} (+100 Điểm Xanh)`,
-              "success",
-            );
-          }
+          showToast(
+            `Tạo tài khoản thành công! Chào mừng ${state.user.name} (+100 Điểm Xanh)`,
+            "success",
+          );
           await syncFromBackend(false);
           return;
         }
