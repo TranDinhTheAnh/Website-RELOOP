@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..700&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&subset=vietnamese&display=swap"
       rel="stylesheet"
     />
     <script src="https://cdn.tailwindcss.com"></script>
@@ -23,7 +23,7 @@
                 "BlinkMacSystemFont",
                 "sans-serif",
               ],
-              display: ['"Plus Jakarta Sans"', '"Inter"', "sans-serif"],
+              display: ['"Fraunces"', '"Plus Jakarta Sans"', "serif"],
             },
             colors: {
               eco: {
@@ -81,6 +81,12 @@
         --eco-600: #059669;
         --eco-700: #047857;
         --eco-900: #064e3b;
+        --intro-sage: #607966;
+        --intro-clay: #b36f58;
+        --intro-sand: #a58a5d;
+        --intro-lavender: #817197;
+        --intro-orb-mint: rgba(110, 231, 183, 0.34);
+        --intro-orb-peach: rgba(246, 190, 166, 0.3);
         --sand-50: #faf8f5;
         --sand-100: #f5f2eb;
         --sand-200: #e8e2d5;
@@ -778,6 +784,12 @@
         --ink-700: #d4e0d9;
         --ink-500: #a4b5ab;
         --line: rgba(226, 240, 231, 0.1);
+        --intro-sage: #a4c3a9;
+        --intro-clay: #e6a18b;
+        --intro-sand: #d7be88;
+        --intro-lavender: #c2add8;
+        --intro-orb-mint: rgba(52, 211, 153, 0.17);
+        --intro-orb-peach: rgba(244, 163, 133, 0.12);
         --shadow-card:
           0 2px 8px rgba(0, 0, 0, 0.2),
           0 18px 40px -24px rgba(0, 0, 0, 0.65);
@@ -932,6 +944,1917 @@
 
       html[data-theme="dark"] .skeleton-shimmer {
         background: #26382f;
+      }
+
+      .intro-page {
+        position: relative;
+        isolation: isolate;
+        overflow: clip;
+        color: var(--ink-900);
+      }
+
+      .intro-content {
+        position: relative;
+        z-index: 1;
+        width: min(100%, 76rem);
+        margin: 0 auto;
+      }
+
+      .intro-skip {
+        position: fixed;
+        z-index: 35;
+        top: 5.25rem;
+        right: max(1rem, calc((100vw - 80rem) / 2));
+        display: inline-flex;
+        min-height: 2.75rem;
+        align-items: center;
+        gap: 0.55rem;
+        padding: 0.65rem 0.9rem;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--surface);
+        color: var(--ink-700);
+        font-size: 0.7rem;
+        font-weight: 700;
+        box-shadow: var(--shadow-card);
+        transition:
+          color var(--duration-fast) ease,
+          border-color var(--duration-fast) ease,
+          transform var(--duration-fast) ease;
+      }
+
+      .intro-skip svg,
+      .intro-button svg,
+      .intro-scroll-link svg,
+      .intro-back-to-top svg {
+        width: 1rem;
+        height: 1rem;
+        flex: 0 0 auto;
+        stroke: currentColor;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .intro-skip:hover {
+        transform: translateY(-2px);
+        border-color: var(--eco-500);
+        color: var(--eco-700);
+      }
+
+      .intro-orb {
+        position: absolute;
+        z-index: -1;
+        width: clamp(16rem, 34vw, 34rem);
+        aspect-ratio: 1;
+        border-radius: 50%;
+        filter: blur(72px);
+        opacity: 0.78;
+        pointer-events: none;
+        will-change: transform;
+      }
+
+      .intro-orb-mint {
+        top: 0;
+        right: -9rem;
+        background: var(--intro-orb-mint);
+      }
+
+      .intro-orb-peach {
+        top: 15rem;
+        left: -12rem;
+        background: var(--intro-orb-peach);
+      }
+
+      .intro-page.is-active .intro-orb {
+        animation: intro-orb-breathe 12s ease-in-out infinite alternate;
+      }
+
+      .intro-hero {
+        position: relative;
+        display: grid;
+        min-height: min(42rem, calc(100svh - 8rem));
+        align-items: center;
+        grid-template-columns: minmax(0, 1.1fr) minmax(18rem, 0.9fr);
+        gap: clamp(2rem, 6vw, 6rem);
+        padding: clamp(4.5rem, 9vw, 8rem) clamp(0rem, 3vw, 2.5rem) 5rem;
+      }
+
+      .intro-hero-copy {
+        position: relative;
+        z-index: 2;
+        max-width: 43rem;
+      }
+
+      .intro-kicker,
+      .intro-mono {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.68rem;
+        font-weight: 500;
+        letter-spacing: 0.11em;
+        line-height: 1.6;
+      }
+
+      .intro-kicker {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        margin: 0 0 1.2rem;
+        color: var(--eco-700);
+      }
+
+      .intro-kicker > span {
+        color: var(--eco-500);
+        font-size: 0.72rem;
+      }
+
+      .intro-heading,
+      .intro-title {
+        margin: 0;
+        color: var(--ink-900);
+        font-family: "Fraunces", Georgia, serif;
+        font-weight: 500;
+        letter-spacing: -0.045em;
+        text-wrap: balance;
+      }
+
+      .intro-heading {
+        max-width: 12ch;
+        font-size: clamp(3rem, 7.3vw, 6.7rem);
+        line-height: 0.99;
+      }
+
+      .intro-heading em {
+        display: inline;
+        color: var(--eco-700);
+        font-weight: 400;
+      }
+
+      .intro-type-slot {
+        display: block;
+        min-height: 2.2em;
+      }
+
+      .intro-caret {
+        display: inline-block;
+        width: 2px;
+        height: 0.78em;
+        margin-left: 0.12em;
+        background: var(--eco-600);
+        vertical-align: -0.06em;
+        animation: intro-caret-blink 850ms step-end infinite;
+      }
+
+      .intro-lede,
+      .intro-section-copy {
+        max-width: 39rem;
+        color: var(--ink-700);
+        font-size: clamp(0.9rem, 1.2vw, 1.05rem);
+        line-height: 1.85;
+      }
+
+      .intro-lede {
+        margin: 1.5rem 0 0;
+      }
+
+      .intro-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        margin-top: 1.8rem;
+      }
+
+      .intro-button {
+        position: relative;
+        display: inline-flex;
+        min-height: 3rem;
+        align-items: center;
+        justify-content: center;
+        gap: 0.7rem;
+        overflow: hidden;
+        padding: 0.8rem 1.2rem;
+        border: 1px solid transparent;
+        border-radius: 999px;
+        font-size: 0.8rem;
+        font-weight: 700;
+        transition:
+          transform var(--duration-fast) ease,
+          background-color var(--duration-fast) ease,
+          border-color var(--duration-fast) ease,
+          color var(--duration-fast) ease,
+          box-shadow var(--duration-fast) ease;
+      }
+
+      .intro-button::after {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(110deg, transparent 25%, rgba(255, 255, 255, 0.22), transparent 70%);
+        content: "";
+        transform: translateX(-120%);
+        transition: transform 650ms var(--ease-smooth);
+      }
+
+      .intro-button:hover::after {
+        transform: translateX(120%);
+      }
+
+      .intro-button:hover {
+        transform: translateY(-2px);
+      }
+
+      .intro-button:focus-visible,
+      .intro-skip:focus-visible,
+      .intro-back-to-top:focus-visible,
+      .intro-feature-item:focus-visible,
+      .intro-faq-toggle:focus-visible {
+        outline: 3px solid var(--eco-500);
+        outline-offset: 3px;
+      }
+
+      .intro-button-primary {
+        background: var(--ink-900);
+        color: var(--page-bg);
+        box-shadow: var(--shadow-card);
+      }
+
+      .intro-button-primary:hover {
+        background: var(--eco-900);
+        color: #fff;
+      }
+
+      .intro-button-secondary {
+        border-color: var(--line);
+        background: color-mix(in srgb, var(--surface) 75%, transparent);
+        color: var(--ink-900);
+      }
+
+      .intro-button-secondary:hover {
+        border-color: var(--eco-500);
+        color: var(--eco-700);
+      }
+
+      .intro-scroll-link {
+        display: inline-flex;
+        min-height: 2.75rem;
+        align-items: center;
+        gap: 0.5rem;
+        margin-top: 0.8rem;
+        color: var(--ink-500);
+        font-size: 0.72rem;
+        font-weight: 600;
+        text-decoration: underline;
+        text-decoration-color: var(--line);
+        text-underline-offset: 0.28rem;
+      }
+
+      .intro-scroll-link:hover {
+        color: var(--eco-700);
+      }
+
+      .intro-hero-art {
+        position: relative;
+        display: grid;
+        min-height: 26rem;
+        place-items: center;
+        border: 1px solid var(--line);
+        border-radius: 46% 46% 1.8rem 1.8rem;
+        background:
+          radial-gradient(ellipse at 42% 42%, var(--intro-orb-mint), transparent 48%),
+          linear-gradient(145deg, var(--surface), var(--surface-muted));
+        box-shadow: var(--shadow-card);
+      }
+
+      .intro-editorial-note {
+        position: absolute;
+        top: 1.1rem;
+        left: 1.25rem;
+        display: grid;
+        gap: 0.3rem;
+        color: var(--ink-500);
+        font-size: 0.68rem;
+      }
+
+      .intro-editorial-note .intro-mono {
+        color: var(--eco-700);
+        font-size: 0.58rem;
+      }
+
+      .intro-hanger-art {
+        position: relative;
+        display: grid;
+        width: min(78%, 21rem);
+        place-items: center;
+      }
+
+      .intro-hanger-string {
+        position: absolute;
+        top: -1.6rem;
+        left: 50%;
+        width: 1px;
+        height: 3.1rem;
+        background: var(--line);
+      }
+
+      .intro-garment-svg {
+        width: 100%;
+        max-height: 23rem;
+        filter: drop-shadow(0 1.5rem 1rem rgba(17, 24, 39, 0.12));
+      }
+
+      :root {
+        --intro-garment: #c4b39b;
+        --intro-garment-line: #75634e;
+      }
+
+      html[data-theme="dark"] {
+        --intro-garment: #718678;
+        --intro-garment-line: #d3e2d6;
+      }
+
+      .intro-hanger-tag {
+        position: absolute;
+        right: -0.4rem;
+        bottom: 1.25rem;
+        display: grid;
+        min-width: 7.4rem;
+        gap: 0.4rem;
+        padding: 1.35rem 0.85rem 0.75rem;
+        border: 1px dashed var(--intro-sand);
+        background: var(--surface);
+        box-shadow: var(--shadow-card);
+        transform: rotate(7deg);
+      }
+
+      .intro-tag-hole {
+        position: absolute;
+        top: 0.42rem;
+        left: 50%;
+        width: 0.42rem;
+        height: 0.42rem;
+        border: 1px solid var(--intro-sand);
+        border-radius: 50%;
+        background: var(--page-bg);
+        transform: translateX(-50%);
+      }
+
+      .intro-hanger-tag .intro-mono {
+        color: var(--ink-500);
+        font-size: 0.48rem;
+      }
+
+      .intro-hanger-tag strong {
+        color: var(--ink-900);
+        font-family: "Fraunces", Georgia, serif;
+        font-size: 0.9rem;
+        font-weight: 500;
+        line-height: 1.2;
+      }
+
+      .intro-art-caption {
+        position: absolute;
+        right: 1.25rem;
+        bottom: 1rem;
+        left: 1.25rem;
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        color: var(--ink-500);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.55rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .intro-caption-line {
+        width: 1.5rem;
+        height: 1px;
+        background: var(--eco-500);
+      }
+
+      .intro-section {
+        padding: clamp(4.5rem, 9vw, 8rem) 0;
+        border-top: 1px solid var(--line);
+      }
+
+      .intro-section-heading {
+        max-width: 45rem;
+        margin: 0 auto 2.7rem;
+        text-align: center;
+      }
+
+      .intro-section-heading .intro-kicker,
+      .intro-faq-heading .intro-kicker {
+        justify-content: center;
+      }
+
+      .intro-title {
+        font-size: clamp(2.2rem, 4.7vw, 4.1rem);
+        line-height: 1.08;
+      }
+
+      .intro-title-small {
+        font-size: clamp(1.9rem, 3.4vw, 3rem);
+      }
+
+      .intro-section-copy {
+        margin: 0.85rem auto 0;
+        font-size: 0.9rem;
+      }
+
+      .intro-flow-layout {
+        position: relative;
+        display: grid;
+        min-height: 31rem;
+        align-items: center;
+        grid-template-columns: minmax(8rem, 1fr) minmax(18rem, 1.3fr) minmax(8rem, 1fr);
+        gap: 1rem;
+        padding: 1rem 0;
+      }
+
+      .intro-flow-lines {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        width: 100%;
+        height: 100%;
+        overflow: visible;
+        pointer-events: none;
+      }
+
+      .intro-flow-base,
+      .intro-flow-pulse {
+        fill: none;
+        stroke-linecap: round;
+      }
+
+      .intro-flow-base {
+        stroke: var(--line);
+        stroke-width: 1.5;
+      }
+
+      .intro-flow-pulse {
+        stroke: var(--eco-500);
+        stroke-width: 2;
+        stroke-dasharray: 4 22;
+        stroke-dashoffset: 0;
+        opacity: 0;
+      }
+
+      .intro-page.is-active .intro-flow-layout.is-visible .intro-flow-pulse {
+        animation: intro-flow-dash 4.5s linear infinite;
+        opacity: 0.78;
+      }
+
+      .intro-flow-list {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        gap: 1.15rem;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .intro-flow-list li {
+        display: flex;
+        min-height: 2.5rem;
+        align-items: center;
+        justify-content: center;
+        padding: 0.55rem 0.65rem;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--surface);
+        color: var(--ink-700);
+        font-size: 0.68rem;
+        font-weight: 600;
+        text-align: center;
+        box-shadow: var(--shadow-card);
+      }
+
+      .intro-flow-list li::after {
+        width: 0.38rem;
+        height: 0.38rem;
+        margin-left: 0.45rem;
+        border: 1.5px solid var(--eco-600);
+        border-top: 0;
+        border-left: 0;
+        content: "";
+        opacity: 0;
+        transform: scale(0.5) rotate(45deg);
+      }
+
+      .intro-page.is-active .intro-flow-layout.is-visible .intro-flow-list li::after {
+        animation: intro-check-pop 450ms var(--ease-smooth) both;
+      }
+
+      .intro-flow-sources li:nth-child(1)::after { animation-delay: 250ms; }
+      .intro-flow-sources li:nth-child(2)::after { animation-delay: 400ms; }
+      .intro-flow-sources li:nth-child(3)::after { animation-delay: 550ms; }
+      .intro-flow-sources li:nth-child(4)::after { animation-delay: 700ms; }
+      .intro-flow-sources li:nth-child(5)::after { animation-delay: 850ms; }
+      .intro-flow-outcomes li:nth-child(1)::after { animation-delay: 1s; }
+      .intro-flow-outcomes li:nth-child(2)::after { animation-delay: 1.15s; }
+      .intro-flow-outcomes li:nth-child(3)::after { animation-delay: 1.3s; }
+      .intro-flow-outcomes li:nth-child(4)::after { animation-delay: 1.45s; }
+      .intro-flow-outcomes li:nth-child(5)::after { animation-delay: 1.6s; }
+
+      .intro-flow-core {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        min-height: 20rem;
+        place-items: center;
+      }
+
+      .intro-diamond-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 6.25rem);
+        gap: 1.15rem;
+      }
+
+      .intro-diamond {
+        display: grid;
+        width: 6.25rem;
+        aspect-ratio: 1;
+        place-items: center;
+        border: 1px solid color-mix(in srgb, var(--eco-600) 35%, var(--line));
+        border-radius: 1.05rem;
+        background: color-mix(in srgb, var(--surface) 78%, var(--eco-100));
+        box-shadow: var(--shadow-card);
+        transform: rotate(45deg);
+      }
+
+      .intro-diamond span {
+        color: var(--eco-900);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.49rem;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+        text-align: center;
+        transform: rotate(-45deg);
+      }
+
+      html[data-theme="dark"] .intro-diamond {
+        background: color-mix(in srgb, var(--surface) 75%, var(--eco-900));
+      }
+
+      html[data-theme="dark"] .intro-diamond span {
+        color: #c1f3db;
+      }
+
+      .intro-loop-mark {
+        position: absolute;
+        z-index: 2;
+        display: grid;
+        width: 4.2rem;
+        aspect-ratio: 1;
+        place-items: center;
+        border: 1px solid var(--line);
+        border-radius: 50%;
+        background: var(--surface);
+        box-shadow: var(--shadow-float);
+      }
+
+      .intro-loop-mark svg {
+        width: 2rem;
+        height: 2rem;
+        stroke: var(--eco-700);
+        stroke-width: 1.6;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .intro-page.is-active .intro-flow-layout.is-visible .intro-loop-mark svg {
+        animation: intro-slow-spin 18s linear infinite;
+      }
+
+      .intro-step-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: clamp(1rem, 2.5vw, 2rem);
+      }
+
+      .intro-step-card {
+        --tag-accent: var(--intro-sage);
+        position: relative;
+        padding: 1rem 1rem 0;
+        border: 1px dashed var(--line);
+        border-top: 3px solid var(--tag-accent);
+        border-radius: 1.1rem 1.1rem 1.6rem 1.6rem;
+        background: var(--surface);
+        box-shadow: var(--shadow-card);
+        opacity: 1;
+      }
+
+      .intro-step-card:nth-child(2) { --tag-accent: var(--intro-clay); }
+      .intro-step-card:nth-child(3) { --tag-accent: var(--intro-lavender); }
+
+      .intro-step-card::before {
+        position: absolute;
+        top: -1.1rem;
+        left: 50%;
+        width: 1px;
+        height: 1.1rem;
+        background: var(--tag-accent);
+        content: "";
+      }
+
+      .intro-step-card::after {
+        position: absolute;
+        top: 0.55rem;
+        left: 50%;
+        width: 0.48rem;
+        aspect-ratio: 1;
+        border: 1px solid var(--tag-accent);
+        border-radius: 50%;
+        background: var(--page-bg);
+        content: "";
+        transform: translateX(-50%);
+      }
+
+      .intro-step-mockup {
+        position: relative;
+        min-height: 15.5rem;
+        overflow: hidden;
+        padding: 1rem;
+        border: 1px solid var(--line);
+        border-radius: 0.8rem;
+        background: var(--surface-muted);
+      }
+
+      .intro-mockup-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+      }
+
+      .intro-mockup-top .intro-mono {
+        color: var(--ink-500);
+        font-size: 0.55rem;
+      }
+
+      .intro-mockup-dot,
+      .intro-order-status {
+        width: 0.42rem;
+        height: 0.42rem;
+        border-radius: 50%;
+        background: var(--eco-500);
+      }
+
+      .intro-upload-stage {
+        position: relative;
+        display: grid;
+        min-height: 11.6rem;
+        margin-top: 0.8rem;
+        place-items: center;
+        overflow: hidden;
+        border: 1px dashed color-mix(in srgb, var(--tag-accent) 60%, var(--line));
+        border-radius: 0.65rem;
+        background: color-mix(in srgb, var(--surface) 75%, transparent);
+      }
+
+      .intro-upload-garment {
+        width: 6rem;
+        opacity: 0.86;
+      }
+
+      .intro-upload-garment svg {
+        width: 100%;
+        filter: drop-shadow(0 0.7rem 0.5rem rgba(17, 24, 39, 0.12));
+      }
+
+      .intro-upload-hint {
+        position: absolute;
+        right: 0.5rem;
+        bottom: 0.5rem;
+        left: 0.5rem;
+        color: var(--ink-500);
+        font-size: 0.56rem;
+        text-align: center;
+      }
+
+      .intro-scan-line {
+        position: absolute;
+        top: 1rem;
+        right: 0;
+        left: 0;
+        height: 2px;
+        background: linear-gradient(90deg, transparent, var(--eco-500), transparent);
+        box-shadow: 0 0 0.7rem var(--eco-500);
+        opacity: 0;
+      }
+
+      .intro-page.is-active .intro-step-card.is-inview .intro-scan-line {
+        animation: intro-scan 3.2s ease-in-out infinite;
+      }
+
+      .intro-upload-cursor {
+        position: absolute;
+        z-index: 1;
+        top: 42%;
+        left: 68%;
+        width: 0.85rem;
+        height: 1.05rem;
+        border: 1px solid var(--ink-900);
+        background: var(--surface);
+        clip-path: polygon(0 0, 100% 65%, 60% 70%, 78% 100%, 60% 100%, 42% 74%, 22% 100%);
+        opacity: 0;
+      }
+
+      .intro-page.is-active .intro-step-card.is-inview .intro-upload-cursor {
+        animation: intro-drag 4s ease-in-out infinite;
+      }
+
+      .intro-step-meta {
+        display: flex;
+        align-items: baseline;
+        gap: 0.8rem;
+        margin: 1.1rem 0 0.55rem;
+        color: var(--tag-accent);
+      }
+
+      .intro-step-number {
+        font-family: "Fraunces", Georgia, serif;
+        font-size: 1.8rem;
+        line-height: 1;
+      }
+
+      .intro-step-meta .intro-mono {
+        font-size: 0.58rem;
+      }
+
+      .intro-step-card h3 {
+        margin: 0;
+        color: var(--ink-900);
+        font-family: "Fraunces", Georgia, serif;
+        font-size: 1.3rem;
+        font-weight: 500;
+        line-height: 1.2;
+      }
+
+      .intro-step-card > p {
+        min-height: 4.1rem;
+        margin: 0.6rem 0 1.15rem;
+        color: var(--ink-500);
+        font-size: 0.73rem;
+        line-height: 1.7;
+      }
+
+      .intro-condition {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin: 1.3rem 0 1rem;
+      }
+
+      .intro-condition > div:first-child {
+        display: grid;
+        gap: 0.25rem;
+      }
+
+      .intro-condition .intro-mono {
+        color: var(--ink-500);
+        font-size: 0.54rem;
+      }
+
+      .intro-condition strong {
+        color: var(--ink-900);
+        font-family: "Fraunces", Georgia, serif;
+        font-size: 2.3rem;
+        font-weight: 500;
+      }
+
+      .intro-condition strong small {
+        font-size: 1rem;
+      }
+
+      .intro-condition-ring {
+        display: grid;
+        width: 4.2rem;
+        aspect-ratio: 1;
+        place-items: center;
+        border: 0.3rem solid color-mix(in srgb, var(--tag-accent) 24%, var(--line));
+        border-top-color: var(--tag-accent);
+        border-right-color: var(--tag-accent);
+        border-radius: 50%;
+        transform: rotate(25deg);
+      }
+
+      .intro-chip-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+      }
+
+      .intro-chip-row span {
+        padding: 0.32rem 0.5rem;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--ink-500);
+        font-size: 0.52rem;
+      }
+
+      .intro-suggested-price {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        margin-top: 1rem;
+        padding-top: 0.7rem;
+        border-top: 1px solid var(--line);
+        color: var(--ink-500);
+        font-size: 0.6rem;
+      }
+
+      .intro-suggested-price strong {
+        color: var(--ink-900);
+        font-family: "Fraunces", Georgia, serif;
+        font-size: 1.1rem;
+        font-weight: 500;
+      }
+
+      .intro-mockup-footnote {
+        margin: 0.55rem 0 0;
+        color: var(--ink-500);
+        font-size: 0.5rem;
+      }
+
+      .intro-score-label,
+      .intro-order-status {
+        width: auto;
+        height: auto;
+        padding: 0.24rem 0.42rem;
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--eco-500) 16%, var(--surface));
+        color: var(--eco-700);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.48rem;
+      }
+
+      .intro-order-line {
+        display: flex;
+        align-items: center;
+        gap: 0.7rem;
+        margin-top: 1.4rem;
+        padding: 0.7rem;
+        border: 1px solid var(--line);
+        border-radius: 0.6rem;
+        background: var(--surface);
+      }
+
+      .intro-order-garment {
+        display: grid;
+        width: 3rem;
+        height: 3.2rem;
+        flex: 0 0 auto;
+        place-items: center;
+        border-radius: 0.45rem;
+        background: var(--surface-muted);
+      }
+
+      .intro-order-garment svg {
+        width: 2rem;
+      }
+
+      .intro-order-line > div {
+        display: grid;
+        gap: 0.2rem;
+      }
+
+      .intro-order-line strong {
+        color: var(--ink-900);
+        font-size: 0.61rem;
+      }
+
+      .intro-order-line > div > span {
+        color: var(--ink-500);
+        font-size: 0.5rem;
+      }
+
+      .intro-points-badge {
+        display: flex;
+        width: fit-content;
+        align-items: center;
+        gap: 0.35rem;
+        margin: 0.7rem auto;
+        padding: 0.45rem 0.7rem;
+        border: 1px solid color-mix(in srgb, var(--eco-500) 30%, var(--line));
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--eco-500) 12%, var(--surface));
+        color: var(--eco-700);
+        font-size: 0.58rem;
+        font-weight: 700;
+      }
+
+      .intro-points-badge svg {
+        width: 0.8rem;
+        height: 0.8rem;
+        stroke: currentColor;
+        stroke-width: 1.7;
+      }
+
+      .intro-page.is-active .intro-step-card.is-inview .intro-points-badge {
+        animation: intro-badge-pop 3.5s ease-in-out infinite;
+      }
+
+      .intro-resell-button {
+        display: block;
+        width: 100%;
+        min-height: 2.1rem;
+        border: 1px solid var(--tag-accent);
+        border-radius: 0.55rem;
+        background: transparent;
+        color: var(--ink-700);
+        font-size: 0.58rem;
+        font-weight: 700;
+      }
+
+      .intro-explainer-grid {
+        display: grid;
+        grid-template-columns: 1fr 0.9fr;
+        gap: clamp(1.5rem, 5vw, 4rem);
+      }
+
+      .intro-explainer-card,
+      .intro-points-card {
+        padding: clamp(1.2rem, 3vw, 2.4rem);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-card);
+        background: var(--surface);
+        box-shadow: var(--shadow-card);
+      }
+
+      .intro-explainer-card .intro-kicker,
+      .intro-points-card .intro-kicker {
+        font-size: 0.59rem;
+      }
+
+      .intro-lifecycle {
+        display: grid;
+        gap: 1.15rem;
+        margin-top: 1.5rem;
+      }
+
+      .intro-linear,
+      .intro-circular {
+        position: relative;
+        padding: 0.9rem 0.75rem;
+        border: 1px solid var(--line);
+        border-radius: 0.8rem;
+        background: var(--surface-muted);
+      }
+
+      .intro-linear > .intro-mono,
+      .intro-circular > .intro-mono {
+        color: var(--ink-500);
+        font-size: 0.55rem;
+      }
+
+      .intro-linear > div {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.4rem;
+        margin-top: 0.85rem;
+        color: var(--ink-700);
+        font-size: 0.62rem;
+      }
+
+      .intro-linear i {
+        width: 1.35rem;
+        height: 1px;
+        background: var(--ink-500);
+        opacity: 0.45;
+      }
+
+      .intro-circular {
+        min-height: 8rem;
+        overflow: hidden;
+      }
+
+      .intro-circular svg {
+        position: absolute;
+        top: 1.5rem;
+        left: 0.5rem;
+        width: calc(100% - 1rem);
+        height: 5rem;
+        overflow: visible;
+        color: var(--eco-600);
+        stroke: currentColor;
+        stroke-width: 1.5;
+      }
+
+      .intro-circular-path {
+        stroke-dasharray: 500;
+        stroke-dashoffset: 500;
+      }
+
+      .intro-page.is-active .intro-circular.is-visible .intro-circular-path {
+        animation: intro-path-draw 1.8s var(--ease-smooth) forwards;
+      }
+
+      .intro-circular-labels {
+        position: absolute;
+        right: 0.75rem;
+        bottom: 0.55rem;
+        left: 0.75rem;
+        display: flex;
+        justify-content: space-between;
+        color: var(--ink-700);
+        font-size: 0.53rem;
+      }
+
+      .intro-points-table {
+        display: grid;
+        margin-top: 1.1rem;
+        border-top: 1px solid var(--line);
+      }
+
+      .intro-points-table > div {
+        display: flex;
+        min-height: 2.6rem;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.6rem;
+        border-bottom: 1px solid var(--line);
+        color: var(--ink-700);
+        font-size: 0.65rem;
+      }
+
+      .intro-points-table strong {
+        color: var(--eco-700);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.62rem;
+        white-space: nowrap;
+      }
+
+      .intro-donation-note {
+        display: grid;
+        gap: 0.25rem;
+        margin-top: 1rem;
+        padding: 0.85rem;
+        border: 1px solid color-mix(in srgb, var(--eco-500) 28%, var(--line));
+        border-radius: 0.75rem;
+        background: color-mix(in srgb, var(--eco-500) 8%, var(--surface));
+      }
+
+      .intro-donation-note .intro-mono {
+        color: var(--eco-700);
+        font-size: 0.53rem;
+      }
+
+      .intro-donation-note strong {
+        color: var(--ink-900);
+        font-family: "Fraunces", Georgia, serif;
+        font-size: 1.35rem;
+        font-weight: 500;
+      }
+
+      .intro-donation-note > span:last-child,
+      .intro-data-note {
+        color: var(--ink-500);
+        font-size: 0.62rem;
+        line-height: 1.6;
+      }
+
+      .intro-data-note {
+        margin: 0.7rem 0 0;
+      }
+
+      .intro-feature-layout {
+        display: grid;
+        grid-template-columns: minmax(15rem, 0.85fr) minmax(0, 1.15fr);
+        gap: clamp(1.3rem, 4vw, 3.5rem);
+        align-items: stretch;
+      }
+
+      .intro-feature-list {
+        display: grid;
+        align-content: start;
+        border-top: 1px solid var(--line);
+      }
+
+      .intro-feature-item {
+        position: relative;
+        display: grid;
+        min-height: 3.6rem;
+        align-items: center;
+        grid-template-columns: 2.4rem 1fr;
+        gap: 0.6rem;
+        overflow: hidden;
+        padding: 0.65rem 0.45rem;
+        border-bottom: 1px solid var(--line);
+        background: transparent;
+        color: var(--ink-500);
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .intro-feature-item.is-active {
+        color: var(--ink-900);
+      }
+
+      .intro-feature-number {
+        color: var(--intro-sage);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.65rem;
+      }
+
+      .intro-feature-label {
+        font-size: 0.77rem;
+        font-weight: 600;
+      }
+
+      .intro-feature-progress {
+        position: absolute;
+        right: 0;
+        bottom: -1px;
+        left: 0;
+        height: 2px;
+        background: transparent;
+      }
+
+      .intro-feature-progress i {
+        display: block;
+        width: 100%;
+        height: 100%;
+        background: var(--eco-500);
+        transform: scaleX(0);
+        transform-origin: left center;
+      }
+
+      .intro-feature-item.is-active .intro-feature-progress i {
+        transform: scaleX(1);
+        transition: transform 5s linear;
+      }
+
+      .intro-feature-panel {
+        display: flex;
+        min-height: 24rem;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: clamp(1.3rem, 3vw, 2.3rem);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-card);
+        background:
+          radial-gradient(ellipse at 90% 15%, var(--intro-orb-mint), transparent 40%),
+          var(--surface-muted);
+        opacity: 1;
+        transition: opacity var(--duration-ui) ease;
+      }
+
+      .intro-feature-panel.is-changing {
+        opacity: 0.2;
+      }
+
+      .intro-feature-panel-copy .intro-mono {
+        color: var(--eco-700);
+        font-size: 0.56rem;
+      }
+
+      .intro-feature-panel-copy h3 {
+        max-width: 20rem;
+        margin: 0.8rem 0 0.45rem;
+        color: var(--ink-900);
+        font-family: "Fraunces", Georgia, serif;
+        font-size: clamp(1.6rem, 2.8vw, 2.3rem);
+        font-weight: 500;
+        line-height: 1.1;
+      }
+
+      .intro-feature-panel-copy p {
+        max-width: 28rem;
+        margin: 0;
+        color: var(--ink-500);
+        font-size: 0.73rem;
+        line-height: 1.7;
+      }
+
+      .intro-feature-preview {
+        display: flex;
+        min-height: 8rem;
+        align-items: center;
+        justify-content: center;
+        gap: 0.8rem;
+        margin-top: 1.5rem;
+        border: 1px dashed var(--line);
+        border-radius: 1rem;
+        background: color-mix(in srgb, var(--surface) 82%, transparent);
+        color: var(--ink-500);
+      }
+
+      .intro-feature-preview .intro-mono {
+        font-size: 0.56rem;
+      }
+
+      .intro-feature-preview-ring {
+        display: grid;
+        width: 4rem;
+        aspect-ratio: 1;
+        place-items: center;
+        border: 0.28rem solid var(--eco-500);
+        border-left-color: color-mix(in srgb, var(--eco-500) 25%, transparent);
+        border-radius: 50%;
+        color: var(--ink-900);
+        font-family: "Fraunces", Georgia, serif;
+        font-size: 1.15rem;
+      }
+
+      .intro-preview-pills {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        padding: 0 1rem;
+      }
+
+      .intro-preview-pills span {
+        padding: 0.4rem 0.6rem;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--ink-700);
+        font-size: 0.58rem;
+      }
+
+      .intro-stats-section {
+        padding-top: 3.5rem;
+        padding-bottom: 3.5rem;
+      }
+
+      .intro-stats-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        border-top: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+      }
+
+      .intro-stat {
+        min-height: 11rem;
+        padding: 1.7rem 1.2rem;
+        border-right: 1px solid var(--line);
+        opacity: 1;
+      }
+
+      .intro-stat:last-child {
+        border-right: 0;
+      }
+
+      .intro-stat strong {
+        display: block;
+        color: var(--ink-900);
+        font-family: "Fraunces", Georgia, serif;
+        font-size: clamp(2rem, 4vw, 3.3rem);
+        font-weight: 500;
+        letter-spacing: -0.04em;
+        line-height: 1;
+      }
+
+      .intro-stat .intro-mono {
+        display: block;
+        min-height: 2.2rem;
+        margin-top: 0.7rem;
+        color: var(--eco-700);
+        font-size: 0.55rem;
+      }
+
+      .intro-stat p {
+        max-width: 14rem;
+        margin: 0.2rem 0 0;
+        color: var(--ink-500);
+        font-size: 0.63rem;
+        line-height: 1.6;
+      }
+
+      .intro-marquee-section {
+        overflow: hidden;
+        padding: 2.5rem 0 3rem;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .intro-marquee-section > .intro-kicker {
+        justify-content: center;
+      }
+
+      .intro-marquee {
+        overflow: hidden;
+        padding: 0.6rem 0;
+      }
+
+      .intro-marquee-track {
+        display: flex;
+        width: max-content;
+        align-items: center;
+        gap: clamp(1.2rem, 3vw, 2.7rem);
+        color: var(--ink-700);
+        font-family: "Fraunces", Georgia, serif;
+        font-size: clamp(1.4rem, 3vw, 2.3rem);
+        font-style: italic;
+        white-space: nowrap;
+      }
+
+      .intro-marquee-track i {
+        width: 0.38rem;
+        height: 0.38rem;
+        border: 1px solid var(--intro-sage);
+        transform: rotate(45deg);
+      }
+
+      .intro-page.is-active .intro-marquee-track {
+        animation: intro-marquee-scroll 36s linear infinite;
+      }
+
+      .intro-marquee:hover .intro-marquee-track {
+        animation-play-state: paused;
+      }
+
+      .intro-faq-section {
+        display: grid;
+        grid-template-columns: minmax(14rem, 0.7fr) minmax(0, 1.3fr);
+        gap: clamp(2rem, 7vw, 7rem);
+      }
+
+      .intro-faq-heading {
+        position: sticky;
+        top: 8rem;
+        align-self: start;
+      }
+
+      .intro-faq-heading .intro-kicker {
+        justify-content: flex-start;
+      }
+
+      .intro-faq-heading .intro-section-copy {
+        margin-left: 0;
+      }
+
+      .intro-faq-list {
+        border-top: 1px solid var(--line);
+      }
+
+      .intro-faq-item {
+        border-bottom: 1px solid var(--line);
+      }
+
+      .intro-faq-item h3 {
+        margin: 0;
+      }
+
+      .intro-faq-toggle {
+        display: flex;
+        width: 100%;
+        min-height: 4rem;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 0.8rem 0;
+        background: transparent;
+        color: var(--ink-900);
+        font-family: "Fraunces", Georgia, serif;
+        font-size: 1.08rem;
+        font-weight: 500;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .intro-faq-toggle > span {
+        position: relative;
+        width: 1.2rem;
+        height: 1.2rem;
+        flex: 0 0 auto;
+      }
+
+      .intro-faq-toggle > span::before,
+      .intro-faq-toggle > span::after {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 0.8rem;
+        height: 1px;
+        background: var(--eco-700);
+        content: "";
+        transform: translate(-50%, -50%);
+        transition: transform var(--duration-fast) ease;
+      }
+
+      .intro-faq-toggle > span::after {
+        transform: translate(-50%, -50%) rotate(90deg);
+      }
+
+      .intro-faq-toggle[aria-expanded="true"] > span::after {
+        transform: translate(-50%, -50%) rotate(0);
+      }
+
+      .intro-faq-panel {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 320ms var(--ease-smooth);
+      }
+
+      .intro-faq-panel > div {
+        padding: 0 2rem 1.2rem 0;
+        color: var(--ink-500);
+        font-size: 0.76rem;
+        line-height: 1.8;
+      }
+
+      .intro-faq-panel p {
+        margin: 0;
+      }
+
+      .intro-placeholder {
+        padding: 0.65rem 0.8rem;
+        border-left: 2px solid var(--intro-clay);
+        background: color-mix(in srgb, var(--intro-clay) 10%, var(--surface));
+        color: var(--ink-700);
+      }
+
+      .intro-final-cta {
+        display: grid;
+        justify-items: center;
+        padding: clamp(3rem, 8vw, 6rem) clamp(1.2rem, 5vw, 4rem);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-card);
+        background:
+          radial-gradient(ellipse at 20% 5%, var(--intro-orb-mint), transparent 38%),
+          radial-gradient(ellipse at 90% 100%, var(--intro-orb-peach), transparent 38%),
+          var(--surface-muted);
+        text-align: center;
+      }
+
+      .intro-final-cta .intro-title {
+        max-width: 17ch;
+      }
+
+      .intro-final-cta > p:not(.intro-kicker) {
+        margin: 0.85rem 0 0;
+        color: var(--ink-500);
+        font-size: 0.8rem;
+      }
+
+      .intro-actions-center {
+        justify-content: center;
+      }
+
+      .intro-footer {
+        display: grid;
+        grid-template-columns: 1.5fr repeat(4, 1fr);
+        gap: clamp(1rem, 3vw, 2.2rem);
+        margin-top: 4rem;
+        padding: 2.2rem 0 1.2rem;
+        border-top: 1px solid var(--line);
+      }
+
+      .intro-footer-brand {
+        max-width: 15rem;
+      }
+
+      .intro-footer-logo {
+        color: var(--ink-900);
+        font-family: "Fraunces", Georgia, serif;
+        font-size: 1.6rem;
+        font-weight: 600;
+        letter-spacing: -0.06em;
+      }
+
+      .intro-footer-brand p {
+        margin: 0.5rem 0 0;
+        color: var(--ink-500);
+        font-size: 0.66rem;
+        line-height: 1.7;
+      }
+
+      .intro-footer-column {
+        display: flex;
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 0.55rem;
+      }
+
+      .intro-footer-column .intro-mono {
+        margin-bottom: 0.25rem;
+        color: var(--eco-700);
+        font-size: 0.53rem;
+      }
+
+      .intro-footer-column a,
+      .intro-footer-column button,
+      .intro-placeholder-link {
+        padding: 0;
+        background: transparent;
+        color: var(--ink-500);
+        font-size: 0.65rem;
+        text-align: left;
+      }
+
+      .intro-footer-column a:hover,
+      .intro-footer-column button:hover {
+        color: var(--eco-700);
+      }
+
+      .intro-footer-bottom {
+        grid-column: 1 / -1;
+        margin: 0.8rem 0 0;
+        padding-top: 1rem;
+        border-top: 1px solid var(--line);
+        color: var(--ink-500);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.55rem;
+      }
+
+      .intro-back-to-top {
+        position: fixed;
+        z-index: 38;
+        right: 1.25rem;
+        bottom: 6.2rem;
+        display: grid;
+        width: 2.8rem;
+        min-height: 2.8rem;
+        place-items: center;
+        border: 1px solid var(--line);
+        border-radius: 50%;
+        background: var(--surface);
+        color: var(--ink-900);
+        box-shadow: var(--shadow-float);
+        transition:
+          transform var(--duration-fast) ease,
+          color var(--duration-fast) ease;
+      }
+
+      .intro-back-to-top:hover {
+        color: var(--eco-700);
+        transform: translateY(-3px);
+      }
+
+      .intro-back-to-top svg {
+        width: 1.1rem;
+        height: 1.1rem;
+      }
+
+      .intro-page.intro-reveal-ready [data-intro-reveal]:not(.is-visible) {
+        opacity: 0;
+        transform: translateY(1rem);
+      }
+
+      .intro-page [data-intro-reveal] {
+        transition:
+          opacity var(--duration-reveal) var(--ease-smooth),
+          transform var(--duration-reveal) var(--ease-smooth);
+      }
+
+      .intro-page [data-intro-reveal].is-visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      .intro-step-card:nth-child(2)[data-intro-reveal] {
+        transition-delay: 90ms;
+      }
+
+      .intro-step-card:nth-child(3)[data-intro-reveal] {
+        transition-delay: 180ms;
+      }
+
+      .intro-feature-list,
+      .intro-feature-panel,
+      .intro-faq-list {
+        --intro-panel-bg: var(--surface);
+      }
+
+      html[data-theme="dark"] .intro-page {
+        color: var(--ink-900);
+      }
+
+      html[data-theme="dark"] .intro-flow-list li,
+      html[data-theme="dark"] .intro-feature-panel,
+      html[data-theme="dark"] .intro-step-card,
+      html[data-theme="dark"] .intro-explainer-card,
+      html[data-theme="dark"] .intro-points-card,
+      html[data-theme="dark"] .intro-skip,
+      html[data-theme="dark"] .intro-back-to-top {
+        border-color: var(--line);
+      }
+
+      html[data-theme="dark"] .intro-flow-list li,
+      html[data-theme="dark"] .intro-skip,
+      html[data-theme="dark"] .intro-back-to-top {
+        background-color: var(--surface);
+        color: var(--ink-900);
+      }
+
+      html[data-theme="dark"] .intro-hanger-tag,
+      html[data-theme="dark"] .intro-explainer-card,
+      html[data-theme="dark"] .intro-points-card,
+      html[data-theme="dark"] .intro-step-card {
+        background-color: var(--surface);
+      }
+
+      html[data-theme="dark"] .intro-donation-note,
+      html[data-theme="dark"] .intro-points-badge {
+        color: #c1f3db;
+      }
+
+      @media (max-width: 900px) {
+        .intro-hero {
+          min-height: auto;
+          grid-template-columns: 1fr 0.8fr;
+          gap: 2rem;
+          padding-top: 6.5rem;
+        }
+
+        .intro-heading {
+          font-size: clamp(3rem, 8vw, 5rem);
+        }
+
+        .intro-hero-art {
+          min-height: 22rem;
+        }
+
+        .intro-flow-layout {
+          grid-template-columns: minmax(7rem, 1fr) minmax(15rem, 1.3fr) minmax(7rem, 1fr);
+          gap: 0.55rem;
+        }
+
+        .intro-flow-list li {
+          font-size: 0.59rem;
+        }
+
+        .intro-diamond-grid {
+          grid-template-columns: repeat(2, 5rem);
+          gap: 1rem;
+        }
+
+        .intro-diamond {
+          width: 5rem;
+        }
+
+        .intro-diamond span {
+          font-size: 0.42rem;
+        }
+
+        .intro-footer {
+          grid-template-columns: repeat(4, 1fr);
+        }
+
+        .intro-footer-brand {
+          grid-column: 1 / -1;
+        }
+      }
+
+      @media (max-width: 640px) {
+        .intro-page {
+          overflow: clip;
+        }
+
+        .intro-skip {
+          top: 5rem;
+          right: 0.75rem;
+          min-height: 2.5rem;
+          padding: 0.55rem 0.7rem;
+          font-size: 0.62rem;
+        }
+
+        .intro-hero {
+          grid-template-columns: 1fr;
+          gap: 2rem;
+          padding: 5.5rem 0 3.5rem;
+        }
+
+        .intro-heading {
+          max-width: 11ch;
+          font-size: clamp(3rem, 14vw, 4.5rem);
+        }
+
+        .intro-type-slot {
+          min-height: 3em;
+        }
+
+        .intro-lede {
+          max-width: 34rem;
+          font-size: 0.84rem;
+        }
+
+        .intro-actions {
+          align-items: stretch;
+          flex-direction: column;
+        }
+
+        .intro-button {
+          width: 100%;
+        }
+
+        .intro-hero-art {
+          width: min(100%, 23rem);
+          min-height: 21rem;
+          justify-self: center;
+        }
+
+        .intro-section {
+          padding: 4rem 0;
+        }
+
+        .intro-section-heading {
+          margin-bottom: 2rem;
+          text-align: left;
+        }
+
+        .intro-section-heading .intro-kicker {
+          justify-content: flex-start;
+        }
+
+        .intro-section-copy {
+          margin-left: 0;
+          font-size: 0.8rem;
+        }
+
+        .intro-flow-layout {
+          min-height: auto;
+          grid-template-columns: 1fr;
+          gap: 1rem;
+        }
+
+        .intro-flow-lines {
+          display: none;
+        }
+
+        .intro-flow-list {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 0.55rem;
+        }
+
+        .intro-flow-sources li:last-child,
+        .intro-flow-outcomes li:last-child {
+          grid-column: 1 / -1;
+        }
+
+        .intro-flow-core {
+          min-height: 15rem;
+          order: 0;
+        }
+
+        .intro-flow-sources { order: -1; }
+        .intro-flow-outcomes { order: 1; }
+
+        .intro-flow-list li {
+          min-height: 2.7rem;
+          font-size: 0.65rem;
+        }
+
+        .intro-diamond-grid {
+          grid-template-columns: repeat(2, 4.2rem);
+          gap: 1rem;
+        }
+
+        .intro-diamond {
+          width: 4.2rem;
+          border-radius: 0.7rem;
+        }
+
+        .intro-diamond span {
+          font-size: 0.37rem;
+        }
+
+        .intro-loop-mark {
+          width: 3.1rem;
+        }
+
+        .intro-loop-mark svg {
+          width: 1.5rem;
+        }
+
+        .intro-step-grid,
+        .intro-explainer-grid,
+        .intro-feature-layout {
+          grid-template-columns: 1fr;
+        }
+
+        .intro-step-grid {
+          gap: 2rem;
+          padding-top: 0.9rem;
+        }
+
+        .intro-step-card > p {
+          min-height: 0;
+        }
+
+        .intro-feature-layout {
+          gap: 1.2rem;
+        }
+
+        .intro-feature-item {
+          min-height: 3.2rem;
+        }
+
+        .intro-feature-panel {
+          min-height: 20rem;
+        }
+
+        .intro-stats-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .intro-stat {
+          min-height: 9.5rem;
+          padding: 1.2rem 0.8rem;
+        }
+
+        .intro-stat:nth-child(2) {
+          border-right: 0;
+        }
+
+        .intro-stat:nth-child(-n + 2) {
+          border-bottom: 1px solid var(--line);
+        }
+
+        .intro-stat .intro-mono {
+          min-height: 2rem;
+          font-size: 0.49rem;
+        }
+
+        .intro-stat p {
+          font-size: 0.58rem;
+        }
+
+        .intro-faq-section {
+          grid-template-columns: 1fr;
+          gap: 1.5rem;
+        }
+
+        .intro-faq-heading {
+          position: static;
+        }
+
+        .intro-faq-toggle {
+          min-height: 3.7rem;
+          font-size: 0.98rem;
+        }
+
+        .intro-footer {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 1.6rem 1rem;
+        }
+
+        .intro-footer-brand {
+          grid-column: 1 / -1;
+        }
+
+        .intro-footer-bottom {
+          font-size: 0.49rem;
+        }
+
+        .intro-back-to-top {
+          right: 0.85rem;
+          bottom: 6rem;
+          width: 2.65rem;
+          min-height: 2.65rem;
+        }
+      }
+
+      @keyframes intro-orb-breathe {
+        from { transform: translate3d(var(--pointer-x, 0px), var(--pointer-y, 0px), 0) scale(0.94); }
+        to { transform: translate3d(calc(var(--pointer-x, 0px) + 10px), calc(var(--pointer-y, 0px) - 8px), 0) scale(1.06); }
+      }
+
+      @keyframes intro-caret-blink {
+        50% { opacity: 0; }
+      }
+
+      @keyframes intro-flow-dash {
+        to { stroke-dashoffset: -130; }
+      }
+
+      @keyframes intro-check-pop {
+        0% { opacity: 0; transform: scale(0.5) rotate(45deg); }
+        70% { opacity: 1; transform: scale(1.2) rotate(45deg); }
+        100% { opacity: 1; transform: scale(1) rotate(45deg); }
+      }
+
+      @keyframes intro-slow-spin {
+        to { transform: rotate(360deg); }
+      }
+
+      @keyframes intro-scan {
+        0% { opacity: 0; transform: translateY(0); }
+        20%, 80% { opacity: 1; }
+        100% { opacity: 0; transform: translateY(10rem); }
+      }
+
+      @keyframes intro-drag {
+        0%, 15% { opacity: 0; transform: translate(-1.5rem, 1rem); }
+        35%, 65% { opacity: 1; transform: translate(-0.2rem, 0); }
+        85%, 100% { opacity: 0; transform: translate(0.8rem, 0.6rem); }
+      }
+
+      @keyframes intro-badge-pop {
+        0%, 75%, 100% { transform: scale(1); }
+        82% { transform: scale(1.06); }
+        89% { transform: scale(0.98); }
+      }
+
+      @keyframes intro-path-draw {
+        to { stroke-dashoffset: 0; }
+      }
+
+      @keyframes intro-marquee-scroll {
+        to { transform: translateX(-50%); }
       }
 
       @keyframes scanLine {
@@ -1181,6 +3104,21 @@
           opacity: 1;
           transform: none;
         }
+
+        .intro-page [data-intro-reveal],
+        .intro-page.intro-reveal-ready [data-intro-reveal]:not(.is-visible) {
+          opacity: 1;
+          transform: none;
+        }
+
+        .intro-page .intro-marquee-track {
+          animation: none !important;
+          transform: none;
+        }
+
+        .intro-page .intro-caret {
+          display: none;
+        }
       }
     </style>
   </head>
@@ -1198,7 +3136,7 @@
           <a
             href="#"
             onclick="
-              switchTab('store');
+              switchTab('intro');
               return false;
             "
             class="header-logo flex items-center gap-2.5 shrink-0"
@@ -1238,7 +3176,7 @@
             <button
               onclick="switchTab('store')"
               data-tab="store"
-              class="nav-tab whitespace-nowrap px-0.5 md:px-1 lg:px-2 py-2 rounded-xl text-[10px] lg:text-xs font-semibold transition bg-white text-ink-900 shadow-sm"
+              class="nav-tab whitespace-nowrap px-0.5 md:px-1 lg:px-2 py-2 rounded-xl text-[10px] lg:text-xs font-medium text-ink-700 hover:text-ink-900 transition"
             >
               Khám phá
             </button>
@@ -1546,7 +3484,7 @@
           <button
             onclick="switchTab('store')"
             data-tab="store"
-            class="nav-tab shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold bg-eco-600 text-white"
+            class="nav-tab shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-100 text-ink-700"
           >
             Khám phá
           </button>
@@ -1598,10 +3536,518 @@
 
     <!-- MAIN CONTENT CONTAINER -->
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10">
+      <section id="section-intro" class="intro-page">
+        <a
+          class="intro-skip"
+          href="#"
+          onclick="switchTab('store'); return false"
+        >
+          Bỏ qua, vào cửa hàng
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M5 12h14m-6-6 6 6-6 6" />
+          </svg>
+        </a>
+        <div class="intro-orb intro-orb-mint" aria-hidden="true"></div>
+        <div class="intro-orb intro-orb-peach" aria-hidden="true"></div>
+
+        <div class="intro-content">
+          <section class="intro-hero" id="intro-home">
+            <div class="intro-hero-copy" data-intro-reveal>
+              <p class="intro-kicker">
+                <span aria-hidden="true">■</span>
+                NỀN TẢNG THỜI TRANG TUẦN HOÀN AI
+              </p>
+              <h1
+                class="intro-heading"
+                aria-label="Mỗi món đồ xứng đáng có một vòng đời thứ hai"
+              >
+                Mỗi món đồ xứng đáng có
+                <span class="intro-type-slot">
+                  <em id="intro-typewriter" aria-hidden="true"
+                    >một vòng đời thứ hai</em
+                  ><span class="intro-caret" aria-hidden="true"></span>
+                </span>
+              </h1>
+              <p class="intro-lede">
+                AI hỗ trợ kiểm định độ mới và gợi ý giá bán công bằng. Mỗi món
+                đồ được lưu trong tủ đồ số để bạn dễ dàng bán lại, phối lại và
+                trao cho người mặc tiếp theo.
+              </p>
+              <div class="intro-actions">
+                <button
+                  type="button"
+                  class="intro-button intro-button-primary"
+                  onclick="switchTab('store')"
+                >
+                  Khám phá bộ sưu tập
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M5 12h14m-6-6 6 6-6 6" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  class="intro-button intro-button-secondary"
+                  onclick="switchTab('sell')"
+                >
+                  Đăng bán trong 30 giây
+                </button>
+              </div>
+              <a class="intro-scroll-link" href="#intro-steps">
+                Cách hoạt động
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M12 5v14m-6-6 6 6 6-6" />
+                </svg>
+              </a>
+            </div>
+
+            <div class="intro-hero-art" data-intro-reveal aria-hidden="true">
+              <div class="intro-editorial-note">
+                <span class="intro-mono">LOOKBOOK / 01</span>
+                <span>Đồ đẹp, thêm một vòng đời.</span>
+              </div>
+              <div class="intro-hanger-art">
+                <span class="intro-hanger-string"></span>
+                <svg
+                  class="intro-garment-svg"
+                  viewBox="0 0 320 360"
+                  fill="none"
+                >
+                  <path
+                    d="M160 35c-15 0-25 12-25 25 0 10 5 17 13 22l-5 27-75 38c-12 6-20 18-20 32v119c0 12 10 22 22 22h180c12 0 22-10 22-22V179c0-14-8-26-20-32l-75-38-5-27c8-5 13-12 13-22 0-13-10-25-25-25Z"
+                    fill="var(--intro-garment)"
+                    stroke="var(--intro-garment-line)"
+                    stroke-width="2"
+                  />
+                  <path
+                    d="m148 83 12 24 12-24m-47 29 35 23 35-23m-35-5v213m-57-186 18 42m96-42-18 42"
+                    stroke="var(--intro-garment-line)"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                  <path
+                    d="M120 210h18m44 0h18M120 228h18m44 0h18"
+                    stroke="var(--intro-garment-line)"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    opacity=".7"
+                  />
+                </svg>
+                <div class="intro-hanger-tag">
+                  <span class="intro-tag-hole"></span>
+                  <span class="intro-mono">CIRCULAR<br />WARDROBE</span>
+                  <strong>Vòng đời<br />tiếp theo</strong>
+                </div>
+              </div>
+              <div class="intro-art-caption">
+                <span class="intro-caption-line"></span>
+                <span>RE:LOOP — Mặc đẹp có trách nhiệm</span>
+              </div>
+            </div>
+          </section>
+
+          <section
+            class="intro-section intro-flow-section"
+            aria-labelledby="intro-flow-title"
+          >
+            <div class="intro-section-heading" data-intro-reveal>
+              <p class="intro-kicker"><span aria-hidden="true">■</span> VÒNG TUẦN HOÀN</p>
+              <h2 id="intro-flow-title" class="intro-title">
+                Một món đồ. Nhiều câu chuyện.
+              </h2>
+              <p class="intro-section-copy">
+                Từ tủ đồ của bạn, qua kiểm định và định giá, đến người mặc tiếp
+                theo — rồi tiếp tục hành trình.
+              </p>
+            </div>
+            <div class="intro-flow-layout" data-intro-reveal>
+              <svg
+                class="intro-flow-lines"
+                viewBox="0 0 1000 500"
+                preserveAspectRatio="none"
+                role="img"
+                aria-label="Đường nối quy trình tuần hoàn"
+              >
+                <path class="intro-flow-base" d="M185 55 C300 55 320 250 410 250" />
+                <path class="intro-flow-base" d="M185 152 C300 152 335 250 410 250" />
+                <path class="intro-flow-base" d="M185 250 H410" />
+                <path class="intro-flow-base" d="M185 348 C300 348 335 250 410 250" />
+                <path class="intro-flow-base" d="M185 445 C300 445 320 250 410 250" />
+                <path class="intro-flow-base" d="M590 250 C680 250 700 55 815 55" />
+                <path class="intro-flow-base" d="M590 250 C665 250 700 152 815 152" />
+                <path class="intro-flow-base" d="M590 250 H815" />
+                <path class="intro-flow-base" d="M590 250 C665 250 700 348 815 348" />
+                <path class="intro-flow-base" d="M590 250 C680 250 700 445 815 445" />
+                <path class="intro-flow-pulse" d="M185 55 C300 55 320 250 410 250" />
+                <path class="intro-flow-pulse" d="M590 250 C680 250 700 445 815 445" />
+              </svg>
+              <ul class="intro-flow-list intro-flow-sources" aria-label="Danh mục sản phẩm">
+                <li>Áo</li>
+                <li>Quần</li>
+                <li>Váy</li>
+                <li>Áo khoác</li>
+                <li>Set &amp; Phụ kiện</li>
+              </ul>
+              <div class="intro-flow-core">
+                <div class="intro-diamond-grid" aria-label="Kiểm định, định giá, phối đồ, ký gửi lại">
+                  <div class="intro-diamond"><span>KIỂM ĐỊNH</span></div>
+                  <div class="intro-diamond"><span>ĐỊNH GIÁ</span></div>
+                  <div class="intro-diamond"><span>PHỐI ĐỒ</span></div>
+                  <div class="intro-diamond"><span>KÝ GỬI LẠI</span></div>
+                </div>
+                <div class="intro-loop-mark" aria-hidden="true">
+                  <svg viewBox="0 0 48 48" fill="none">
+                    <path d="M9 18a16 16 0 0 1 27-6l3 3m0 0v-8m0 8h-8M39 30a16 16 0 0 1-27 6l-3-3m0 0v8m0-8h8" />
+                  </svg>
+                </div>
+              </div>
+              <ul class="intro-flow-list intro-flow-outcomes" aria-label="Kết quả tuần hoàn">
+                <li>Người mua mới</li>
+                <li>Tủ đồ số</li>
+                <li>Điểm Xanh</li>
+                <li>Quỹ Xanh</li>
+                <li>Vòng đời kế tiếp</li>
+              </ul>
+            </div>
+          </section>
+
+          <section
+            id="intro-steps"
+            class="intro-section intro-steps-section"
+            aria-labelledby="intro-steps-title"
+          >
+            <div class="intro-section-heading" data-intro-reveal>
+              <p class="intro-kicker"><span aria-hidden="true">■</span> BẮT ĐẦU</p>
+              <h2 id="intro-steps-title" class="intro-title">
+                Ba bước, để tủ đồ của bạn sống tiếp
+              </h2>
+              <p class="intro-section-copy">
+                Không cần biết trước giá trị món đồ — RE:LOOP giúp bạn bắt đầu,
+                còn quyết định cuối cùng luôn thuộc về bạn.
+              </p>
+            </div>
+            <div class="intro-step-grid">
+              <article class="intro-step-card" data-intro-reveal data-intro-step>
+                <div class="intro-step-mockup intro-mockup-upload">
+                  <div class="intro-mockup-top">
+                    <span class="intro-mono">TẠO TIN ĐĂNG</span>
+                    <span class="intro-mockup-dot"></span>
+                  </div>
+                  <div class="intro-upload-stage">
+                    <div class="intro-upload-garment">
+                      <svg viewBox="0 0 120 130" fill="none" aria-hidden="true">
+                        <path d="M60 12c-8 0-14 6-14 14 0 5 3 10 8 12l-3 12-28 15c-5 3-8 8-8 14v35h90V79c0-6-3-11-8-14L69 50l-3-12c5-2 8-7 8-12 0-8-6-14-14-14Z" fill="var(--intro-garment)" stroke="var(--intro-garment-line)" stroke-width="2" />
+                        <path d="m51 37 9 13 9-13M60 50v64" stroke="var(--intro-garment-line)" stroke-width="2" />
+                      </svg>
+                    </div>
+                    <span class="intro-upload-cursor" aria-hidden="true"></span>
+                    <span class="intro-scan-line" aria-hidden="true"></span>
+                    <span class="intro-upload-hint">Kéo ảnh hoặc chọn tệp</span>
+                  </div>
+                </div>
+                <div class="intro-step-meta">
+                  <span class="intro-step-number">01</span>
+                  <span class="intro-mono">ĐĂNG ẢNH</span>
+                </div>
+                <h3>Cho món đồ một khởi đầu mới</h3>
+                <p>Thêm ảnh và thông tin cơ bản. Ảnh rõ giúp người mua hiểu đúng tình trạng sản phẩm.</p>
+              </article>
+
+              <article class="intro-step-card" data-intro-reveal data-intro-step>
+                <div class="intro-step-mockup intro-mockup-price">
+                  <div class="intro-mockup-top">
+                    <span class="intro-mono">GỢI Ý TỪ AI</span>
+                    <span class="intro-score-label">ƯỚC TÍNH</span>
+                  </div>
+                  <div class="intro-condition">
+                    <div>
+                      <span class="intro-mono">ĐỘ MỚI</span>
+                      <strong><span data-intro-condition data-intro-count data-count-value="94">0</span><small>%</small></strong>
+                    </div>
+                    <div class="intro-condition-ring"><span></span></div>
+                  </div>
+                  <div class="intro-chip-row">
+                    <span>Chất liệu</span><span>Đường may</span><span>Sợi vải</span>
+                  </div>
+                  <div class="intro-suggested-price">
+                    <span>Giá gợi ý</span>
+                    <strong aria-label="Giá tham khảo được tính từ ảnh" data-intro-price>ước tính từ ảnh</strong>
+                  </div>
+                  <p class="intro-mockup-footnote">Giá thật chỉ hiển thị sau khi tải ảnh; AI đưa ra mức tham khảo.</p>
+                </div>
+                <div class="intro-step-meta">
+                  <span class="intro-step-number">02</span>
+                  <span class="intro-mono">AI ĐỊNH GIÁ</span>
+                </div>
+                <h3>Kiểm định, rồi chọn mức giá</h3>
+                <p>AI phân tích ảnh để ước tính độ mới và giá tham khảo — không phải kết quả chính xác tuyệt đối.</p>
+              </article>
+
+              <article class="intro-step-card" data-intro-reveal data-intro-step>
+                <div class="intro-step-mockup intro-mockup-sold">
+                  <div class="intro-mockup-top">
+                    <span class="intro-mono">ĐƠN HÀNG</span>
+                    <span class="intro-order-status">ĐÃ BÁN</span>
+                  </div>
+                  <div class="intro-order-line">
+                    <span class="intro-order-garment" aria-hidden="true">
+                      <svg viewBox="0 0 44 48" fill="none">
+                        <path d="M22 4c-4 0-7 3-7 7 0 3 2 5 4 6l-1 5-10 5c-2 1-3 3-3 5v12h34V32c0-2-1-4-3-5l-10-5-1-5c2-1 4-3 4-6 0-4-3-7-7-7Z" fill="var(--intro-garment)" stroke="var(--intro-garment-line)" stroke-width="1.5" />
+                      </svg>
+                    </span>
+                    <div><strong>Áo Linen tự nhiên</strong><span>Đang đến với chủ nhân mới</span></div>
+                  </div>
+                  <div class="intro-points-badge">
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M12 3v18m6-13H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                    </svg>
+                    <span>+ Điểm Xanh</span>
+                  </div>
+                  <button type="button" class="intro-resell-button" tabindex="-1">
+                    Ký gửi lại 1 chạm
+                  </button>
+                </div>
+                <div class="intro-step-meta">
+                  <span class="intro-step-number">03</span>
+                  <span class="intro-mono">BÁN &amp; TUẦN HOÀN</span>
+                </div>
+                <h3>Bán, mặc tiếp hoặc ký gửi lại</h3>
+                <p>Khi món đồ được mua, nó đi vào tủ đồ số của chủ mới — và có thể bắt đầu một vòng đời khác.</p>
+              </article>
+            </div>
+          </section>
+
+          <section class="intro-section intro-explainer-section">
+            <div class="intro-explainer-grid">
+              <article class="intro-explainer-card" data-intro-reveal>
+                <p class="intro-kicker"><span aria-hidden="true">■</span> VÒNG ĐỜI CỦA MỘT MÓN ĐỒ</p>
+                <h2 class="intro-title intro-title-small">Thời trang tuần hoàn là gì?</h2>
+                <p class="intro-section-copy">
+                  Thay vì kết thúc sau một người mặc, quần áo được trao đổi,
+                  sử dụng và tái bán để kéo dài thời gian hữu ích.
+                </p>
+                <div class="intro-lifecycle">
+                  <div class="intro-linear">
+                    <span class="intro-mono">TUYẾN TÍNH</span>
+                    <div><span>Mua</span><i></i><span>Mặc</span><i></i><span>Bỏ</span></div>
+                  </div>
+                  <div class="intro-circular" data-intro-reveal>
+                    <span class="intro-mono">TUẦN HOÀN</span>
+                    <svg viewBox="0 0 520 132" fill="none" aria-hidden="true">
+                      <path class="intro-circular-path" d="M62 66h102c24 0 24-34 48-34h93c24 0 24 68 48 68h105" />
+                      <path d="m449 88 10 12-14 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                    <div class="intro-circular-labels">
+                      <span>Mua</span><span>Mặc</span><span>Bán / ký gửi</span><span>Mặc tiếp</span>
+                    </div>
+                  </div>
+                </div>
+              </article>
+
+              <article class="intro-points-card" data-intro-reveal>
+                <p class="intro-kicker"><span aria-hidden="true">■</span> GIÁ TRỊ TỪ HÀNH ĐỘNG XANH</p>
+                <h2 class="intro-title intro-title-small">Điểm Xanh là gì?</h2>
+                <p class="intro-section-copy">
+                  Điểm Xanh ghi nhận hoạt động tuần hoàn của bạn. Tích lũy
+                  điểm để đổi voucher hoặc quy đổi đóng góp cho Quỹ Xanh.
+                </p>
+                <div class="intro-points-table">
+                  <div><span>Đăng ký tài khoản</span><strong>+100 ĐX</strong></div>
+                  <div><span>Đăng bán sản phẩm</span><strong>+120 ĐX</strong></div>
+                  <div><span>Ký gửi lại 1 chạm</span><strong>+150 ĐX</strong></div>
+                  <div><span>Mua sản phẩm</span><strong>Theo từng món</strong></div>
+                </div>
+                <div class="intro-donation-note">
+                  <span class="intro-mono">GÓP QUỸ XANH</span>
+                  <strong>100 ĐX = 25.000đ</strong>
+                  <span>Tương đương 250đ cho mỗi Điểm Xanh quy đổi.</span>
+                </div>
+                <p class="intro-data-note">
+                  Mức thưởng và quy đổi theo cấu hình hiện tại của hệ thống.
+                </p>
+              </article>
+            </div>
+          </section>
+
+          <section class="intro-section intro-features-section" aria-labelledby="intro-features-title">
+            <div class="intro-section-heading" data-intro-reveal>
+              <p class="intro-kicker"><span aria-hidden="true">■</span> TRẢI NGHIỆM RE:LOOP</p>
+              <h2 id="intro-features-title" class="intro-title">Một nền tảng, nhiều cách mặc tiếp</h2>
+            </div>
+            <div class="intro-feature-layout" data-intro-reveal>
+              <div class="intro-feature-list" role="tablist" aria-label="Tính năng cốt lõi">
+                <button type="button" id="intro-feature-tab-0" class="intro-feature-item is-active" role="tab" aria-selected="true" aria-controls="intro-feature-panel" tabindex="0" data-feature-index="0">
+                  <span class="intro-feature-number">01</span><span class="intro-feature-label">AI kiểm định độ mới</span><span class="intro-feature-progress"><i></i></span>
+                </button>
+                <button type="button" id="intro-feature-tab-1" class="intro-feature-item" role="tab" aria-selected="false" aria-controls="intro-feature-panel" tabindex="-1" data-feature-index="1">
+                  <span class="intro-feature-number">02</span><span class="intro-feature-label">Định giá tham khảo</span><span class="intro-feature-progress"><i></i></span>
+                </button>
+                <button type="button" id="intro-feature-tab-2" class="intro-feature-item" role="tab" aria-selected="false" aria-controls="intro-feature-panel" tabindex="-1" data-feature-index="2">
+                  <span class="intro-feature-number">03</span><span class="intro-feature-label">Tủ đồ số</span><span class="intro-feature-progress"><i></i></span>
+                </button>
+                <button type="button" id="intro-feature-tab-3" class="intro-feature-item" role="tab" aria-selected="false" aria-controls="intro-feature-panel" tabindex="-1" data-feature-index="3">
+                  <span class="intro-feature-number">04</span><span class="intro-feature-label">Phối đồ AI</span><span class="intro-feature-progress"><i></i></span>
+                </button>
+                <button type="button" id="intro-feature-tab-4" class="intro-feature-item" role="tab" aria-selected="false" aria-controls="intro-feature-panel" tabindex="-1" data-feature-index="4">
+                  <span class="intro-feature-number">05</span><span class="intro-feature-label">Ký gửi lại 1 chạm</span><span class="intro-feature-progress"><i></i></span>
+                </button>
+                <button type="button" id="intro-feature-tab-5" class="intro-feature-item" role="tab" aria-selected="false" aria-controls="intro-feature-panel" tabindex="-1" data-feature-index="5">
+                  <span class="intro-feature-number">06</span><span class="intro-feature-label">Điểm Xanh &amp; Quỹ Xanh</span><span class="intro-feature-progress"><i></i></span>
+                </button>
+                <button type="button" id="intro-feature-tab-6" class="intro-feature-item" role="tab" aria-selected="false" aria-controls="intro-feature-panel" tabindex="-1" data-feature-index="6">
+                  <span class="intro-feature-number">07</span><span class="intro-feature-label">Nhắn tin với người bán</span><span class="intro-feature-progress"><i></i></span>
+                </button>
+              </div>
+              <div class="intro-feature-panel" id="intro-feature-panel" role="tabpanel" aria-labelledby="intro-feature-tab-0" aria-live="polite">
+                <div class="intro-feature-panel-copy">
+                  <span id="intro-feature-kicker" class="intro-mono">TÌNH TRẠNG SẢN PHẨM</span>
+                  <h3 id="intro-feature-title">AI hỗ trợ kiểm định độ mới</h3>
+                  <p id="intro-feature-description">
+                    Phân tích hình ảnh để đưa ra nhận định tham khảo về chất liệu,
+                    đường may và tình trạng món đồ.
+                  </p>
+                </div>
+                <div id="intro-feature-preview" class="intro-feature-preview">
+                  <span class="intro-feature-preview-ring">94%</span>
+                  <span class="intro-mono">ĐỘ MỚI ƯỚC TÍNH</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="intro-section intro-stats-section" aria-label="Một vài con số của RE:LOOP">
+            <div class="intro-stats-grid">
+              <article class="intro-stat" data-intro-reveal>
+                <strong id="intro-api-product-count" data-intro-count data-count-value="">—</strong>
+                <span class="intro-mono">SẢN PHẨM TRÊN SÀN</span>
+                <p>Số liệu tải trực tiếp từ API, có thể thay đổi theo gian hàng.</p>
+              </article>
+              <article class="intro-stat" data-intro-reveal>
+                <strong data-intro-count data-count-value="6.2" data-count-decimals="1">0</strong>
+                <span class="intro-mono">KG CO₂ / ĐĂNG BÁN</span>
+                <p>Chỉ số hệ thống ghi nhận cho mỗi lượt đăng bán mới.</p>
+              </article>
+              <article class="intro-stat" data-intro-reveal>
+                <strong data-intro-count data-count-value="1400">0</strong>
+                <span class="intro-mono">L NƯỚC / ĐĂNG BÁN</span>
+                <p>Chỉ số tiết kiệm được ghi nhận trong backend.</p>
+              </article>
+              <article class="intro-stat" data-intro-reveal>
+                <strong data-intro-count data-count-value="250">0</strong>
+                <span class="intro-mono">ĐỒNG / 1 ĐIỂM GÓP QUỸ</span>
+                <p>Tỷ lệ quy đổi hiện tại khi đóng góp cho Quỹ Xanh.</p>
+              </article>
+            </div>
+          </section>
+
+          <section class="intro-marquee-section" aria-label="Các phong cách thời trang">
+            <p class="intro-kicker"><span aria-hidden="true">■</span> MẶC THEO CÁCH CỦA BẠN</p>
+            <div class="intro-marquee" aria-hidden="true">
+              <div class="intro-marquee-track">
+                <span>Vintage</span><i></i><span>Streetwear</span><i></i><span>Công sở</span><i></i><span>Tối giản</span><i></i><span>Y2K</span><i></i><span>Local brand</span><i></i><span>Mùa đông</span><i></i><span>Dạ tiệc</span><i></i>
+                <span>Vintage</span><i></i><span>Streetwear</span><i></i><span>Công sở</span><i></i><span>Tối giản</span><i></i><span>Y2K</span><i></i><span>Local brand</span><i></i><span>Mùa đông</span><i></i><span>Dạ tiệc</span><i></i>
+              </div>
+            </div>
+          </section>
+
+          <section id="intro-faq" class="intro-section intro-faq-section" aria-labelledby="intro-faq-title">
+            <div class="intro-faq-heading" data-intro-reveal>
+              <p class="intro-kicker"><span aria-hidden="true">■</span> HỎI ĐÁP</p>
+              <h2 id="intro-faq-title" class="intro-title">Điều bạn muốn biết</h2>
+              <p class="intro-section-copy">Thông tin ngắn gọn trước khi bạn bắt đầu.</p>
+            </div>
+            <div class="intro-faq-list" data-intro-reveal>
+              <article class="intro-faq-item">
+                <h3><button type="button" class="intro-faq-toggle" aria-expanded="false" aria-controls="intro-faq-panel-1" id="intro-faq-button-1">Thời trang tuần hoàn là gì?<span aria-hidden="true"></span></button></h3>
+                <div class="intro-faq-panel" id="intro-faq-panel-1" role="region" aria-labelledby="intro-faq-button-1" aria-hidden="true"><div><p>Là cách kéo dài vòng đời quần áo bằng việc sử dụng lâu hơn, bán lại hoặc ký gửi để người khác tiếp tục mặc, thay vì bỏ đi khi bạn không còn cần.</p></div></div>
+              </article>
+              <article class="intro-faq-item">
+                <h3><button type="button" class="intro-faq-toggle" aria-expanded="false" aria-controls="intro-faq-panel-2" id="intro-faq-button-2">Điểm Xanh là gì, kiếm và dùng thế nào?<span aria-hidden="true"></span></button></h3>
+                <div class="intro-faq-panel" id="intro-faq-panel-2" role="region" aria-labelledby="intro-faq-button-2" aria-hidden="true"><div><p>Điểm Xanh được cộng khi đăng ký (+100), đăng bán (+120), ký gửi lại (+150) và mua hàng theo mức thưởng của từng sản phẩm. Bạn có thể đổi voucher hoặc quy đổi đóng góp Quỹ Xanh; 100 ĐX tương đương 25.000đ khi góp quỹ.</p></div></div>
+              </article>
+              <article class="intro-faq-item">
+                <h3><button type="button" class="intro-faq-toggle" aria-expanded="false" aria-controls="intro-faq-panel-3" id="intro-faq-button-3">AI kiểm định và định giá có chính xác tuyệt đối không?<span aria-hidden="true"></span></button></h3>
+                <div class="intro-faq-panel" id="intro-faq-panel-3" role="region" aria-labelledby="intro-faq-button-3" aria-hidden="true"><div><p>Không. AI phân tích ảnh để hỗ trợ nhận diện tình trạng và đưa ra mức giá tham khảo. Kết quả có thể sai khác theo ánh sáng, góc chụp và thông tin sản phẩm; người bán cần kiểm tra và quyết định giá cuối cùng.</p></div></div>
+              </article>
+              <article class="intro-faq-item">
+                <h3><button type="button" class="intro-faq-toggle" aria-expanded="false" aria-controls="intro-faq-panel-4" id="intro-faq-button-4">Đăng bán có mất phí không?<span aria-hidden="true"></span></button></h3>
+                <div class="intro-faq-panel" id="intro-faq-panel-4" role="region" aria-labelledby="intro-faq-button-4" aria-hidden="true"><div><p class="intro-placeholder">[ĐIỀN: chính sách phí đăng bán hoặc xác nhận miễn phí.]</p></div></div>
+              </article>
+              <article class="intro-faq-item">
+                <h3><button type="button" class="intro-faq-toggle" aria-expanded="false" aria-controls="intro-faq-panel-5" id="intro-faq-button-5">Tủ đồ số và “Ký gửi lại 1 chạm” hoạt động thế nào?<span aria-hidden="true"></span></button></h3>
+                <div class="intro-faq-panel" id="intro-faq-panel-5" role="region" aria-labelledby="intro-faq-button-5" aria-hidden="true"><div><p>Sản phẩm bạn mua được lưu vào tủ đồ số. Khi muốn chuyển tiếp, chọn món đồ đã mua, gửi 1–2 ảnh hiện trạng và xác nhận ký gửi; hệ thống đồng bộ thông tin gốc, đánh giá lại tình trạng và cộng 150 ĐX nếu ký gửi thành công.</p></div></div>
+              </article>
+              <article class="intro-faq-item">
+                <h3><button type="button" class="intro-faq-toggle" aria-expanded="false" aria-controls="intro-faq-panel-6" id="intro-faq-button-6">Thanh toán và giao hàng như thế nào?<span aria-hidden="true"></span></button></h3>
+                <div class="intro-faq-panel" id="intro-faq-panel-6" role="region" aria-labelledby="intro-faq-button-6" aria-hidden="true"><div><p class="intro-placeholder">[ĐIỀN: phương thức thanh toán, đơn vị giao hàng, thời gian và phí vận chuyển.]</p></div></div>
+              </article>
+              <article class="intro-faq-item">
+                <h3><button type="button" class="intro-faq-toggle" aria-expanded="false" aria-controls="intro-faq-panel-7" id="intro-faq-button-7">Nếu sản phẩm không đúng mô tả thì sao?<span aria-hidden="true"></span></button></h3>
+                <div class="intro-faq-panel" id="intro-faq-panel-7" role="region" aria-labelledby="intro-faq-button-7" aria-hidden="true"><div><p class="intro-placeholder">[ĐIỀN: điều kiện, thời hạn và quy trình đổi trả / khiếu nại.]</p></div></div>
+              </article>
+              <article class="intro-faq-item">
+                <h3><button type="button" class="intro-faq-toggle" aria-expanded="false" aria-controls="intro-faq-panel-8" id="intro-faq-button-8">Điểm Xanh quyên góp đi đâu?<span aria-hidden="true"></span></button></h3>
+                <div class="intro-faq-panel" id="intro-faq-panel-8" role="region" aria-labelledby="intro-faq-button-8" aria-hidden="true"><div><p>Điểm quy đổi được chuyển thành khoản đóng góp cho dự án Quỹ Xanh mà bạn chọn. Backend hiện ghi nhận 250đ cho mỗi ĐX quy đổi và cộng số tiền này vào tổng gây quỹ của dự án.</p></div></div>
+              </article>
+            </div>
+          </section>
+
+          <section class="intro-final-cta" data-intro-reveal>
+            <p class="intro-kicker"><span aria-hidden="true">■</span> BẮT ĐẦU VÒNG TIẾP THEO</p>
+            <h2 class="intro-title">Sẵn sàng cho vòng đời thứ hai của tủ đồ?</h2>
+            <p>Một món đồ tốt có thể làm nhiều người vui hơn một lần.</p>
+            <div class="intro-actions intro-actions-center">
+              <button type="button" class="intro-button intro-button-primary" onclick="switchTab('store')">Vào cửa hàng</button>
+              <button type="button" class="intro-button intro-button-secondary" onclick="switchTab('sell')">Đăng bán ngay</button>
+            </div>
+          </section>
+
+          <footer class="intro-footer">
+            <div class="intro-footer-brand">
+              <a href="#" class="intro-footer-logo" onclick="switchTab('intro'); return false">RE:LOOP</a>
+              <p>Thời trang tuần hoàn, bắt đầu từ một lựa chọn nhỏ.</p>
+            </div>
+            <div class="intro-footer-column">
+              <span class="intro-mono">SẢN PHẨM</span>
+              <button type="button" onclick="switchTab('store')">Khám phá</button>
+              <button type="button" onclick="switchTab('sell')">Đăng bán</button>
+              <button type="button" onclick="switchTab('wardrobe')">Tủ đồ</button>
+              <button type="button" onclick="switchTab('green')">Sống Xanh</button>
+            </div>
+            <div class="intro-footer-column">
+              <span class="intro-mono">HỖ TRỢ</span>
+              <a href="#intro-faq" onclick="window.scrollToIntroFAQ?.(); return false">Câu hỏi thường gặp</a>
+              <a href="#" class="intro-placeholder-link">Liên hệ [ĐIỀN]</a>
+            </div>
+            <div class="intro-footer-column">
+              <span class="intro-mono">PHÁP LÝ</span>
+              <a href="#" class="intro-placeholder-link">Điều khoản [ĐIỀN]</a>
+              <a href="#" class="intro-placeholder-link">Bảo mật [ĐIỀN]</a>
+              <a href="#" class="intro-placeholder-link">Đổi trả [ĐIỀN]</a>
+            </div>
+            <div class="intro-footer-column">
+              <span class="intro-mono">KẾT NỐI</span>
+              <span class="intro-placeholder-link">Email [ĐIỀN]</span>
+              <span class="intro-placeholder-link">Mạng xã hội [ĐIỀN]</span>
+            </div>
+            <p class="intro-footer-bottom">© RE:LOOP · Mặc đẹp, rồi để chiếc áo sống tiếp.</p>
+          </footer>
+        </div>
+        <button
+          class="intro-back-to-top"
+          type="button"
+          aria-label="Lên đầu trang"
+          onclick="window.scrollIntroToTop?.()"
+        >
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M12 19V5m-6 6 6-6 6 6" />
+          </svg>
+        </button>
+      </section>
       <!-- ========================================================= -->
       <!-- TAB 1: KHÁM PHÁ GIAN HÀNG (STORE)                         -->
       <!-- ========================================================= -->
-      <section id="section-store" class="space-y-8">
+      <section id="section-store" class="hidden space-y-8">
         <!-- Hero Banner -->
         <div
           class="hero-panel rounded-3xl bg-gradient-to-br from-sand-100 via-white to-eco-50 border border-sand-200 p-6 sm:p-10 lg:p-12 relative overflow-hidden"
@@ -3182,6 +5628,7 @@
       // Application State
       const state = {
         backendOnline: false,
+        introApiProductCount: null,
         token: localStorage.getItem("reloop_token") || null,
         user: JSON.parse(localStorage.getItem("reloop_user") || "null"),
         products: [],
@@ -3621,6 +6068,8 @@
           const rawProducts = Array.isArray(prodRes)
             ? prodRes
             : prodRes.items || prodRes.products || [];
+          state.introApiProductCount = rawProducts.length;
+          window.updateIntroProductCount?.(rawProducts.length);
           updateBackendIndicator(
             true,
             `Đã kết nối Backend FastAPI (127.0.0.1:8000) • ${rawProducts.length} sản phẩm từ SQLite`,
@@ -6238,6 +8687,7 @@
           return;
         }
         [
+          "intro",
           "store",
           "sell",
           "wardrobe",
@@ -6262,6 +8712,18 @@
               : "nav-tab whitespace-nowrap shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-100 text-ink-700";
           }
         });
+        window.scrollTo({
+          top: 0,
+          behavior: window.matchMedia("(prefers-reduced-motion: reduce)")
+            .matches
+            ? "auto"
+            : "smooth",
+        });
+        if (tabName === "intro") {
+          window.initIntro?.();
+        } else {
+          window.destroyIntro?.();
+        }
         if (tabName === "wardrobe") generateAIOutfits(false);
         if (tabName === "seller") loadSellerListings();
         if (tabName === "messages") {
@@ -6341,9 +8803,488 @@
 
       // Boot Application
       window.addEventListener("DOMContentLoaded", () => {
+        const validTabs = [
+          "intro",
+          "store",
+          "sell",
+          "wardrobe",
+          "orders",
+          "seller",
+          "messages",
+          "green",
+        ];
+        const requestedTab = window.location.hash.match(/^#([a-z]+)$/)?.[1];
+        switchTab(validTabs.includes(requestedTab) ? requestedTab : "intro");
         syncFromBackend(false);
         setInterval(refreshNotifications, 30000);
       });
+    </script>
+    <script>
+      (() => {
+        const intro = document.getElementById("section-intro");
+        const reducedMotion = window.matchMedia(
+          "(prefers-reduced-motion: reduce)",
+        ).matches;
+        const typewriter = document.getElementById("intro-typewriter");
+        const mockupPrice = intro.querySelector("[data-intro-price]");
+        const featurePanel = document.getElementById("intro-feature-panel");
+        const featureTitle = document.getElementById("intro-feature-title");
+        const featureDescription = document.getElementById(
+          "intro-feature-description",
+        );
+        const featureKicker = document.getElementById("intro-feature-kicker");
+        const featurePreview = document.getElementById("intro-feature-preview");
+        const featureButtons = [
+          ...document.querySelectorAll(".intro-feature-item"),
+        ];
+        const featureData = [
+          {
+            kicker: "TÌNH TRẠNG SẢN PHẨM",
+            title: "AI hỗ trợ kiểm định độ mới",
+            description:
+              "Phân tích hình ảnh để đưa ra nhận định tham khảo về chất liệu, đường may và tình trạng món đồ.",
+            preview:
+              '<span class="intro-feature-preview-ring">94%</span><span class="intro-mono">ĐỘ MỚI ƯỚC TÍNH</span>',
+          },
+          {
+            kicker: "GIÁ THAM KHẢO",
+            title: "Một điểm bắt đầu để định giá",
+            description:
+              "AI gợi ý giá từ hình ảnh và thông tin sản phẩm. Người bán xem lại và quyết định giá trước khi đăng.",
+            preview:
+              '<div class="intro-preview-pills"><span>Ảnh sản phẩm</span><span>Độ mới</span><span>Giá tham khảo</span></div>',
+          },
+          {
+            kicker: "LƯU GIỮ HÀNH TRÌNH",
+            title: "Món đồ nào cũng có chỗ trong tủ",
+            description:
+              "Đơn mua thành công lưu sản phẩm vào tủ đồ số, nơi bạn theo dõi món đồ và lựa chọn bước tiếp theo.",
+            preview:
+              '<div class="intro-preview-pills"><span>Đã mua</span><span>Đang sử dụng</span><span>Có thể ký gửi lại</span></div>',
+          },
+          {
+            kicker: "MẶC LẠI THEO CÁCH MỚI",
+            title: "Gợi ý phối đồ từ tủ đồ của bạn",
+            description:
+              "Stylist AI dùng thông tin tủ đồ và sản phẩm trên sàn để hỗ trợ tìm cách phối phù hợp.",
+            preview:
+              '<div class="intro-preview-pills"><span>Áo linen</span><span>Quần suông</span><span>Phụ kiện</span></div>',
+          },
+          {
+            kicker: "TRAO ĐI TIẾP",
+            title: "Ký gửi lại chỉ qua một chạm",
+            description:
+              "Gửi ảnh hiện trạng món đã mua. Hệ thống đồng bộ thông tin gốc, đánh giá lại tình trạng và tạo tin đăng mới.",
+            preview:
+              '<div class="intro-preview-pills"><span>Ảnh hiện trạng</span><span>Kiểm định lại</span><span>+150 ĐX</span></div>',
+          },
+          {
+            kicker: "GIÁ TRỊ XANH",
+            title: "Tích điểm, đổi voucher hoặc góp quỹ",
+            description:
+              "Điểm Xanh ghi nhận hoạt động tuần hoàn; bạn có thể đổi voucher hoặc quy đổi đóng góp cho dự án Quỹ Xanh.",
+            preview:
+              '<div class="intro-preview-pills"><span>100 ĐX</span><span>25.000đ</span><span>Quỹ Xanh</span></div>',
+          },
+          {
+            kicker: "KẾT NỐI CỘNG ĐỒNG",
+            title: "Trao đổi trực tiếp với người bán",
+            description:
+              "Hỏi thêm về chất liệu, kích thước và tình trạng trước khi quyết định mua.",
+            preview:
+              '<div class="intro-preview-pills"><span>Người mua</span><span>Hỏi về sản phẩm</span><span>Người bán</span></div>',
+          },
+        ];
+        const typewriterPhrases = [
+          "một vòng đời thứ hai",
+          "một tủ đồ mới",
+          "người yêu quý tiếp theo",
+          "cách mặc đẹp có trách nhiệm",
+        ];
+        const introFrames = new Map();
+        const cleanups = [];
+        let initialized = false;
+        let observer = null;
+        let typeTimer = null;
+        let priceTimer = null;
+        let featureTimer = null;
+        let panelTimer = null;
+        let featureIndex = 0;
+        let priceTyped = false;
+        let latestProductCount = null;
+
+        function listen(target, eventName, handler, options) {
+          if (!target) return;
+          target.addEventListener(eventName, handler, options);
+          cleanups.push(() =>
+            target.removeEventListener(eventName, handler, options),
+          );
+        }
+
+        function formatCount(value, decimals = 0) {
+          return Number(value).toLocaleString("vi-VN", {
+            minimumFractionDigits: decimals,
+            maximumFractionDigits: decimals,
+          });
+        }
+
+        function animateCounter(element) {
+          const value = element?.dataset.countValue;
+          if (value === undefined || value === "") return;
+          const target = Number(value);
+          if (!Number.isFinite(target)) return;
+          const decimals = Number(element.dataset.countDecimals || 0);
+          const previousFrame = introFrames.get(element);
+          if (previousFrame) cancelAnimationFrame(previousFrame);
+
+          if (reducedMotion) {
+            element.textContent = formatCount(target, decimals);
+            return;
+          }
+
+          const duration = 850;
+          const startedAt = performance.now();
+          element.textContent = formatCount(0, decimals);
+          const tick = (now) => {
+            const progress = Math.min(1, (now - startedAt) / duration);
+            const eased = 1 - (1 - progress) ** 3;
+            element.textContent = formatCount(target * eased, decimals);
+            if (progress < 1) {
+              introFrames.set(element, requestAnimationFrame(tick));
+            } else {
+              introFrames.delete(element);
+            }
+          };
+          introFrames.set(element, requestAnimationFrame(tick));
+        }
+
+        function typeNextPhrase() {
+          if (!typewriter || !initialized || reducedMotion) return;
+          let phraseIndex = 0;
+          let deleting = false;
+
+          const tick = () => {
+            if (!initialized) return;
+            const phrase = typewriterPhrases[phraseIndex];
+            const visible = typewriter.textContent || "";
+            if (!deleting && visible.length < phrase.length) {
+              typewriter.textContent = phrase.slice(0, visible.length + 1);
+              typeTimer = setTimeout(tick, 48);
+            } else if (!deleting) {
+              deleting = true;
+              typeTimer = setTimeout(tick, 1500);
+            } else if (visible.length > 0) {
+              typewriter.textContent = visible.slice(0, -1);
+              typeTimer = setTimeout(tick, 24);
+            } else {
+              phraseIndex = (phraseIndex + 1) % typewriterPhrases.length;
+              deleting = false;
+              typeTimer = setTimeout(tick, 250);
+            }
+          };
+
+          phraseIndex = 0;
+          typewriter.textContent = "";
+          tick();
+        }
+
+        function typeMockupPrice() {
+          if (!mockupPrice || reducedMotion || priceTyped) return;
+          priceTyped = true;
+          const label = "ước tính từ ảnh";
+          let visibleLength = 0;
+          mockupPrice.textContent = "";
+
+          const tick = () => {
+            if (
+              !initialized ||
+              !mockupPrice.closest("[data-intro-step]")?.classList.contains(
+                "is-inview",
+              )
+            ) {
+              mockupPrice.textContent = "—";
+              priceTyped = false;
+              priceTimer = null;
+              return;
+            }
+            visibleLength += 1;
+            mockupPrice.textContent = label.slice(0, visibleLength);
+            if (visibleLength < label.length) {
+              priceTimer = setTimeout(tick, 65);
+            } else {
+              priceTimer = null;
+            }
+          };
+
+          tick();
+        }
+
+        function clearFeatureTimer() {
+          if (featureTimer) {
+            clearTimeout(featureTimer);
+            featureTimer = null;
+          }
+        }
+
+        function scheduleFeatureChange() {
+          clearFeatureTimer();
+          if (!initialized || reducedMotion) return;
+          featureTimer = setTimeout(() => {
+            selectFeature((featureIndex + 1) % featureData.length);
+          }, 5000);
+        }
+
+        function selectFeature(index) {
+          if (!featureData[index] || !featurePanel) return;
+          clearFeatureTimer();
+          featureIndex = index;
+          featureButtons.forEach((button, buttonIndex) => {
+            const selected = buttonIndex === index;
+            button.classList.toggle("is-active", selected);
+            button.setAttribute("aria-selected", String(selected));
+            button.tabIndex = selected ? 0 : -1;
+            const progress = button.querySelector(
+              ".intro-feature-progress i",
+            );
+            if (progress) {
+              progress.style.transition = "none";
+              progress.style.transform = "scaleX(0)";
+            }
+          });
+
+          clearTimeout(panelTimer);
+          featurePanel.classList.add("is-changing");
+          panelTimer = setTimeout(() => {
+            const feature = featureData[index];
+            featureKicker.textContent = feature.kicker;
+            featureTitle.textContent = feature.title;
+            featureDescription.textContent = feature.description;
+            featurePreview.innerHTML = feature.preview;
+            featurePanel.setAttribute(
+              "aria-labelledby",
+              `intro-feature-tab-${index}`,
+            );
+            featurePanel.classList.remove("is-changing");
+            const activeProgress = featureButtons[index]?.querySelector(
+              ".intro-feature-progress i",
+            );
+            if (activeProgress && initialized && !reducedMotion) {
+              void activeProgress.offsetWidth;
+              activeProgress.style.transition = "transform 5s linear";
+              activeProgress.style.transform = "scaleX(1)";
+            }
+            scheduleFeatureChange();
+          }, 140);
+        }
+
+        function closeFaqItem(button) {
+          const panel = document.getElementById(
+            button.getAttribute("aria-controls"),
+          );
+          button.setAttribute("aria-expanded", "false");
+          panel.setAttribute("aria-hidden", "true");
+          panel.style.maxHeight = "0px";
+        }
+
+        function scrollToElement(element) {
+          if (!element) return;
+          const top =
+            element.getBoundingClientRect().top + window.scrollY - 96;
+          window.scrollTo({
+            top: Math.max(0, top),
+            behavior: reducedMotion ? "auto" : "smooth",
+          });
+        }
+
+        function initIntro() {
+          if (
+            initialized ||
+            !intro ||
+            intro.classList.contains("hidden")
+          ) {
+            return;
+          }
+          initialized = true;
+          intro.classList.add("is-active", "intro-reveal-ready");
+          if (mockupPrice) {
+            mockupPrice.textContent = reducedMotion ? "ước tính từ ảnh" : "—";
+            priceTyped = false;
+          }
+
+          if (latestProductCount !== null) {
+            window.updateIntroProductCount(latestProductCount);
+          }
+
+          if ("IntersectionObserver" in window) {
+            observer = new IntersectionObserver(
+              (entries) => {
+                entries.forEach((entry) => {
+                  const element = entry.target;
+                  if (entry.isIntersecting) {
+                    element.classList.add("is-visible");
+                    if (element.matches("[data-intro-step]")) {
+                      element.classList.add("is-inview");
+                      if (element.contains(mockupPrice)) typeMockupPrice();
+                    }
+                    if (element.matches("[data-intro-count]")) {
+                      animateCounter(element);
+                    }
+                  } else if (element.matches("[data-intro-step]")) {
+                    element.classList.remove("is-inview");
+                  }
+                });
+              },
+              { threshold: 0.16, rootMargin: "0px 0px -5% 0px" },
+            );
+            intro
+              .querySelectorAll(
+                "[data-intro-reveal], [data-intro-step], [data-intro-count]",
+              )
+              .forEach((element) => observer.observe(element));
+          } else {
+            intro
+              .querySelectorAll("[data-intro-reveal], [data-intro-step]")
+              .forEach((element) =>
+                element.classList.add("is-visible", "is-inview"),
+              );
+            intro.querySelectorAll("[data-intro-count]").forEach(animateCounter);
+            typeMockupPrice();
+          }
+
+          const flow = intro.querySelector(".intro-flow-layout");
+          if (flow && !observer) flow.classList.add("is-visible");
+          selectFeature(featureIndex);
+          typeNextPhrase();
+
+          featureButtons.forEach((button, index) => {
+            listen(button, "click", () => selectFeature(index));
+            listen(button, "keydown", (event) => {
+              let nextIndex = index;
+              if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+                nextIndex = (index + 1) % featureButtons.length;
+              } else if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+                nextIndex =
+                  (index - 1 + featureButtons.length) % featureButtons.length;
+              } else if (event.key === "Home") {
+                nextIndex = 0;
+              } else if (event.key === "End") {
+                nextIndex = featureButtons.length - 1;
+              } else {
+                return;
+              }
+              event.preventDefault();
+              featureButtons[nextIndex].focus();
+              selectFeature(nextIndex);
+            });
+          });
+
+          const featureList = intro.querySelector(".intro-feature-layout");
+          listen(featureList, "mouseenter", clearFeatureTimer);
+          listen(featureList, "mouseleave", scheduleFeatureChange);
+          listen(featureList, "focusin", clearFeatureTimer);
+          listen(featureList, "focusout", (event) => {
+            if (!featureList.contains(event.relatedTarget)) {
+              scheduleFeatureChange();
+            }
+          });
+
+          intro.querySelectorAll(".intro-faq-toggle").forEach((button) => {
+            listen(button, "click", () => {
+              const isOpen = button.getAttribute("aria-expanded") === "true";
+              intro.querySelectorAll(".intro-faq-toggle").forEach((other) => {
+                if (other !== button) closeFaqItem(other);
+              });
+              const panel = document.getElementById(
+                button.getAttribute("aria-controls"),
+              );
+              button.setAttribute("aria-expanded", String(!isOpen));
+              panel.setAttribute("aria-hidden", String(isOpen));
+              panel.style.maxHeight = isOpen
+                ? "0px"
+                : `${panel.scrollHeight}px`;
+            });
+          });
+
+          const scrollLink = intro.querySelector(".intro-scroll-link");
+          listen(scrollLink, "click", (event) => {
+            event.preventDefault();
+            scrollToElement(document.getElementById("intro-steps"));
+          });
+
+          const hero = intro.querySelector(".intro-hero");
+          const canParallax =
+            !reducedMotion &&
+            window.matchMedia("(min-width: 1024px) and (hover: hover)").matches;
+          if (hero && canParallax) {
+            listen(hero, "pointermove", (event) => {
+              const bounds = hero.getBoundingClientRect();
+              const x = (event.clientX - bounds.left) / bounds.width - 0.5;
+              const y = (event.clientY - bounds.top) / bounds.height - 0.5;
+              intro.style.setProperty("--pointer-x", `${x * 8}px`);
+              intro.style.setProperty("--pointer-y", `${y * 8}px`);
+            });
+            listen(hero, "pointerleave", () => {
+              intro.style.setProperty("--pointer-x", "0px");
+              intro.style.setProperty("--pointer-y", "0px");
+            });
+          }
+
+          scheduleFeatureChange();
+        }
+
+        function destroyIntro() {
+          if (!initialized) return;
+          initialized = false;
+          clearFeatureTimer();
+          if (typeTimer) clearTimeout(typeTimer);
+          if (priceTimer) clearTimeout(priceTimer);
+          if (panelTimer) clearTimeout(panelTimer);
+          if (featurePanel) featurePanel.classList.remove("is-changing");
+          if (mockupPrice) mockupPrice.textContent = "—";
+          priceTimer = null;
+          priceTyped = false;
+          if (observer) {
+            observer.disconnect();
+            observer = null;
+          }
+          cleanups.splice(0).forEach((cleanup) => cleanup());
+          introFrames.forEach((frame) => cancelAnimationFrame(frame));
+          introFrames.clear();
+          intro
+            .querySelectorAll(
+              "[data-intro-reveal], [data-intro-step], [data-intro-count]",
+            )
+            .forEach((element) => {
+              element.classList.remove("is-visible", "is-inview");
+            });
+          intro.classList.remove("is-active", "intro-reveal-ready");
+          intro.style.removeProperty("--pointer-x");
+          intro.style.removeProperty("--pointer-y");
+        }
+
+        window.initIntro = initIntro;
+        window.destroyIntro = destroyIntro;
+        window.updateIntroProductCount = (count) => {
+          const numericCount = Number(count);
+          if (!Number.isFinite(numericCount) || numericCount < 0) return;
+          latestProductCount = numericCount;
+          const metric = document.getElementById("intro-api-product-count");
+          if (!metric) return;
+          metric.dataset.countValue = String(numericCount);
+          if (initialized && metric.classList.contains("is-visible")) {
+            animateCounter(metric);
+          } else {
+            metric.textContent = formatCount(numericCount);
+          }
+        };
+        window.scrollToIntroFAQ = () =>
+          scrollToElement(document.getElementById("intro-faq"));
+        window.scrollIntroToTop = () =>
+          window.scrollTo({
+            top: 0,
+            behavior: reducedMotion ? "auto" : "smooth",
+          });
+      })();
     </script>
     <script>
       (() => {
@@ -6479,9 +9420,11 @@
           }
         };
 
-        document.querySelectorAll("main > section").forEach((section) => {
-          [...section.children].forEach(observeReveal);
-        });
+        document
+          .querySelectorAll("main > section:not(#section-intro)")
+          .forEach((section) => {
+            [...section.children].forEach(observeReveal);
+          });
 
         const dynamicRevealContainers = [
           "#products-grid",
