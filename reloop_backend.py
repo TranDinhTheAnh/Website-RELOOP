@@ -392,6 +392,39 @@ def init_db():
             )
         """)
 
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS conversations (
+                id TEXT PRIMARY KEY,
+                product_id TEXT NOT NULL,
+                buyer_id TEXT NOT NULL,
+                seller_id TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE (product_id, buyer_id),
+                FOREIGN KEY (product_id) REFERENCES products(id),
+                FOREIGN KEY (buyer_id) REFERENCES users(id),
+                FOREIGN KEY (seller_id) REFERENCES users(id)
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS messages (
+                id TEXT PRIMARY KEY,
+                conversation_id TEXT NOT NULL,
+                sender_id TEXT NOT NULL,
+                recipient_id TEXT NOT NULL,
+                content TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                read_at TEXT,
+                FOREIGN KEY (conversation_id) REFERENCES conversations(id),
+                FOREIGN KEY (sender_id) REFERENCES users(id),
+                FOREIGN KEY (recipient_id) REFERENCES users(id)
+            )
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_messages_conversation_created
+            ON messages (conversation_id, created_at)
+        """)
+
         # Nạp dữ liệu mẫu nếu database còn trống
         cursor.execute("SELECT COUNT(*) FROM users")
         if cursor.fetchone()[0] == 0:
@@ -610,6 +643,14 @@ class CheckoutRequest(BaseModel):
     phone: str = Field(..., min_length=8, max_length=20)
     shipping_address: str = Field(..., min_length=10, max_length=500)
     payment_method: str = Field(default="COD", pattern="^(COD|BANK_TRANSFER|E_WALLET)$")
+
+
+class CreateConversationRequest(BaseModel):
+    product_id: str = Field(..., min_length=1, max_length=100)
+
+
+class SendMessageRequest(BaseModel):
+    content: str = Field(..., min_length=1, max_length=2000)
 
 
 class RedeemVoucherRequest(BaseModel):
@@ -857,7 +898,12 @@ def list_products(
     limit: int = Query(200, ge=1, le=1000),
     offset: int = Query(0, ge=0)
 ):
-    query_sql = "SELECT * FROM products WHERE status = 'available'"
+    query_sql = """
+        SELECT products.*, users.name AS seller_name
+        FROM products
+        LEFT JOIN users ON users.id = products.seller_id
+        WHERE products.status = 'available'
+    """
     params: List[Any] = []
 
     if category and category != "all":
@@ -873,13 +919,13 @@ def list_products(
         params.extend([kw, kw, kw])
 
     order_map = {
-        "condition-desc": "condition_score DESC",
-        "price-asc": "price ASC",
-        "price-desc": "price DESC",
-        "cycle-desc": "cycle DESC",
-        "default": "created_at DESC"
+        "condition-desc": "products.condition_score DESC",
+        "price-asc": "products.price ASC",
+        "price-desc": "products.price DESC",
+        "cycle-desc": "products.cycle DESC",
+        "default": "products.created_at DESC"
     }
-    query_sql += f" ORDER BY {order_map.get(sort, 'created_at DESC')}"
+    query_sql += f" ORDER BY {order_map.get(sort, 'products.created_at DESC')}"
 
     with get_db() as conn:
         cursor = conn.cursor()
@@ -900,11 +946,192 @@ def list_products(
 def get_product_detail(product_id: str):
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM products WHERE id = ?", (product_id,))
+        cursor.execute("""
+            SELECT products.*, users.name AS seller_name
+            FROM products
+            LEFT JOIN users ON users.id = products.seller_id
+            WHERE products.id = ?
+        """, (product_id,))
         row = cursor.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Không tìm thấy sản phẩm.")
         return enrich_product_dict(row)
+
+
+@app.get("/api/conversations", summary="Danh sách hội thoại mua bán của người dùng")
+def list_conversations(user: Dict[str, Any] = Depends(get_current_user)):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT
+                conversations.id,
+                conversations.product_id,
+                products.title AS product_name,
+                products.image_url AS product_image,
+                conversations.buyer_id,
+                buyer.name AS buyer_name,
+                conversations.seller_id,
+                seller.name AS seller_name,
+                conversations.updated_at,
+                (SELECT content FROM messages
+                 WHERE conversation_id = conversations.id
+                 ORDER BY created_at DESC, id DESC LIMIT 1) AS last_message,
+                (SELECT COUNT(*) FROM messages
+                 WHERE conversation_id = conversations.id
+                   AND recipient_id = ? AND read_at IS NULL) AS unread_count
+            FROM conversations
+            JOIN products ON products.id = conversations.product_id
+            JOIN users AS buyer ON buyer.id = conversations.buyer_id
+            JOIN users AS seller ON seller.id = conversations.seller_id
+            WHERE conversations.buyer_id = ? OR conversations.seller_id = ?
+            ORDER BY conversations.updated_at DESC
+        """, (user["id"], user["id"], user["id"]))
+        rows = cursor.fetchall()
+
+    conversations = []
+    for row in rows:
+        conversation = dict(row)
+        is_buyer = conversation["buyer_id"] == user["id"]
+        conversation["other_user_id"] = (
+            conversation["seller_id"] if is_buyer else conversation["buyer_id"]
+        )
+        conversation["other_user_name"] = (
+            conversation["seller_name"] if is_buyer else conversation["buyer_name"]
+        )
+        conversations.append(conversation)
+
+    return {"items": conversations}
+
+
+@app.post("/api/conversations", summary="Bắt đầu hoặc mở hội thoại với người bán")
+def create_conversation(
+    payload: CreateConversationRequest,
+    user: Dict[str, Any] = Depends(get_current_user),
+):
+    now = datetime.utcnow().isoformat()
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT products.id, products.seller_id, users.name AS seller_name
+            FROM products
+            JOIN users ON users.id = products.seller_id
+            WHERE products.id = ?
+        """, (payload.product_id,))
+        product = cursor.fetchone()
+        if not product:
+            raise HTTPException(
+                status_code=404,
+                detail="Không tìm thấy người bán cho sản phẩm này.",
+            )
+        if product["seller_id"] == user["id"]:
+            raise HTTPException(status_code=400, detail="Bạn không thể nhắn tin cho chính mình.")
+
+        cursor.execute("""
+            SELECT id FROM conversations
+            WHERE product_id = ? AND buyer_id = ? AND seller_id = ?
+        """, (payload.product_id, user["id"], product["seller_id"]))
+        row = cursor.fetchone()
+        if row:
+            conversation_id = row["id"]
+        else:
+            conversation_id = f"c-{uuid.uuid4().hex[:12]}"
+            cursor.execute("""
+                INSERT INTO conversations
+                    (id, product_id, buyer_id, seller_id, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (
+                conversation_id, payload.product_id, user["id"],
+                product["seller_id"], now, now,
+            ))
+
+    return {"id": conversation_id, "product_id": payload.product_id}
+
+
+@app.get(
+    "/api/conversations/{conversation_id}/messages",
+    summary="Xem tin nhắn trong hội thoại",
+)
+def list_conversation_messages(
+    conversation_id: str,
+    user: Dict[str, Any] = Depends(get_current_user),
+):
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, buyer_id, seller_id
+            FROM conversations
+            WHERE id = ?
+        """, (conversation_id,))
+        conversation = cursor.fetchone()
+        if not conversation:
+            raise HTTPException(status_code=404, detail="Không tìm thấy hội thoại.")
+        if user["id"] not in (conversation["buyer_id"], conversation["seller_id"]):
+            raise HTTPException(status_code=403, detail="Bạn không có quyền xem hội thoại này.")
+
+        now = datetime.utcnow().isoformat()
+        cursor.execute("""
+            UPDATE messages SET read_at = ?
+            WHERE conversation_id = ? AND recipient_id = ? AND read_at IS NULL
+        """, (now, conversation_id, user["id"]))
+        cursor.execute("""
+            SELECT messages.id, messages.sender_id, users.name AS sender_name,
+                   messages.content, messages.created_at, messages.read_at
+            FROM messages
+            JOIN users ON users.id = messages.sender_id
+            WHERE messages.conversation_id = ?
+            ORDER BY messages.created_at, messages.id
+        """, (conversation_id,))
+        messages = [dict(row) for row in cursor.fetchall()]
+
+    return {"items": messages}
+
+
+@app.post(
+    "/api/conversations/{conversation_id}/messages",
+    summary="Gửi tin nhắn trong hội thoại",
+)
+def send_conversation_message(
+    conversation_id: str,
+    payload: SendMessageRequest,
+    user: Dict[str, Any] = Depends(get_current_user),
+):
+    content = payload.content.strip()
+    if not content:
+        raise HTTPException(status_code=422, detail="Tin nhắn không được để trống.")
+
+    now = datetime.utcnow().isoformat()
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT buyer_id, seller_id
+            FROM conversations
+            WHERE id = ?
+        """, (conversation_id,))
+        conversation = cursor.fetchone()
+        if not conversation:
+            raise HTTPException(status_code=404, detail="Không tìm thấy hội thoại.")
+        if user["id"] not in (conversation["buyer_id"], conversation["seller_id"]):
+            raise HTTPException(status_code=403, detail="Bạn không có quyền gửi tin nhắn này.")
+
+        recipient_id = (
+            conversation["seller_id"]
+            if user["id"] == conversation["buyer_id"]
+            else conversation["buyer_id"]
+        )
+        cursor.execute("""
+            INSERT INTO messages
+                (id, conversation_id, sender_id, recipient_id, content, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (
+            f"m-{uuid.uuid4().hex[:12]}", conversation_id,
+            user["id"], recipient_id, content, now,
+        ))
+        cursor.execute(
+            "UPDATE conversations SET updated_at = ? WHERE id = ?",
+            (now, conversation_id),
+        )
+
+    return {"message": "Đã gửi tin nhắn.", "created_at": now}
 
 
 # =============================================================================
