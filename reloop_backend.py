@@ -11,6 +11,7 @@ Tài liệu API tương tác (Swagger UI): http://localhost:8000/docs
 """
 
 import os
+import asyncio
 import json
 import base64
 import uuid
@@ -20,6 +21,7 @@ import hashlib
 import secrets
 import sqlite3
 import threading
+import re
 import html
 import logging
 import urllib.error
@@ -41,7 +43,7 @@ from fastapi import (
     WebSocketDisconnect,
 )
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 # =============================================================================
 # 1. CẤU HÌNH HỆ THỐNG & DATABASE SQLITE
@@ -60,9 +62,15 @@ VILAO_API_BASE_URL = (
 )
 KIMI_MODEL = os.getenv("KIMI_MODEL", "").strip() or "kimi-2.7"
 MAX_GARMENT_IMAGE_BYTES = 10 * 1024 * 1024
+ORDER_RESERVATION_MINUTES = 15
 COMPLAINT_WINDOW_DAYS = 7  # Tính từ orders.created_at; đổi sang mốc giao hàng khi có trạng thái giao hàng.
 MESSAGE_ONLINE_THRESHOLD_SECONDS = 75
 CIRCULAR_BADGE_TEXT = "Sản phẩm chính hãng thuộc hệ tuần hoàn, đã được kiểm định từ vòng trước"
+EMAIL_PATTERN = re.compile(
+    r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@"
+    r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
+    r"(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$"
+)
 logger = logging.getLogger(__name__)
 
 
@@ -225,6 +233,7 @@ def get_db():
 
 MESSAGE_WEBSOCKET_TICKETS: Dict[str, tuple[str, datetime]] = {}
 MESSAGE_WEBSOCKET_TICKETS_LOCK = threading.Lock()
+_reservation_cleanup_task: Optional[asyncio.Task] = None
 
 
 class MessageConnectionManager:
@@ -333,6 +342,10 @@ def init_db():
                 created_at TEXT NOT NULL
             )
         """)
+        cursor.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_lower
+            ON users (LOWER(email))
+        """)
 
         # 2. Bảng Phiên đăng nhập (Sessions)
         cursor.execute("""
@@ -413,11 +426,27 @@ def init_db():
             "ALTER TABLE orders ADD COLUMN payment_method TEXT",
             "ALTER TABLE orders ADD COLUMN payment_status TEXT",
             "ALTER TABLE orders ADD COLUMN order_status TEXT",
+            "ALTER TABLE orders ADD COLUMN voucher_id TEXT",
+            "ALTER TABLE orders ADD COLUMN reservation_expires_at TEXT",
+            "ALTER TABLE orders ADD COLUMN completed_at TEXT",
         ):
             try:
                 cursor.execute(column_sql)
             except sqlite3.OperationalError:
                 pass
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS product_reservations (
+                product_id TEXT PRIMARY KEY,
+                order_id TEXT NOT NULL,
+                expires_at TEXT,
+                FOREIGN KEY (product_id) REFERENCES products(id),
+                FOREIGN KEY (order_id) REFERENCES orders(id)
+            )
+        """)
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_product_reservations_order ON product_reservations (order_id)"
+        )
 
         # 6. Bảng Mã giảm giá đổi từ Điểm Xanh (Vouchers)
         cursor.execute("""
@@ -608,10 +637,30 @@ def init_db():
             cursor.execute("DELETE FROM wardrobe_items WHERE user_id = 'u-demo' AND source_product_id LIKE 'p-seed-%'")
 
         ensure_admin_account(cursor)
+        _reconcile_points_ledger(cursor)
 
 
 def _is_admin_user(user: Dict[str, Any]) -> bool:
     return bool(ADMIN_EMAIL) and (user.get("email") or "").strip().lower() == ADMIN_EMAIL
+
+
+def _reconcile_points_ledger(cursor: sqlite3.Cursor) -> None:
+    cursor.execute("""
+        SELECT users.id, users.green_points, COALESCE(SUM(points_ledger.delta), 0) AS ledger_total
+        FROM users
+        LEFT JOIN points_ledger ON points_ledger.user_id = users.id
+        GROUP BY users.id
+    """)
+    for row in cursor.fetchall():
+        difference = row["green_points"] - row["ledger_total"]
+        if difference:
+            cursor.execute(
+                """
+                INSERT INTO points_ledger (id, user_id, title, delta, entry_type, created_at)
+                VALUES (?, ?, 'Điều chỉnh đối soát Điểm Xanh', ?, 'adjustment', ?)
+                """,
+                (f"l-{uuid.uuid4().hex[:8]}", row["id"], difference, datetime.utcnow().isoformat()),
+            )
 
 
 def ensure_admin_account(cursor: sqlite3.Cursor):
@@ -776,9 +825,33 @@ def seed_initial_data(cursor: sqlite3.Cursor):
     """, ledger)
 
 
+async def _reservation_cleanup_loop():
+    while True:
+        await asyncio.sleep(30)
+        try:
+            with get_db() as conn:
+                _release_expired_order_reservations(conn.cursor(), datetime.utcnow())
+        except sqlite3.Error:
+            logger.exception("Could not release expired product reservations.")
+
+
 @app.on_event("startup")
-def on_startup():
+async def on_startup():
+    global _reservation_cleanup_task
     init_db()
+    _reservation_cleanup_task = asyncio.create_task(_reservation_cleanup_loop())
+
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    global _reservation_cleanup_task
+    if _reservation_cleanup_task:
+        _reservation_cleanup_task.cancel()
+        try:
+            await _reservation_cleanup_task
+        except asyncio.CancelledError:
+            pass
+        _reservation_cleanup_task = None
 
 
 # =============================================================================
@@ -799,17 +872,44 @@ class LoginRequest(BaseModel):
 
 
 class CreateListingRequest(BaseModel):
-    title: str = Field(..., min_length=3)
-    category: str
-    size: str = "M"
-    color: str
-    material: str
+    title: str = Field(..., min_length=3, max_length=120)
+    category: str = Field(..., min_length=1, max_length=40)
+    size: str = Field(default="M", min_length=1, max_length=16)
+    color: str = Field(..., min_length=1, max_length=80)
+    material: str = Field(..., min_length=1, max_length=120)
     condition_score: int = Field(..., ge=60, le=100)
-    condition_label: str = "Như mới"
-    ai_note: str = "Đã qua 42 điểm quét AI kiểm định sợi vải và đường may."
-    price: int = Field(..., ge=30000)
-    original_price: int = Field(..., ge=50000)
-    image_url: str
+    condition_label: str = Field(default="Như mới", max_length=30)
+    ai_note: str = Field(
+        default="Đã qua 42 điểm quét AI kiểm định sợi vải và đường may.",
+        max_length=500,
+    )
+    price: int = Field(..., ge=30000, le=100000000)
+    original_price: int = Field(..., ge=50000, le=100000000)
+    image_url: str = Field(..., min_length=10, max_length=14_000_000)
+
+    @field_validator(
+        "title", "category", "size", "color", "material", "condition_label", "ai_note",
+        mode="before",
+    )
+    @classmethod
+    def normalize_listing_text(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            return " ".join(re.sub(r"[\x00-\x1f\x7f]", " ", value).split())
+        return value
+
+    @field_validator("image_url", mode="before")
+    @classmethod
+    def validate_listing_image_url(cls, value: Any) -> Any:
+        if not isinstance(value, str):
+            return value
+        image_url = value.strip()
+        if not re.match(
+            r"^(?:https?://|/(?!/)|data:image/(?:jpeg|png|webp);base64,)",
+            image_url,
+            flags=re.IGNORECASE,
+        ):
+            raise ValueError("Ảnh sản phẩm cần là URL HTTP(S) hoặc ảnh JPEG, PNG, WEBP.")
+        return image_url
 
 
 class ReconsignRequest(BaseModel):
@@ -830,12 +930,175 @@ class ChatRequest(BaseModel):
 
 
 class CheckoutRequest(BaseModel):
-    product_ids: List[str] = Field(..., min_length=1)
+    product_ids: List[str] = Field(..., min_length=1, max_length=50)
     voucher_id: Optional[str] = None
     recipient_name: str = Field(..., min_length=2, max_length=100)
-    phone: str = Field(..., min_length=8, max_length=20)
+    phone: str = Field(..., min_length=8, max_length=30)
     shipping_address: str = Field(..., min_length=10, max_length=500)
     payment_method: str = Field(default="COD", pattern="^(COD|BANK_TRANSFER|E_WALLET)$")
+
+
+def normalize_vietnamese_phone(value: str) -> str:
+    phone = re.sub(r"[\s().-]", "", value)
+    if phone.startswith("+84"):
+        phone = "0" + phone[3:]
+    if not re.fullmatch(r"0\d{9}", phone):
+        raise HTTPException(
+            status_code=422,
+            detail="Số điện thoại cần đúng 10 chữ số Việt Nam, có thể bắt đầu bằng +84.",
+        )
+    return phone
+
+
+def _release_expired_order_reservations(cursor: sqlite3.Cursor, now: datetime) -> None:
+    now_text = now.isoformat()
+    cursor.execute(
+        """
+        SELECT id, voucher_id FROM orders
+        WHERE order_status = 'pending_payment'
+          AND reservation_expires_at IS NOT NULL
+          AND reservation_expires_at <= ?
+        """,
+        (now_text,),
+    )
+    expired_orders = [dict(row) for row in cursor.fetchall()]
+    for order in expired_orders:
+        cursor.execute(
+            "SELECT product_id FROM product_reservations WHERE order_id = ?",
+            (order["id"],),
+        )
+        reserved_ids = [row["product_id"] for row in cursor.fetchall()]
+        for product_id in reserved_ids:
+            cursor.execute(
+                "UPDATE products SET status = 'available' WHERE id = ? AND status = 'reserved'",
+                (product_id,),
+            )
+        cursor.execute("DELETE FROM product_reservations WHERE order_id = ?", (order["id"],))
+        cursor.execute(
+            """
+            UPDATE orders
+            SET order_status = 'expired', payment_status = 'expired'
+            WHERE id = ? AND order_status = 'pending_payment'
+            """,
+            (order["id"],),
+        )
+        if order.get("voucher_id"):
+            cursor.execute(
+                "UPDATE vouchers SET is_used = 0 WHERE id = ?",
+                (order["voucher_id"],),
+            )
+
+
+def _complete_cod_order(cursor: sqlite3.Cursor, order_id: str, now: datetime) -> bool:
+    cursor.execute("SELECT * FROM orders WHERE id = ?", (order_id,))
+    order_row = cursor.fetchone()
+    if not order_row:
+        raise HTTPException(status_code=404, detail="Không tìm thấy đơn hàng.")
+    order = dict(order_row)
+    if order["order_status"] == "completed":
+        return False
+    if order["payment_method"] != "COD" or order["order_status"] != "processing":
+        raise HTTPException(status_code=409, detail="Đơn COD không ở trạng thái có thể xác nhận giao hàng.")
+
+    product_ids = _parse_json_list(order.get("items_json"))
+    products = []
+    for product_id in product_ids:
+        cursor.execute(
+            """
+            SELECT p.* FROM products p
+            JOIN product_reservations r ON r.product_id = p.id
+            WHERE p.id = ? AND p.status = 'reserved' AND r.order_id = ?
+            """,
+            (product_id, order_id),
+        )
+        product = cursor.fetchone()
+        if not product:
+            raise HTTPException(status_code=409, detail="Sản phẩm không còn được giữ cho đơn hàng này.")
+        products.append(dict(product))
+
+    points_earned = sum(product["points_reward"] for product in products)
+    now_text = now.isoformat()
+    cursor.execute("SELECT email FROM users WHERE id = ?", (order["user_id"],))
+    buyer_row = cursor.fetchone()
+    buyer_email = buyer_row["email"] if buyer_row else None
+    cursor.execute(
+        """
+        UPDATE orders
+        SET order_status = 'completed', payment_status = 'paid',
+            completed_at = ?, points_earned = ?
+        WHERE id = ? AND order_status = 'processing' AND payment_method = 'COD'
+        """,
+        (now_text, points_earned, order_id),
+    )
+    if cursor.rowcount != 1:
+        raise HTTPException(status_code=409, detail="Đơn hàng vừa được cập nhật bởi thao tác khác.")
+
+    purchased_at = now.strftime("%d/%m/%Y")
+    for product in products:
+        cursor.execute(
+            "UPDATE products SET status = 'sold' WHERE id = ? AND status = 'reserved'",
+            (product["id"],),
+        )
+        if cursor.rowcount != 1:
+            raise HTTPException(status_code=409, detail="Sản phẩm vừa được cập nhật bởi thao tác khác.")
+        cursor.execute(
+            """
+            INSERT INTO wardrobe_items (
+                id, user_id, source_product_id, title, category, size, color, material,
+                cycle, original_price, paid_price, image_url, reconsigned, purchased_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+            """,
+            (
+                f"w-{uuid.uuid4().hex[:8]}", order["user_id"], product["id"],
+                product["title"], product["category"], product["size"], product["color"],
+                product["material"], product["cycle"], product["original_price"],
+                product["price"], product["image_url"], purchased_at,
+            ),
+        )
+        cursor.execute(
+            "DELETE FROM product_reservations WHERE product_id = ? AND order_id = ?",
+            (product["id"], order_id),
+        )
+        seller_id = product.get("seller_id")
+        if seller_id and seller_id != order["user_id"]:
+            cursor.execute(
+                """
+                INSERT INTO notifications (
+                    id, user_id, notification_type, title, message, product_id, order_id,
+                    buyer_name, buyer_email, buyer_phone, buyer_address, is_read, created_at
+                )
+                VALUES (?, ?, 'sale_completed', ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+                """,
+                (
+                    f"noti-{uuid.uuid4().hex[:8]}", seller_id,
+                    "Đơn COD đã giao thành công",
+                    f"{product['title']} đã được giao trong đơn hàng #{order_id}.",
+                    product["id"], order_id, order["recipient_name"], buyer_email,
+                    order["phone"], order["shipping_address"], now_text,
+                ),
+            )
+
+    cursor.execute(
+        """
+        UPDATE users
+        SET green_points = green_points + ?,
+            co2_saved = co2_saved + ?,
+            water_saved = water_saved + ?
+        WHERE id = ?
+        """,
+        (points_earned, round(len(products) * 5.8, 1), len(products) * 1350, order["user_id"]),
+    )
+    cursor.execute(
+        """
+        INSERT INTO points_ledger (id, user_id, title, delta, entry_type, created_at)
+        VALUES (?, ?, ?, ?, 'earn', ?)
+        """,
+        (
+            f"l-{uuid.uuid4().hex[:8]}", order["user_id"],
+            f"Hoàn tất đơn hàng #{order_id}", points_earned, now_text,
+        ),
+    )
+    return True
 
 
 class CreateComplaintRequest(BaseModel):
@@ -886,7 +1149,7 @@ class RedeemVoucherRequest(BaseModel):
 
 class DonateCharityRequest(BaseModel):
     project_id: str
-    points_to_donate: int = Field(..., ge=50)
+    points_to_donate: int = Field(..., ge=50, le=100000)
 
 
 # =============================================================================
@@ -899,6 +1162,8 @@ def get_current_user(authorization: Optional[str] = Header(None)) -> Dict[str, A
         raise HTTPException(status_code=401, detail="Vui lòng đăng nhập để sử dụng tính năng này.")
     token = authorization.replace("Bearer ", "").strip()
 
+    expired = False
+    user_data: Dict[str, Any]
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT user_id, expires_at FROM sessions WHERE token = ?", (token,))
@@ -908,13 +1173,17 @@ def get_current_user(authorization: Optional[str] = Header(None)) -> Dict[str, A
 
         if datetime.fromisoformat(session["expires_at"]) < datetime.utcnow():
             cursor.execute("DELETE FROM sessions WHERE token = ?", (token,))
-            raise HTTPException(status_code=401, detail="Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.")
+            expired = True
+        else:
+            cursor.execute("SELECT * FROM users WHERE id = ?", (session["user_id"],))
+            user = cursor.fetchone()
+            if not user:
+                raise HTTPException(status_code=404, detail="Không tìm thấy tài khoản người dùng.")
+            user_data = dict(user)
 
-        cursor.execute("SELECT * FROM users WHERE id = ?", (session["user_id"],))
-        user = cursor.fetchone()
-        if not user:
-            raise HTTPException(status_code=404, detail="Không tìm thấy tài khoản người dùng.")
-        return dict(user)
+    if expired:
+        raise HTTPException(status_code=401, detail="Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.")
+    return user_data
 
 
 def get_optional_user(authorization: Optional[str] = Header(None)) -> Optional[Dict[str, Any]]:
@@ -943,6 +1212,8 @@ def enrich_product_dict(row: sqlite3.Row) -> Dict[str, Any]:
 @app.post("/api/auth/register", summary="Tạo tài khoản thành viên mới (+100 Điểm Xanh)")
 def register_user(payload: RegisterRequest):
     email_clean = payload.email.strip().lower()
+    if not EMAIL_PATTERN.fullmatch(email_clean):
+        raise HTTPException(status_code=422, detail="Vui lòng nhập địa chỉ email hợp lệ.")
     if ADMIN_EMAIL and email_clean == ADMIN_EMAIL:
         raise HTTPException(status_code=403, detail="Email quản trị viên không thể đăng ký thông qua biểu mẫu công khai.")
     with get_db() as conn:
@@ -1767,6 +2038,8 @@ async def create_marketplace_listing(
     payload: CreateListingRequest,
     user: Dict[str, Any] = Depends(get_current_user)
 ):
+    if payload.price > payload.original_price:
+        raise HTTPException(status_code=422, detail="Giá bán không được cao hơn giá gốc.")
     product_id = f"p-{uuid.uuid4().hex[:8]}"
     now = datetime.utcnow().isoformat()
     points_earned = 120
@@ -2221,6 +2494,7 @@ def get_my_orders(user: Dict[str, Any] = Depends(get_current_user)):
     now = datetime.utcnow()
     with get_db() as conn:
         cursor = conn.cursor()
+        _release_expired_order_reservations(cursor, now)
         cursor.execute(
             "SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC",
             (user["id"],),
@@ -2259,6 +2533,7 @@ def get_my_orders(user: Dict[str, Any] = Depends(get_current_user)):
                 complaint_row = cursor.fetchone()
                 complaint = dict(complaint_row) if complaint_row else None
                 created_at = _utc_naive_datetime(order.get("created_at"))
+                order_status = order.get("order_status") or "confirmed"
                 within_window = bool(
                     created_at
                     and now <= created_at + timedelta(days=COMPLAINT_WINDOW_DAYS)
@@ -2267,7 +2542,8 @@ def get_my_orders(user: Dict[str, Any] = Depends(get_current_user)):
                 seller_id = product.get("seller_id")
                 product_exists = bool(product)
                 can_complain = bool(
-                    within_window
+                    order_status in ("completed", "confirmed")
+                    and within_window
                     and not reconsigned
                     and not complaint
                     and product_exists
@@ -2275,6 +2551,8 @@ def get_my_orders(user: Dict[str, Any] = Depends(get_current_user)):
                 )
                 if complaint:
                     blocked_reason = "Đơn hàng này đã có khiếu nại."
+                elif order_status not in ("completed", "confirmed"):
+                    blocked_reason = "Đơn hàng chưa hoàn tất."
                 elif not within_window:
                     blocked_reason = f"Đã quá thời hạn khiếu nại {COMPLAINT_WINDOW_DAYS} ngày."
                 elif reconsigned:
@@ -2312,7 +2590,10 @@ def get_my_orders(user: Dict[str, Any] = Depends(get_current_user)):
                 {
                     "order_id": order["id"],
                     "created_at": order["created_at"],
-                    "order_status": order.get("order_status") or "confirmed",
+                    "order_status": order_status,
+                    "payment_status": order.get("payment_status"),
+                    "payment_method": order.get("payment_method"),
+                    "reservation_expires_at": order.get("reservation_expires_at"),
                     "items": product_items,
                 }
             )
@@ -2324,11 +2605,13 @@ def checkout_order(
     payload: CheckoutRequest,
     user: Dict[str, Any] = Depends(get_current_user)
 ):
-    now = datetime.utcnow().isoformat()
-    today_str = datetime.utcnow().strftime("%d/%m/%Y")
-
+    now_dt = datetime.utcnow()
+    now = now_dt.isoformat()
+    normalized_phone = normalize_vietnamese_phone(payload.phone)
     with get_db() as conn:
         cursor = conn.cursor()
+        cursor.execute("BEGIN IMMEDIATE")
+        _release_expired_order_reservations(cursor, now_dt)
         unique_product_ids = list(dict.fromkeys(payload.product_ids))
         if len(unique_product_ids) != len(payload.product_ids):
             raise HTTPException(status_code=400, detail="Giỏ hàng chứa sản phẩm trùng lặp.")
@@ -2336,25 +2619,30 @@ def checkout_order(
         if not payload.recipient_name.strip() or not payload.shipping_address.strip():
             raise HTTPException(status_code=400, detail="Vui lòng nhập đầy đủ người nhận và địa chỉ.")
 
-        placeholders = ",".join(["?"] * len(payload.product_ids))
-        cursor.execute(f"SELECT * FROM products WHERE id IN ({placeholders}) AND status = 'available'", unique_product_ids)
+        placeholders = ",".join(["?"] * len(unique_product_ids))
+        cursor.execute(
+            f"SELECT * FROM products WHERE id IN ({placeholders})",
+            unique_product_ids,
+        )
         products = [dict(r) for r in cursor.fetchall()]
 
         if len(products) != len(unique_product_ids):
-            available_ids = {p["id"] for p in products}
-            unavailable_ids = [product_id for product_id in unique_product_ids if product_id not in available_ids]
-            raise HTTPException(
-                status_code=409,
-                detail=f"Sản phẩm không còn khả dụng: {', '.join(unavailable_ids)}"
-            )
+            raise HTTPException(status_code=404, detail="Không tìm thấy một hoặc nhiều sản phẩm trong giỏ hàng.")
+        if any(product.get("seller_id") == user["id"] for product in products):
+            raise HTTPException(status_code=403, detail="Bạn không thể mua sản phẩm do chính mình đăng bán.")
+        if any(product.get("status") != "available" for product in products):
+            raise HTTPException(status_code=409, detail="Sản phẩm vừa được người khác đặt hoặc không còn khả dụng.")
 
         subtotal = sum(p["price"] for p in products)
         discount = 0
         applied_voucher_code = None
+        applied_voucher_id = None
 
-        # Áp dụng Voucher Điểm Xanh nếu có
         if payload.voucher_id:
-            cursor.execute("SELECT * FROM vouchers WHERE id = ? AND user_id = ? AND is_used = 0", (payload.voucher_id, user["id"]))
+            cursor.execute(
+                "SELECT * FROM vouchers WHERE id = ? AND user_id = ? AND is_used = 0",
+                (payload.voucher_id, user["id"]),
+            )
             voucher = cursor.fetchone()
             if not voucher:
                 raise HTTPException(status_code=400, detail="Voucher không hợp lệ hoặc đã được sử dụng.")
@@ -2362,42 +2650,58 @@ def checkout_order(
                 raise HTTPException(status_code=400, detail=f"Đơn hàng cần tối thiểu {voucher['min_order']:,}đ để dùng mã này.")
             discount = min(subtotal, voucher["discount_amount"])
             applied_voucher_code = voucher["code"]
-            cursor.execute("UPDATE vouchers SET is_used = 1 WHERE id = ?", (voucher["id"],))
+            applied_voucher_id = voucher["id"]
+            cursor.execute(
+                "UPDATE vouchers SET is_used = 1 WHERE id = ? AND user_id = ? AND is_used = 0",
+                (voucher["id"], user["id"]),
+            )
+            if cursor.rowcount != 1:
+                raise HTTPException(status_code=409, detail="Voucher vừa được sử dụng ở đơn hàng khác.")
 
         total_paid = max(0, subtotal - discount)
-        total_points_earned = sum(p["points_reward"] for p in products)
-
-        # 1. Tự động lưu từng sản phẩm vào Tủ đồ số của khách hàng & cập nhật trạng thái đã bán
-        for p in products:
-            wardrobe_id = f"w-{uuid.uuid4().hex[:8]}"
-            cursor.execute("""
-                INSERT INTO wardrobe_items (id, user_id, source_product_id, title, category, size, color, material, cycle, original_price, paid_price, image_url, reconsigned, purchased_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
-            """, (
-                wardrobe_id, user["id"], p["id"], p["title"], p["category"],
-                p["size"], p["color"], p["material"], p["cycle"],
-                p["original_price"], p["price"], p["image_url"], today_str
-            ))
-            cursor.execute("UPDATE products SET status = 'sold' WHERE id = ?", (p["id"],))
-
-        # 2. Tạo bản ghi đơn hàng
         order_id = f"ord-{uuid.uuid4().hex[:8]}"
-        payment_status = "pending" if payload.payment_method != "COD" else "unpaid"
+        is_cod = payload.payment_method == "COD"
+        payment_status = "unpaid" if is_cod else "pending"
+        order_status = "processing" if is_cod else "pending_payment"
+        reservation_expires_at = (
+            None
+            if is_cod
+            else (now_dt + timedelta(minutes=ORDER_RESERVATION_MINUTES)).isoformat()
+        )
         cursor.execute("""
             INSERT INTO orders (
                 id, user_id, items_json, subtotal_vnd, discount_vnd, total_vnd,
                 voucher_code, points_earned, created_at, recipient_name, phone,
-                shipping_address, payment_method, payment_status, order_status
+                shipping_address, payment_method, payment_status, order_status,
+                voucher_id, reservation_expires_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             order_id, user["id"], json.dumps([p["id"] for p in products]),
-            subtotal, discount, total_paid, applied_voucher_code, total_points_earned, now,
-            payload.recipient_name.strip(), payload.phone.strip(), payload.shipping_address.strip(),
-            payload.payment_method, payment_status, "confirmed"
+            subtotal, discount, total_paid, applied_voucher_code, now,
+            payload.recipient_name.strip(), normalized_phone, payload.shipping_address.strip(),
+            payload.payment_method, payment_status, order_status, applied_voucher_id,
+            reservation_expires_at,
         ))
 
-        # 3. Thông báo cho từng người bán kèm thông tin người mua
+        for product in products:
+            cursor.execute(
+                "UPDATE products SET status = 'reserved' WHERE id = ? AND status = 'available'",
+                (product["id"],),
+            )
+            if cursor.rowcount != 1:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Sản phẩm vừa được người khác đặt. Vui lòng tải lại giỏ hàng.",
+                )
+            cursor.execute(
+                """
+                INSERT INTO product_reservations (product_id, order_id, expires_at)
+                VALUES (?, ?, ?)
+                """,
+                (product["id"], order_id, reservation_expires_at),
+            )
+
         for product in products:
             seller_id = product.get("seller_id")
             if not seller_id or seller_id == user["id"]:
@@ -2407,51 +2711,151 @@ def checkout_order(
                     id, user_id, notification_type, title, message, product_id, order_id,
                     buyer_name, buyer_email, buyer_phone, buyer_address, is_read, created_at
                 )
-                VALUES (?, ?, 'sale_completed', ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+                VALUES (?, ?, 'order_received', ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
             """, (
                 f"noti-{uuid.uuid4().hex[:8]}",
                 seller_id,
-                "Sản phẩm của bạn đã có người mua",
-                f"{product['title']} đã được mua trong đơn hàng #{order_id}.",
+                "Sản phẩm đang được giữ cho đơn hàng",
+                f"{product['title']} đang được giữ chỗ trong đơn hàng #{order_id}.",
                 product["id"],
                 order_id,
                 payload.recipient_name.strip(),
                 user["email"],
-                payload.phone.strip(),
+                normalized_phone,
                 payload.shipping_address.strip(),
                 now
             ))
 
-        # 4. Cộng Điểm Xanh & cập nhật chỉ số môi trường
-        co2_gain = round(len(products) * 5.8, 1)
-        water_gain = len(products) * 1350
-        cursor.execute("""
-            UPDATE users
-            SET green_points = green_points + ?,
-                co2_saved = co2_saved + ?,
-                water_saved = water_saved + ?
-            WHERE id = ?
-        """, (total_points_earned, co2_gain, water_gain, user["id"]))
-
-        cursor.execute("""
-            INSERT INTO points_ledger (id, user_id, title, delta, entry_type, created_at)
-            VALUES (?, ?, ?, ?, 'earn', ?)
-        """, (f"l-{uuid.uuid4().hex[:8]}", user["id"], f"Mua {len(products)} sản phẩm tuần hoàn (#{order_id})", total_points_earned, now))
+    message = (
+        "Đơn COD đã được tạo và sản phẩm được giữ chỗ."
+        if is_cod
+        else f"Đơn đang chờ thanh toán; sản phẩm được giữ chỗ trong {ORDER_RESERVATION_MINUTES} phút."
+    )
 
     return {
-        "message": f"Thanh toán thành công! Đã lưu {len(products)} món đồ vào Tủ đồ AI và cộng +{total_points_earned} Điểm Xanh.",
+        "message": message,
         "order_id": order_id,
         "total_paid": total_paid,
-        "points_earned": total_points_earned,
-        "co2_saved_added": co2_gain,
-        "water_saved_added": water_gain,
+        "points_earned": 0,
         "recipient_name": payload.recipient_name.strip(),
-        "phone": payload.phone.strip(),
+        "phone": normalized_phone,
         "shipping_address": payload.shipping_address.strip(),
         "payment_method": payload.payment_method,
         "payment_status": payment_status,
-        "order_status": "confirmed"
+        "order_status": order_status,
+        "reservation_expires_at": reservation_expires_at,
     }
+
+
+@app.get("/api/admin/orders/cod", summary="Đơn COD cần quản trị viên xử lý")
+def list_admin_cod_orders(user: Dict[str, Any] = Depends(get_current_user)):
+    if not _is_admin_user(user):
+        raise HTTPException(status_code=403, detail="Chỉ quản trị viên mới được xử lý đơn COD.")
+    now = datetime.utcnow()
+    with get_db() as conn:
+        cursor = conn.cursor()
+        _release_expired_order_reservations(cursor, now)
+        cursor.execute(
+            """
+            SELECT id, user_id, items_json, total_vnd, created_at, recipient_name,
+                   phone, shipping_address, order_status, payment_status
+            FROM orders
+            WHERE payment_method = 'COD' AND order_status = 'processing'
+            ORDER BY created_at ASC
+            """
+        )
+        orders = []
+        for row in cursor.fetchall():
+            order = dict(row)
+            product_ids = _parse_json_list(order.pop("items_json"))
+            cursor.execute(
+                "SELECT id, title FROM products WHERE id IN ({})".format(
+                    ",".join("?" for _ in product_ids) or "NULL"
+                ),
+                product_ids,
+            )
+            order["items"] = [dict(product) for product in cursor.fetchall()]
+            orders.append(order)
+    return {"items": orders}
+
+
+@app.post("/api/admin/orders/{order_id}/complete-cod", summary="Xác nhận giao thành công đơn COD")
+def complete_admin_cod_order(
+    order_id: str,
+    user: Dict[str, Any] = Depends(get_current_user),
+):
+    if not _is_admin_user(user):
+        raise HTTPException(status_code=403, detail="Chỉ quản trị viên mới được xử lý đơn COD.")
+    now = datetime.utcnow()
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("BEGIN IMMEDIATE")
+        completed = _complete_cod_order(cursor, order_id, now)
+    return {
+        "message": "Đã xác nhận giao hàng và hoàn tất đơn COD." if completed else "Đơn hàng đã hoàn tất trước đó.",
+        "order_status": "completed",
+    }
+
+
+@app.post("/api/admin/orders/{order_id}/cancel-cod", summary="Hủy đơn COD và nhả sản phẩm")
+def cancel_admin_cod_order(
+    order_id: str,
+    user: Dict[str, Any] = Depends(get_current_user),
+):
+    if not _is_admin_user(user):
+        raise HTTPException(status_code=403, detail="Chỉ quản trị viên mới được xử lý đơn COD.")
+    now = datetime.utcnow().isoformat()
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("BEGIN IMMEDIATE")
+        cursor.execute("SELECT * FROM orders WHERE id = ?", (order_id,))
+        order_row = cursor.fetchone()
+        if not order_row:
+            raise HTTPException(status_code=404, detail="Không tìm thấy đơn hàng.")
+        order = dict(order_row)
+        if order.get("payment_method") != "COD" or order.get("order_status") != "processing":
+            raise HTTPException(status_code=409, detail="Chỉ có thể hủy đơn COD đang chờ giao hàng.")
+        cursor.execute(
+            """
+            UPDATE orders SET order_status = 'cancelled', payment_status = 'cancelled'
+            WHERE id = ? AND order_status = 'processing' AND payment_method = 'COD'
+            """,
+            (order_id,),
+        )
+        if cursor.rowcount != 1:
+            raise HTTPException(status_code=409, detail="Đơn hàng vừa được cập nhật bởi thao tác khác.")
+        cursor.execute(
+            "SELECT product_id FROM product_reservations WHERE order_id = ?",
+            (order_id,),
+        )
+        reserved_ids = [row["product_id"] for row in cursor.fetchall()]
+        for product_id in reserved_ids:
+            cursor.execute(
+                "UPDATE products SET status = 'available' WHERE id = ? AND status = 'reserved'",
+                (product_id,),
+            )
+        cursor.execute("DELETE FROM product_reservations WHERE order_id = ?", (order_id,))
+        if order.get("voucher_id"):
+            cursor.execute("UPDATE vouchers SET is_used = 0 WHERE id = ?", (order["voucher_id"],))
+        for product_id in reserved_ids:
+            cursor.execute("SELECT seller_id, title FROM products WHERE id = ?", (product_id,))
+            product = cursor.fetchone()
+            if product and product["seller_id"]:
+                cursor.execute(
+                    """
+                    INSERT INTO notifications (
+                        id, user_id, notification_type, title, message, product_id, order_id,
+                        is_read, created_at
+                    ) VALUES (?, ?, 'order_cancelled', ?, ?, ?, ?, 0, ?)
+                    """,
+                    (
+                        f"noti-{uuid.uuid4().hex[:8]}", product["seller_id"],
+                        "Đơn COD đã bị hủy",
+                        f"{product['title']} đã được trả lại gian hàng.",
+                        product_id, order_id, now,
+                    ),
+                )
+    return {"message": "Đã hủy đơn COD và nhả sản phẩm.", "order_status": "cancelled"}
 
 
 # =============================================================================
@@ -2728,6 +3132,8 @@ def create_complaint(
         order = dict(order_row)
         if order["user_id"] != user["id"]:
             raise HTTPException(status_code=403, detail="Bạn không có quyền khiếu nại đơn hàng này.")
+        if order.get("order_status") not in ("completed", "confirmed"):
+            raise HTTPException(status_code=409, detail="Chỉ có thể khiếu nại sau khi đơn hàng hoàn tất.")
         if payload.product_id not in _parse_json_list(order.get("items_json")):
             raise HTTPException(status_code=400, detail="Sản phẩm không thuộc đơn hàng đã chọn.")
 
@@ -3125,9 +3531,12 @@ def redeem_points_for_voucher(
             INSERT INTO points_ledger (id, user_id, title, delta, entry_type, created_at)
             VALUES (?, ?, ?, ?, 'spend', ?)
         """, (f"l-{uuid.uuid4().hex[:8]}", user["id"], f"Đổi Voucher {code} (-{payload.discount_amount:,}đ)", -payload.points_cost, now))
+        cursor.execute("SELECT green_points FROM users WHERE id = ?", (user["id"],))
+        green_points = cursor.fetchone()["green_points"]
 
     return {
         "message": f"Đổi thành công mã giảm giá {code} trị giá {payload.discount_amount:,}đ!",
+        "green_points": green_points,
         "voucher": {
             "id": voucher_id,
             "code": code,
@@ -3156,9 +3565,6 @@ def donate_points_to_charity(
     user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Tỷ lệ quy đổi: 100 Điểm Xanh = 25.000đ hiện kim (250đ / 1 Điểm Xanh)."""
-    if user["green_points"] < payload.points_to_donate:
-        raise HTTPException(status_code=400, detail="Số dư Điểm Xanh không đủ để thực hiện quy đổi.")
-
     vnd_converted = payload.points_to_donate * 250
     now = datetime.utcnow().isoformat()
 
@@ -3173,8 +3579,10 @@ def donate_points_to_charity(
             UPDATE users
             SET green_points = green_points - ?,
                 donated_vnd = donated_vnd + ?
-            WHERE id = ?
-        """, (payload.points_to_donate, vnd_converted, user["id"]))
+            WHERE id = ? AND green_points >= ?
+        """, (payload.points_to_donate, vnd_converted, user["id"], payload.points_to_donate))
+        if cursor.rowcount != 1:
+            raise HTTPException(status_code=400, detail="Số dư Điểm Xanh không đủ để thực hiện quy đổi.")
 
         cursor.execute("""
             UPDATE charity_projects
@@ -3187,11 +3595,16 @@ def donate_points_to_charity(
             VALUES (?, ?, ?, ?, 'spend', ?)
         """, (f"l-{uuid.uuid4().hex[:8]}", user["id"], f"Quy đổi {vnd_converted:,}đ góp {project['name']}", -payload.points_to_donate, now))
 
-        cursor.execute("SELECT donated_vnd, co2_saved, water_saved FROM users WHERE id = ?", (user["id"],))
+        cursor.execute("SELECT green_points, donated_vnd, co2_saved, water_saved FROM users WHERE id = ?", (user["id"],))
         updated_stats = dict(cursor.fetchone())
+        cursor.execute("SELECT raised_vnd FROM charity_projects WHERE id = ?", (payload.project_id,))
+        raised_vnd = cursor.fetchone()["raised_vnd"]
 
     return {
         "message": f"Cảm ơn {user['name']}! Đã quy đổi {payload.points_to_donate} Điểm Xanh thành {vnd_converted:,}đ đóng góp cho {project['name']}.",
+        "project_id": payload.project_id,
+        "raised_vnd": raised_vnd,
+        "green_points": updated_stats["green_points"],
         "donated_vnd_added": vnd_converted,
         "green_certificate": {
             "holder_name": user["name"],
