@@ -122,6 +122,36 @@
         transform: translateY(-4px);
         box-shadow: 0 16px 32px -12px rgba(17, 24, 39, 0.12);
       }
+      .typing-indicator-dots {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+      }
+      .typing-indicator-dots span {
+        width: 5px;
+        height: 5px;
+        border-radius: 999px;
+        background: currentColor;
+        animation: typingDot 1s infinite ease-in-out;
+      }
+      .typing-indicator-dots span:nth-child(2) {
+        animation-delay: 0.15s;
+      }
+      .typing-indicator-dots span:nth-child(3) {
+        animation-delay: 0.3s;
+      }
+      @keyframes typingDot {
+        0%,
+        60%,
+        100% {
+          opacity: 0.35;
+          transform: translateY(0);
+        }
+        30% {
+          opacity: 1;
+          transform: translateY(-3px);
+        }
+      }
     </style>
   </head>
   <body
@@ -2028,6 +2058,13 @@
         notifications: [],
         conversations: [],
         activeConversationId: null,
+        messagesSocket: null,
+        messagesSocketConnecting: false,
+        messagesReconnectTimer: null,
+        messagesHeartbeatTimer: null,
+        messagesRealtimeWarned: false,
+        typingIndicatorTimer: null,
+        lastTypingSentAt: 0,
         charityProjects: [
           {
             id: "ch-1",
@@ -2994,6 +3031,7 @@
         if (messagesSection && !messagesSection.classList.contains("hidden")) {
           switchTab("store");
         }
+        closeMessagesSocket();
         state.token = null;
         state.user = null;
         state.notifications = [];
@@ -3157,6 +3195,177 @@
         }
       }
 
+      async function connectMessagesSocket() {
+        if (!state.token || state.messagesSocketConnecting) return;
+        if (
+          state.messagesSocket &&
+          (state.messagesSocket.readyState === WebSocket.OPEN ||
+            state.messagesSocket.readyState === WebSocket.CONNECTING)
+        ) {
+          return;
+        }
+        if (state.messagesReconnectTimer) {
+          clearTimeout(state.messagesReconnectTimer);
+          state.messagesReconnectTimer = null;
+        }
+
+        state.messagesSocketConnecting = true;
+        try {
+          const result = await apiFetch("/api/messages/ws-ticket", {
+            method: "POST",
+          });
+          if (!state.token) {
+            state.messagesSocketConnecting = false;
+            return;
+          }
+          const socketUrl = `${API_BASE.replace(/^http/, "ws")}/api/messages/ws?ticket=${encodeURIComponent(result.ticket)}`;
+          const socket = new WebSocket(socketUrl);
+          state.messagesSocket = socket;
+          socket.onopen = () => {
+            state.messagesSocketConnecting = false;
+            state.messagesRealtimeWarned = false;
+            if (state.messagesHeartbeatTimer) {
+              clearInterval(state.messagesHeartbeatTimer);
+            }
+            state.messagesHeartbeatTimer = setInterval(() => {
+              if (socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({ type: "ping" }));
+              }
+            }, 25000);
+          };
+          socket.onmessage = (event) => {
+            let payload;
+            try {
+              payload = JSON.parse(event.data);
+            } catch (error) {
+              console.warn("Nhận được sự kiện tin nhắn không hợp lệ:", error);
+              return;
+            }
+            handleMessagesSocketEvent(payload);
+          };
+          socket.onclose = () => {
+            if (state.messagesSocket !== socket) return;
+            state.messagesSocket = null;
+            state.messagesSocketConnecting = false;
+            if (state.messagesHeartbeatTimer) {
+              clearInterval(state.messagesHeartbeatTimer);
+              state.messagesHeartbeatTimer = null;
+            }
+            setTypingIndicator(false);
+            if (state.token) {
+              if (!state.messagesRealtimeWarned) {
+                showToast(
+                  "Kết nối trực tiếp bị gián đoạn. Hệ thống đang kết nối lại...",
+                  "warning",
+                );
+                state.messagesRealtimeWarned = true;
+              }
+              state.messagesReconnectTimer = setTimeout(() => {
+                state.messagesReconnectTimer = null;
+                connectMessagesSocket();
+              }, 3000);
+            }
+          };
+          socket.onerror = () => socket.close();
+        } catch (err) {
+          state.messagesSocketConnecting = false;
+          console.warn("Không thể kết nối WebSocket tin nhắn:", err.message);
+          if (!state.messagesRealtimeWarned) {
+            showToast(
+              "Kết nối trực tiếp bị gián đoạn. Hệ thống đang kết nối lại...",
+              "warning",
+            );
+            state.messagesRealtimeWarned = true;
+          }
+          if (state.token) {
+            state.messagesReconnectTimer = setTimeout(() => {
+              state.messagesReconnectTimer = null;
+              connectMessagesSocket();
+            }, 3000);
+          }
+        }
+      }
+
+      async function handleMessagesSocketEvent(payload) {
+        if (payload.type === "message") {
+          if (payload.conversation_id === state.activeConversationId) {
+            await selectConversation(payload.conversation_id);
+          } else {
+            await loadConversations();
+          }
+          return;
+        }
+        if (
+          payload.type === "typing" &&
+          payload.conversation_id === state.activeConversationId
+        ) {
+          setTypingIndicator(payload.is_typing);
+        }
+      }
+
+      function setTypingIndicator(isTyping) {
+        const indicator = document.getElementById(
+          "conversation-typing-indicator",
+        );
+        if (!indicator) return;
+        if (state.typingIndicatorTimer) {
+          clearTimeout(state.typingIndicatorTimer);
+          state.typingIndicatorTimer = null;
+        }
+        indicator.classList.toggle("hidden", !isTyping);
+        indicator.classList.toggle("flex", isTyping);
+        if (isTyping) {
+          state.typingIndicatorTimer = setTimeout(() => {
+            setTypingIndicator(false);
+          }, 2200);
+          const messageList = document.getElementById("conversation-messages");
+          if (messageList) messageList.scrollTop = messageList.scrollHeight;
+        }
+      }
+
+      function sendTypingStatus(isTyping) {
+        const socket = state.messagesSocket;
+        if (!socket || socket.readyState !== WebSocket.OPEN) return;
+        socket.send(
+          JSON.stringify({
+            type: "typing",
+            conversation_id: state.activeConversationId,
+            is_typing: isTyping,
+          }),
+        );
+      }
+
+      function notifyMessageTyping() {
+        if (!state.activeConversationId) return;
+        const input = document.getElementById("conversation-message-input");
+        if (!input) return;
+        if (!input.value.trim()) {
+          state.lastTypingSentAt = 0;
+          sendTypingStatus(false);
+          return;
+        }
+        const now = Date.now();
+        if (now - state.lastTypingSentAt < 700) return;
+        state.lastTypingSentAt = now;
+        sendTypingStatus(true);
+      }
+
+      function closeMessagesSocket() {
+        if (state.messagesReconnectTimer) {
+          clearTimeout(state.messagesReconnectTimer);
+          state.messagesReconnectTimer = null;
+        }
+        if (state.messagesHeartbeatTimer) {
+          clearInterval(state.messagesHeartbeatTimer);
+          state.messagesHeartbeatTimer = null;
+        }
+        const socket = state.messagesSocket;
+        state.messagesSocket = null;
+        state.messagesSocketConnecting = false;
+        if (socket) socket.close(1000, "Signed out");
+        setTypingIndicator(false);
+      }
+
       async function openSellerConversation(productId) {
         if (!state.token || !state.user) {
           showToast("Vui lòng đăng nhập để nhắn tin với người bán.", "info");
@@ -3222,6 +3431,16 @@
                       .join("")
                   : '<p class="py-12 text-center text-xs text-ink-500">Hãy gửi lời nhắn đầu tiên để bắt đầu trao đổi.</p>'
               }
+              <div
+                id="conversation-typing-indicator"
+                aria-live="polite"
+                class="hidden items-center gap-2 text-xs text-ink-500"
+              >
+                <span>Đối phương đang nhập</span>
+                <span class="typing-indicator-dots" aria-hidden="true">
+                  <span></span><span></span><span></span>
+                </span>
+              </div>
             </div>
             <form onsubmit="sendConversationMessage(event)" class="flex items-end gap-2 p-3 border-t border-slate-100">
               <textarea
@@ -3229,6 +3448,7 @@
                 rows="2"
                 maxlength="2000"
                 required
+                oninput="notifyMessageTyping()"
                 placeholder="Nhập tin nhắn..."
                 class="flex-1 resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-eco-500"
               ></textarea>
@@ -3253,6 +3473,7 @@
         const submitButton = event.submitter;
         if (submitButton) submitButton.disabled = true;
         try {
+          sendTypingStatus(false);
           await apiFetch(
             `/api/conversations/${encodeURIComponent(state.activeConversationId)}/messages`,
             {
@@ -4781,7 +5002,10 @@
         });
         if (tabName === "wardrobe") generateAIOutfits(false);
         if (tabName === "seller") loadSellerListings();
-        if (tabName === "messages") loadConversations();
+        if (tabName === "messages") {
+          loadConversations();
+          connectMessagesSocket();
+        }
       }
 
       function showToast(msg, type = "info") {

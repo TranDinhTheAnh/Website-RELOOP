@@ -19,6 +19,7 @@ import random
 import hashlib
 import secrets
 import sqlite3
+import threading
 import html
 import logging
 import urllib.error
@@ -27,7 +28,18 @@ from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any, Literal
 from contextlib import contextmanager
 
-from fastapi import FastAPI, HTTPException, Depends, Header, UploadFile, File, Form, Query
+from fastapi import (
+    FastAPI,
+    HTTPException,
+    Depends,
+    Header,
+    UploadFile,
+    File,
+    Form,
+    Query,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -205,6 +217,45 @@ def get_db():
         raise
     finally:
         conn.close()
+
+
+MESSAGE_WEBSOCKET_TICKETS: Dict[str, tuple[str, datetime]] = {}
+MESSAGE_WEBSOCKET_TICKETS_LOCK = threading.Lock()
+
+
+class MessageConnectionManager:
+    def __init__(self):
+        self.connections: Dict[str, set[WebSocket]] = {}
+
+    async def connect(self, user_id: str, websocket: WebSocket):
+        await websocket.accept()
+        self.connections.setdefault(user_id, set()).add(websocket)
+
+    def disconnect(self, user_id: str, websocket: WebSocket):
+        user_connections = self.connections.get(user_id)
+        if not user_connections:
+            return
+        user_connections.discard(websocket)
+        if not user_connections:
+            self.connections.pop(user_id, None)
+
+    async def broadcast(
+        self,
+        user_ids: List[str],
+        event: Dict[str, Any],
+        exclude_user_id: Optional[str] = None,
+    ):
+        for user_id in set(user_ids):
+            if user_id == exclude_user_id:
+                continue
+            for websocket in list(self.connections.get(user_id, set())):
+                try:
+                    await websocket.send_json(event)
+                except (WebSocketDisconnect, RuntimeError):
+                    self.disconnect(user_id, websocket)
+
+
+message_connections = MessageConnectionManager()
 
 
 def hash_password(password: str, salt: Optional[str] = None) -> tuple[str, str]:
@@ -958,6 +1009,94 @@ def get_product_detail(product_id: str):
         return enrich_product_dict(row)
 
 
+def get_conversation_participants(conversation_id: str) -> List[str]:
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT buyer_id, seller_id
+            FROM conversations
+            WHERE id = ?
+        """, (conversation_id,))
+        row = cursor.fetchone()
+        return [row["buyer_id"], row["seller_id"]] if row else []
+
+
+@app.post("/api/messages/ws-ticket", summary="Tạo vé kết nối WebSocket nhắn tin")
+def create_message_websocket_ticket(
+    user: Dict[str, Any] = Depends(get_current_user),
+):
+    now = datetime.utcnow()
+    ticket = secrets.token_urlsafe(32)
+    with MESSAGE_WEBSOCKET_TICKETS_LOCK:
+        expired_tickets = [
+            value
+            for value, (_, expires_at) in MESSAGE_WEBSOCKET_TICKETS.items()
+            if expires_at <= now
+        ]
+        for value in expired_tickets:
+            MESSAGE_WEBSOCKET_TICKETS.pop(value, None)
+        MESSAGE_WEBSOCKET_TICKETS[ticket] = (
+            user["id"],
+            now + timedelta(seconds=30),
+        )
+    return {"ticket": ticket}
+
+
+@app.websocket("/api/messages/ws")
+async def messages_websocket(
+    websocket: WebSocket,
+    ticket: str = Query(..., min_length=20, max_length=100),
+):
+    with MESSAGE_WEBSOCKET_TICKETS_LOCK:
+        ticket_data = MESSAGE_WEBSOCKET_TICKETS.pop(ticket, None)
+    if not ticket_data or ticket_data[1] <= datetime.utcnow():
+        await websocket.close(code=1008, reason="Vé kết nối không hợp lệ hoặc đã hết hạn.")
+        return
+
+    user_id = ticket_data[0]
+    await message_connections.connect(user_id, websocket)
+    try:
+        while True:
+            try:
+                event = await websocket.receive_json()
+            except ValueError:
+                await websocket.close(code=1003, reason="Dữ liệu WebSocket không hợp lệ.")
+                break
+
+            if not isinstance(event, dict):
+                continue
+            if event.get("type") == "ping":
+                await websocket.send_json({"type": "pong"})
+                continue
+            if event.get("type") != "typing":
+                continue
+            conversation_id = event.get("conversation_id")
+            is_typing = event.get("is_typing")
+            if (
+                not isinstance(conversation_id, str)
+                or len(conversation_id) > 100
+                or not isinstance(is_typing, bool)
+            ):
+                continue
+
+            participants = get_conversation_participants(conversation_id)
+            if user_id not in participants:
+                continue
+            await message_connections.broadcast(
+                participants,
+                {
+                    "type": "typing",
+                    "conversation_id": conversation_id,
+                    "is_typing": is_typing,
+                },
+                exclude_user_id=user_id,
+            )
+    except WebSocketDisconnect:
+        pass
+    finally:
+        message_connections.disconnect(user_id, websocket)
+
+
 @app.get("/api/conversations", summary="Danh sách hội thoại mua bán của người dùng")
 def list_conversations(user: Dict[str, Any] = Depends(get_current_user)):
     with get_db() as conn:
@@ -1090,7 +1229,7 @@ def list_conversation_messages(
     "/api/conversations/{conversation_id}/messages",
     summary="Gửi tin nhắn trong hội thoại",
 )
-def send_conversation_message(
+async def send_conversation_message(
     conversation_id: str,
     payload: SendMessageRequest,
     user: Dict[str, Any] = Depends(get_current_user),
@@ -1131,6 +1270,10 @@ def send_conversation_message(
             (now, conversation_id),
         )
 
+    await message_connections.broadcast(
+        [conversation["buyer_id"], conversation["seller_id"]],
+        {"type": "message", "conversation_id": conversation_id},
+    )
     return {"message": "Đã gửi tin nhắn.", "created_at": now}
 
 
