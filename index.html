@@ -5699,7 +5699,7 @@
         backendOnline: false,
         introApiProductCount: null,
         token: localStorage.getItem("reloop_token") || null,
-        user: JSON.parse(localStorage.getItem("reloop_user") || "null"),
+        user: null,
         products: [],
         visibleLimit: 16,
         selectedCategory: "Tất cả",
@@ -5770,15 +5770,11 @@
         );
       }
 
-      // Sanitize any unverified cached admin session on load
-      if (
-        state.user &&
-        (state.user.email || "").trim().toLowerCase() === ADMIN_EMAIL &&
-        !checkIsAdmin(state.user)
-      ) {
-        state.user = null;
+      // Remove account data from the previous local-only authentication flow.
+      localStorage.removeItem("reloop_accounts_db");
+      localStorage.removeItem("reloop_user");
+      if (isLocalAuthToken(state.token)) {
         state.token = null;
-        localStorage.removeItem("reloop_user");
         localStorage.removeItem("reloop_token");
       }
 
@@ -6184,7 +6180,8 @@
             try {
               const me = await apiFetch("/api/auth/me");
               const u = me.user || me;
-              const preservedSecret = state.user?.adminSecret || null;
+              const isAdminAccount =
+                (u.email || "").trim().toLowerCase() === ADMIN_EMAIL;
               const mergedUser = {
                 id: u.id,
                 name: u.full_name || u.name || "Thành viên RE:LOOP",
@@ -6192,11 +6189,10 @@
                 points: u.green_points ?? u.points ?? 450,
                 height: u.height_cm || 165,
                 weight: u.weight_kg || 55,
-                adminSecret: preservedSecret,
+                adminSecret: isAdminAccount ? ADMIN_SESSION_SECRET : null,
               };
               mergedUser.isAdmin = checkIsAdmin(mergedUser);
               state.user = mergedUser;
-              localStorage.setItem("reloop_user", JSON.stringify(state.user));
               state.notifications = Array.isArray(me.notifications)
                 ? me.notifications
                 : [];
@@ -6239,6 +6235,11 @@
               if (Array.isArray(me.vouchers)) state.vouchers = me.vouchers;
             } catch (e) {
               console.warn("Token expired or /api/auth/me format:", e.message);
+              if (e.status === 401 || e.status === 404) {
+                state.token = null;
+                state.user = null;
+                localStorage.removeItem("reloop_token");
+              }
             }
           }
 
@@ -6266,51 +6267,9 @@
       }
 
       // =========================================================
-      // AUTHENTICATION (ACCOUNT REGISTRY, EXISTENCE CHECK, LOGIN)
+      // AUTHENTICATION (BACKEND-ONLY REGISTRATION AND LOGIN)
       // =========================================================
       let currentAuthMode = "login";
-      const ACCOUNTS_DB_KEY = "reloop_accounts_db";
-
-      function getAccountsDB() {
-        let list = [];
-        try {
-          list = JSON.parse(localStorage.getItem(ACCOUNTS_DB_KEY) || "[]");
-          if (!Array.isArray(list)) list = [];
-        } catch {
-          list = [];
-        }
-        // Ensure default sample customer account exists in the registry
-        if (
-          !list.some(
-            (a) => (a.email || "").toLowerCase() === "minhanh@reloop.vn",
-          )
-        ) {
-          list.unshift({
-            id: 101,
-            name: "Nguyễn Minh Anh",
-            email: "minhanh@reloop.vn",
-            password: "123456",
-            points: 450,
-            height: 165,
-            weight: 55,
-          });
-          localStorage.setItem(ACCOUNTS_DB_KEY, JSON.stringify(list));
-        }
-        return list;
-      }
-
-      function saveAccountsDB(list) {
-        localStorage.setItem(ACCOUNTS_DB_KEY, JSON.stringify(list));
-      }
-
-      function findAccountByEmail(email) {
-        const target = (email || "").trim().toLowerCase();
-        return (
-          getAccountsDB().find(
-            (a) => (a.email || "").trim().toLowerCase() === target,
-          ) || null
-        );
-      }
 
       function showAuthError(msg, actionBtnHtml = "") {
         const box = document.getElementById("auth-error-box");
@@ -6456,7 +6415,6 @@
             isAdmin: true,
           };
           localStorage.setItem("reloop_token", state.token);
-          localStorage.setItem("reloop_user", JSON.stringify(state.user));
           closeAuthModal();
           showToast(
             "Xác thực thành công! Chào mừng Quản trị viên RE:LOOP.",
@@ -6479,20 +6437,7 @@
             return;
           }
 
-          // Check if email already exists in local registry
-          const existingLocal = findAccountByEmail(email);
-          if (existingLocal) {
-            const safeEmail = rawEmail.replace(/'/g, "\'");
-            showAuthError(
-              `Email "${rawEmail}" đã tồn tại trong hệ thống! Không thể tạo trùng tài khoản.`,
-              `<button type="button" onclick="switchToLoginWithEmail('${safeEmail}')" class="underline font-bold text-rose-800 hover:text-rose-950">→ Chuyển sang Đăng nhập với email này</button>`,
-            );
-            showToast("Tài khoản đã tồn tại! Vui lòng đăng nhập.", "warning");
-            return;
-          }
-
-          // Try registering on FastAPI backend first
-          let backendRes = null;
+          let backendRes;
           try {
             backendRes = await apiFetch("/api/auth/register", {
               method: "POST",
@@ -6527,40 +6472,35 @@
               }
               return;
             }
-            // Otherwise network error (backend offline) -> proceed with local registry persistence
+            const message = err.isNetworkError
+              ? "Không thể kết nối backend. Tài khoản chưa được tạo; vui lòng thử lại khi máy chủ hoạt động."
+              : `Đăng ký không thành công: ${err.message || "Lỗi không xác định."}`;
+            showAuthError(message);
+            showToast(message, "error");
+            return;
           }
 
-          const u = backendRes?.user || {};
-          const newAccount = {
-            id: u.id || Date.now(),
-            name: u.full_name || u.name || fullNameInput,
-            email: rawEmail,
-            password,
-            points: u.green_points ?? u.points ?? 100,
-            height: u.height_cm || height,
-            weight: u.weight_kg || weight,
-          };
+          const accessToken = backendRes.access_token;
+          if (typeof accessToken !== "string" || !accessToken.trim()) {
+            const message = "Backend không trả về phiên đăng nhập hợp lệ.";
+            showAuthError(message);
+            showToast(message, "error");
+            return;
+          }
 
-          const db = getAccountsDB();
-          db.push(newAccount);
-          saveAccountsDB(db);
-
-          state.token =
-            backendRes?.access_token ||
-            backendRes?.token ||
-            `local-token-${Date.now()}`;
+          const u = backendRes.user || {};
+          state.token = accessToken;
           state.user = {
-            id: newAccount.id,
-            name: newAccount.name,
-            email: newAccount.email,
-            points: newAccount.points,
-            height: newAccount.height,
-            weight: newAccount.weight,
+            id: u.id,
+            name: u.full_name || u.name || fullNameInput,
+            email: u.email || rawEmail,
+            points: u.green_points ?? u.points ?? 100,
+            height: u.height_cm || u.height || height,
+            weight: u.weight_kg || u.weight || weight,
             adminSecret: null,
             isAdmin: false,
           };
           localStorage.setItem("reloop_token", state.token);
-          localStorage.setItem("reloop_user", JSON.stringify(state.user));
           closeAuthModal();
           if (backendRes?.email_sent === false) {
             showToast(
@@ -6573,11 +6513,7 @@
               "success",
             );
           }
-          if (backendRes) {
-            await syncFromBackend(false);
-          } else {
-            refreshAllUI();
-          }
+          await syncFromBackend(false);
           return;
         }
 
@@ -6592,7 +6528,6 @@
           });
         } catch (err) {
           if (err.isHttpError) {
-            // Backend is online and rejected the credentials -> NEVER bypass!
             const safeEmail = rawEmail.replace(/'/g, "\'");
             if (
               err.status === 404 ||
@@ -6603,81 +6538,47 @@
                 `Tài khoản "${rawEmail}" không tồn tại trong hệ thống!`,
                 `<button type="button" onclick="switchToRegisterWithEmail('${safeEmail}')" class="underline font-bold text-rose-800 hover:text-rose-950">→ Tạo tài khoản mới với email này</button>`,
               );
+            } else if (err.status === 401) {
+              showAuthError("Email hoặc mật khẩu chưa chính xác.");
             } else {
-              showAuthError(
-                "Tài khoản không tồn tại hoặc mật khẩu không chính xác! Vui lòng kiểm tra lại.",
-                `<button type="button" onclick="switchToRegisterWithEmail('${safeEmail}')" class="underline font-bold text-rose-800 hover:text-rose-950">→ Chưa có tài khoản? Đăng ký ngay</button>`,
-              );
+              showAuthError(`Đăng nhập không thành công: ${err.message}`);
             }
             showToast("Đăng nhập thất bại!", "warning");
             return;
           }
-          // Network error (backend offline) -> verify against local registered accounts DB
-        }
-
-        if (backendLoginRes) {
-          const u = backendLoginRes.user || {};
-          const localAcc = findAccountByEmail(email);
-          state.token =
-            backendLoginRes.access_token ||
-            backendLoginRes.token ||
-            `api-token-${Date.now()}`;
-          state.user = {
-            id: u.id || localAcc?.id || 1,
-            name:
-              u.full_name || u.name || localAcc?.name || rawEmail.split("@")[0],
-            email: u.email || rawEmail,
-            points: u.green_points ?? u.points ?? localAcc?.points ?? 450,
-            height: u.height_cm || localAcc?.height || 165,
-            weight: u.weight_kg || localAcc?.weight || 55,
-            adminSecret: null,
-            isAdmin: false,
-          };
-          localStorage.setItem("reloop_token", state.token);
-          localStorage.setItem("reloop_user", JSON.stringify(state.user));
-          closeAuthModal();
-          showToast(`Chào mừng ${state.user.name} quay lại!`, "success");
-          await syncFromBackend(false);
+          const message = err.isNetworkError
+            ? "Không thể kết nối backend. Vui lòng kiểm tra máy chủ và thử đăng nhập lại."
+            : `Đăng nhập không thành công: ${err.message || "Lỗi không xác định."}`;
+          showAuthError(message);
+          showToast(message, "error");
           return;
         }
 
-        // Offline verification against local account registry
-        const account = findAccountByEmail(email);
-        if (!account) {
-          const safeEmail = rawEmail.replace(/'/g, "\'");
-          showAuthError(
-            `Tài khoản "${rawEmail}" chưa tồn tại! Vui lòng kiểm tra lại email hoặc tạo tài khoản mới.`,
-            `<button type="button" onclick="switchToRegisterWithEmail('${safeEmail}')" class="underline font-bold text-rose-800 hover:text-rose-950">→ Tạo tài khoản mới với "${rawEmail}"</button>`,
-          );
-          showToast("Tài khoản không tồn tại!", "warning");
+        const accessToken = backendLoginRes.access_token;
+        if (typeof accessToken !== "string" || !accessToken.trim()) {
+          const message = "Backend không trả về phiên đăng nhập hợp lệ.";
+          showAuthError(message);
+          showToast(message, "error");
           return;
         }
 
-        if (account.password !== password) {
-          showAuthError(
-            "Mật khẩu không chính xác! Vui lòng nhập lại mật khẩu của tài khoản này.",
-          );
-          showToast("Sai mật khẩu!", "warning");
-          return;
-        }
-
-        // Validated local account login
-        state.token = `offline-${Date.now()}`;
+        const u = backendLoginRes.user || {};
+        state.token = accessToken;
         state.user = {
-          id: account.id,
-          name: account.name,
-          email: account.email,
-          points: account.points ?? 100,
-          height: account.height || 165,
-          weight: account.weight || 55,
+          id: u.id,
+          name: u.full_name || u.name || rawEmail.split("@")[0],
+          email: u.email || rawEmail,
+          points: u.green_points ?? u.points ?? 0,
+          height: u.height_cm || u.height || 165,
+          weight: u.weight_kg || u.weight || 55,
           adminSecret: null,
           isAdmin: false,
         };
         localStorage.setItem("reloop_token", state.token);
-        localStorage.setItem("reloop_user", JSON.stringify(state.user));
         closeAuthModal();
         refreshAllUI();
         showToast(`Chào mừng ${state.user.name} quay lại!`, "success");
+        await syncFromBackend(false);
       }
 
       function quickDemoLogin() {
@@ -8590,17 +8491,6 @@
       function addGreenPoints(delta) {
         if (state.user) {
           state.user.points = Math.max(0, (state.user.points || 0) + delta);
-          localStorage.setItem("reloop_user", JSON.stringify(state.user));
-          const db = getAccountsDB();
-          const idx = db.findIndex(
-            (a) =>
-              (a.email || "").toLowerCase() ===
-              (state.user.email || "").toLowerCase(),
-          );
-          if (idx !== -1) {
-            db[idx].points = state.user.points;
-            saveAccountsDB(db);
-          }
         } else {
           const cur = getPoints();
           localStorage.setItem(
