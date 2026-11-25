@@ -5965,7 +5965,7 @@
                 </div>
                 <button
                   onclick="redeemVoucher(100, 20000)"
-                  class="px-4 py-2 rounded-xl bg-ink-900 hover:bg-ink-700 text-white text-xs font-semibold shrink-0"
+                  class="redeem-voucher-button px-4 py-2 rounded-xl bg-ink-900 hover:bg-ink-700 text-white text-xs font-semibold shrink-0"
                 >
                   Đổi ngay
                 </button>
@@ -5987,7 +5987,7 @@
                 </div>
                 <button
                   onclick="redeemVoucher(250, 60000)"
-                  class="px-4 py-2 rounded-xl bg-ink-900 hover:bg-ink-700 text-white text-xs font-semibold shrink-0"
+                  class="redeem-voucher-button px-4 py-2 rounded-xl bg-ink-900 hover:bg-ink-700 text-white text-xs font-semibold shrink-0"
                 >
                   Đổi ngay
                 </button>
@@ -6007,7 +6007,7 @@
                 </div>
                 <button
                   onclick="redeemVoucher(500, 150000)"
-                  class="px-4 py-2 rounded-xl bg-ink-900 hover:bg-ink-700 text-white text-xs font-semibold shrink-0"
+                  class="redeem-voucher-button px-4 py-2 rounded-xl bg-ink-900 hover:bg-ink-700 text-white text-xs font-semibold shrink-0"
                 >
                   Đổi ngay
                 </button>
@@ -6097,6 +6097,18 @@
               </tbody>
             </table>
           </div>
+        </div>
+
+        <div class="rounded-2xl bg-white border border-slate-200 overflow-hidden">
+            <div class="px-4 py-4 border-b border-slate-100">
+              <h3 class="font-bold text-ink-900">Đơn COD chờ xử lý</h3>
+              <p id="admin-cod-orders-status" class="mt-1 text-xs text-ink-600" role="status" aria-live="polite">
+                Chọn làm mới để tải đơn hàng.
+              </p>
+            </div>
+            <div id="admin-cod-orders-list" class="divide-y divide-slate-100">
+              <p class="p-4 text-sm text-ink-500">Chưa tải danh sách.</p>
+            </div>
         </div>
       </section>
     </main>
@@ -6681,6 +6693,7 @@
             >
               <option value="0">-- Không dùng mã giảm giá --</option>
             </select>
+            <p id="cart-voucher-status" class="mt-1 text-[11px] text-ink-500" aria-live="polite"></p>
           </div>
 
           <div class="space-y-1.5 text-sm">
@@ -6701,10 +6714,11 @@
             <span>Tổng thanh toán:</span><span id="cart-total">0đ</span>
           </div>
           <button
+            id="checkout-submit-btn"
             onclick="checkoutCart()"
             class="w-full py-3.5 rounded-2xl bg-eco-600 hover:bg-eco-700 text-white text-sm font-bold shadow-sm transition"
           >
-            Thanh toán & Lưu vào Tủ đồ (+50 ĐX)
+            Tạo đơn hàng
           </button>
         </div>
       </div>
@@ -6880,6 +6894,10 @@
         notifications: [],
         notificationsRefreshInFlight: false,
         notificationsRefreshErrorLogged: false,
+        notificationsRefreshTimer: null,
+        notificationsRefreshController: null,
+        notificationsPollingToken: null,
+        notificationsRetryDelay: 5000,
         unreadMessageCount: null,
         aiRecommendationIds: null,
         aiRecommendations: [],
@@ -6901,29 +6919,8 @@
         messagesSocketAuthFailedToken: null,
         typingIndicatorTimer: null,
         lastTypingSentAt: 0,
-        charityProjects: [
-          {
-            id: "ch-1",
-            title: "Quỹ Trồng Rừng Phòng Hộ Việt Nam",
-            desc: "Phủ xanh rừng đầu nguồn miền Trung bằng cây bản địa.",
-            raised: 18500000,
-            goal: 25000000,
-          },
-          {
-            id: "ch-2",
-            title: "Thu Gom & Tái Chế Sợi Dệt May",
-            desc: "Xử lý vải vụn thành sợi tái sinh, giảm rác thải chôn lấp.",
-            raised: 12400000,
-            goal: 20000000,
-          },
-          {
-            id: "ch-3",
-            title: "Làm Sạch Đại Dương & Bờ Biển",
-            desc: "Thu gom vi nhựa và lưới đánh cá trôi dạt tại Cù Lao Chàm.",
-            raised: 9800000,
-            goal: 15000000,
-          },
-        ],
+        charityProjects: [],
+        charityProjectsError: "Đang tải các dự án quỹ...",
         activeContextProductId: null,
         chatHistory: [],
         activeStylistWardrobeId: null,
@@ -6964,10 +6961,17 @@
       ) {
         if (!imageUrl || typeof imageUrl !== "string") return fallbackUrl;
         const value = imageUrl.trim();
-        if (value.startsWith("data:image/")) return value;
-        if (value.startsWith("http://") || value.startsWith("https://"))
+        if (
+          /^data:image\/(?:jpeg|png|webp);base64,[a-z0-9+/]+=*$/i.test(value)
+        )
           return value;
-        if (value.startsWith("/")) return `${API_BASE}${value}`;
+        try {
+          const parsed = new URL(value, API_BASE);
+          if (parsed.protocol === "http:" || parsed.protocol === "https:")
+            return parsed.href;
+        } catch {
+          return fallbackUrl;
+        }
         return fallbackUrl;
       }
 
@@ -7301,6 +7305,24 @@
           const rawProducts = Array.isArray(prodRes)
             ? prodRes
             : prodRes.items || prodRes.products || [];
+          try {
+            const charityResponse = await apiFetch("/api/charity/projects");
+            if (!Array.isArray(charityResponse.projects)) {
+              throw new Error("Máy chủ trả về danh sách dự án quỹ không hợp lệ.");
+            }
+            state.charityProjects = charityResponse.projects.map((project) => ({
+              id: project.id,
+              title: project.name,
+              desc: project.description,
+              raised: project.raised_vnd,
+              goal: project.goal_vnd,
+            }));
+            state.charityProjectsError = null;
+          } catch (error) {
+            state.charityProjects = [];
+            state.charityProjectsError =
+              error.message || "Không tải được dự án quỹ.";
+          }
           state.introApiProductCount = rawProducts.length;
           window.updateIntroProductCount?.(rawProducts.length);
           updateBackendIndicator(
@@ -7353,7 +7375,7 @@
                 name: u.full_name || u.name || "Thành viên RE:LOOP",
                 email: u.email,
                 points: u.green_points ?? u.points ?? 450,
-                height: u.height_cm || 165,
+                height: u.height_cm || u.height || 165,
                 weight: u.weight_kg || u.weight || 55,
                 isAdmin: Boolean(me.is_admin ?? u.is_admin),
               };
@@ -7386,7 +7408,9 @@
               state.ordersError = null;
               state.complaints = [];
               state.complaintBadgeLoadedAt = 0;
-              if (Array.isArray(me.vouchers)) state.vouchers = me.vouchers;
+              if (Array.isArray(me.active_vouchers)) {
+                state.vouchers = me.active_vouchers;
+              }
             } catch (e) {
               console.warn("Token expired or /api/auth/me format:", e.message);
               if (e.status === 401 || e.status === 404) {
@@ -7403,6 +7427,9 @@
               "success",
             );
         } catch (err) {
+          state.charityProjects = [];
+          state.charityProjectsError =
+            "Không kết nối được máy chủ để tải dự án quỹ.";
           updateBackendIndicator(
             false,
             "Đang chạy dữ liệu cục bộ (Server 127.0.0.1:8000 chưa phản hồi)",
@@ -7428,14 +7455,29 @@
       // =========================================================
       let currentAuthMode = "login";
 
-      function showAuthError(msg, actionBtnHtml = "") {
+      function showAuthError(msg, action = null) {
         const box = document.getElementById("auth-error-box");
         if (!box) return;
         if (msg) {
-          box.innerHTML = `<span>${msg}</span>${actionBtnHtml ? `<div class="mt-1.5">${actionBtnHtml}</div>` : ""}`;
+          box.replaceChildren();
+          const message = document.createElement("span");
+          message.textContent = msg;
+          box.appendChild(message);
+          if (action) {
+            const actionContainer = document.createElement("div");
+            actionContainer.className = "mt-1.5";
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className =
+              "underline font-bold text-rose-800 hover:text-rose-950";
+            button.textContent = action.label;
+            button.addEventListener("click", () => action.run());
+            actionContainer.appendChild(button);
+            box.appendChild(actionContainer);
+          }
           box.classList.remove("hidden");
         } else {
-          box.innerHTML = "";
+          box.replaceChildren();
           box.classList.add("hidden");
         }
       }
@@ -7515,6 +7557,7 @@
 
         const rawEmail = document.getElementById("auth-email").value.trim();
         const email = rawEmail.toLowerCase();
+        const emailInput = document.getElementById("auth-email");
         const password = document.getElementById("auth-password").value;
         const fullNameInput = document.getElementById("auth-name").value.trim();
         const height =
@@ -7526,6 +7569,13 @@
           showAuthError("Vui lòng nhập đầy đủ Email và Mật khẩu.");
           return;
         }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+          emailInput.setCustomValidity("Vui lòng nhập địa chỉ email hợp lệ.");
+          emailInput.reportValidity();
+          showAuthError("Vui lòng nhập địa chỉ email hợp lệ.");
+          return;
+        }
+        emailInput.setCustomValidity("");
 
         // =========================================================
         // ACCOUNT REGISTRATION FLOW
@@ -7564,10 +7614,12 @@
                 err.status === 400 ||
                 err.status === 409
               ) {
-                const safeEmail = rawEmail.replace(/'/g, "\'");
                 showAuthError(
                   `Tài khoản với email "${rawEmail}" đã tồn tại trên máy chủ!`,
-                  `<button type="button" onclick="switchToLoginWithEmail('${safeEmail}')" class="underline font-bold text-rose-800 hover:text-rose-950">→ Chuyển sang Đăng nhập</button>`,
+                  {
+                    label: "→ Chuyển sang Đăng nhập",
+                    run: () => switchToLoginWithEmail(rawEmail),
+                  },
                 );
                 showToast("Email đã được đăng ký trước đó!", "warning");
               } else {
@@ -7623,7 +7675,6 @@
           });
         } catch (err) {
           if (err.isHttpError) {
-            const safeEmail = rawEmail.replace(/'/g, "\'");
             if (
               err.status === 404 ||
               (err.message || "").toLowerCase().includes("not found") ||
@@ -7631,7 +7682,10 @@
             ) {
               showAuthError(
                 `Tài khoản "${rawEmail}" không tồn tại trong hệ thống!`,
-                `<button type="button" onclick="switchToRegisterWithEmail('${safeEmail}')" class="underline font-bold text-rose-800 hover:text-rose-950">→ Tạo tài khoản mới với email này</button>`,
+                {
+                  label: "→ Tạo tài khoản mới với email này",
+                  run: () => switchToRegisterWithEmail(rawEmail),
+                },
               );
             } else if (err.status === 401) {
               showAuthError("Email hoặc mật khẩu chưa chính xác.");
@@ -7684,6 +7738,7 @@
       }
 
       function logoutUser() {
+        stopNotificationsPolling();
         const messagesSection = document.getElementById("section-messages");
         if (messagesSection && !messagesSection.classList.contains("hidden")) {
           switchTab("store");
@@ -7832,6 +7887,61 @@
               </td>
             </tr>`;
           showToast(`Không tải được tài khoản: ${error.message}`, "error");
+        } finally {
+          await loadAdminCodOrders();
+        }
+      }
+
+      async function loadAdminCodOrders() {
+        const status = document.getElementById("admin-cod-orders-status");
+        const list = document.getElementById("admin-cod-orders-list");
+        if (!status || !list || !checkIsAdmin(state.user)) return;
+        status.textContent = "Đang tải đơn COD...";
+        list.innerHTML = `<p class="p-4 text-sm text-ink-500">Đang tải...</p>`;
+        try {
+          const response = await apiFetch("/api/admin/orders/cod");
+          if (!Array.isArray(response.items)) {
+            throw new Error("Máy chủ trả về danh sách đơn COD không hợp lệ.");
+          }
+          status.textContent = `${response.items.length} đơn COD đang chờ giao hàng`;
+          if (!response.items.length) {
+            list.innerHTML = `<p class="p-4 text-sm text-ink-500">Không có đơn COD cần xử lý.</p>`;
+            return;
+          }
+          list.innerHTML = response.items.map((order) => `
+            <article class="space-y-2 p-4">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <strong class="text-sm text-ink-900">Đơn #${escapeHtml(order.id)}</strong>
+                <strong class="text-sm text-eco-700">${formatVND(order.total_vnd)}</strong>
+              </div>
+              <p class="text-sm text-ink-800">${escapeHtml(order.items.map((item) => item.title).join(", "))}</p>
+              <p class="text-xs text-ink-600">${escapeHtml(order.recipient_name)} · ${escapeHtml(order.phone)} · ${escapeHtml(order.shipping_address)}</p>
+              <div class="flex flex-wrap gap-2">
+                <button type="button" data-order-id="${escapeHtml(order.id)}" onclick="updateCodOrder(this.dataset.orderId,'complete',this)" class="min-h-11 rounded-xl bg-eco-600 px-4 py-2 text-xs font-semibold text-white">Xác nhận đã giao</button>
+                <button type="button" data-order-id="${escapeHtml(order.id)}" onclick="updateCodOrder(this.dataset.orderId,'cancel',this)" class="min-h-11 rounded-xl border border-rose-300 px-4 py-2 text-xs font-semibold text-rose-700">Hủy đơn</button>
+              </div>
+            </article>
+          `).join("");
+        } catch (error) {
+          status.textContent = "Không tải được đơn COD.";
+          list.innerHTML = `<p class="p-4 text-sm text-rose-700">${escapeHtml(error.message || "Đã xảy ra lỗi.")}</p>`;
+        }
+      }
+
+      async function updateCodOrder(orderId, action, button) {
+        if (!checkIsAdmin(state.user) || !orderId || !button || button.disabled) return;
+        button.disabled = true;
+        try {
+          const result = await apiFetch(
+            `/api/admin/orders/${encodeURIComponent(orderId)}/${action}-cod`,
+            { method: "POST" },
+          );
+          showToast(result.message || "Đã cập nhật đơn COD.", "success");
+          await Promise.all([loadAdminCodOrders(), loadMyOrders()]);
+        } catch (error) {
+          showToast(`Không thể cập nhật đơn COD: ${error.message}`, "error");
+        } finally {
+          button.disabled = false;
         }
       }
 
@@ -7993,7 +8103,8 @@
               : "";
             return `
               <button
-                onclick="selectConversation('${escapeHtml(conversation.id)}')"
+                data-conversation-id="${escapeHtml(conversation.id)}"
+                onclick="selectConversation(this.dataset.conversationId)"
                 class="w-full text-left px-4 py-3 border-b border-slate-100 hover:bg-slate-50 ${
                   conversation.id === state.activeConversationId
                     ? "bg-eco-50"
@@ -8006,7 +8117,7 @@
                   </strong>
                   ${
                     conversation.unread_count
-                      ? `<span class="min-w-5 px-1.5 py-0.5 rounded-full bg-eco-600 text-white text-[10px] text-center">${conversation.unread_count}</span>`
+                      ? `<span class="min-w-5 px-1.5 py-0.5 rounded-full bg-eco-600 text-white text-[10px] text-center">${escapeHtml(conversation.unread_count)}</span>`
                       : ""
                   }
                 </div>
@@ -8033,8 +8144,10 @@
 
       async function loadConversations(silent = false) {
         if (!state.token) return;
+        const requestToken = state.token;
         try {
           const result = await apiFetch("/api/conversations");
+          if (state.token !== requestToken) return;
           state.conversations = Array.isArray(result.items) ? result.items : [];
           syncUnreadMessageCountFromConversations();
           if (
@@ -8661,15 +8774,30 @@
         if (
           !state.token ||
           isLocalAuthToken(state.token) ||
+          document.hidden ||
           state.notificationsRefreshInFlight
         ) {
           return;
         }
+        if (state.notificationsRefreshTimer) {
+          clearTimeout(state.notificationsRefreshTimer);
+          state.notificationsRefreshTimer = null;
+        }
         const refreshToken = state.token;
+        const controller = new AbortController();
+        state.notificationsRefreshController = controller;
         state.notificationsRefreshInFlight = true;
+        let shouldReschedule = true;
         try {
-          const result = await apiFetch("/api/notifications");
-          if (state.token !== refreshToken) return;
+          const result = await apiFetch("/api/notifications", {
+            signal: controller.signal,
+          });
+          if (
+            controller.signal.aborted ||
+            state.token !== refreshToken ||
+            document.hidden
+          )
+            return;
           state.notifications = Array.isArray(result.items) ? result.items : [];
           const unreadMessagesCount = Number(result.unread_messages_count);
           if (
@@ -8679,18 +8807,86 @@
             state.unreadMessageCount = unreadMessagesCount;
           } else {
             await loadConversations(true);
+            if (
+              controller.signal.aborted ||
+              state.token !== refreshToken ||
+              document.hidden
+            )
+              return;
           }
           renderNotifications();
           updateMessageUnreadBadge();
+          state.notificationsRetryDelay = 5000;
           state.notificationsRefreshErrorLogged = false;
         } catch (err) {
-          if (!state.notificationsRefreshErrorLogged) {
-            console.warn("Không thể tự động cập nhật thông báo:", err);
-            state.notificationsRefreshErrorLogged = true;
+          if (!controller.signal.aborted && state.token === refreshToken) {
+            if (err.status === 401) {
+              shouldReschedule = false;
+              stopNotificationsPolling();
+              showToast(
+                "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",
+                "warning",
+              );
+            } else {
+              state.notificationsRetryDelay = Math.min(
+                Math.max(5000, state.notificationsRetryDelay * 2),
+                60000,
+              );
+              if (!state.notificationsRefreshErrorLogged) {
+                console.warn("Không thể tự động cập nhật thông báo:", err);
+                state.notificationsRefreshErrorLogged = true;
+              }
+            }
           }
         } finally {
-          state.notificationsRefreshInFlight = false;
+          if (state.notificationsRefreshController === controller) {
+            state.notificationsRefreshController = null;
+            state.notificationsRefreshInFlight = false;
+            if (
+              shouldReschedule &&
+              state.token === refreshToken &&
+              state.notificationsPollingToken === refreshToken &&
+              !document.hidden
+            ) {
+              state.notificationsRefreshTimer = setTimeout(
+                () => {
+                  state.notificationsRefreshTimer = null;
+                  refreshNotifications();
+                },
+                state.notificationsRetryDelay,
+              );
+            }
+          }
         }
+      }
+
+      function stopNotificationsPolling() {
+        if (state.notificationsRefreshTimer) {
+          clearTimeout(state.notificationsRefreshTimer);
+          state.notificationsRefreshTimer = null;
+        }
+        state.notificationsRefreshController?.abort();
+        state.notificationsRefreshController = null;
+        state.notificationsRefreshInFlight = false;
+        state.notificationsPollingToken = null;
+      }
+
+      function startNotificationsPolling() {
+        if (
+          !state.token ||
+          isLocalAuthToken(state.token) ||
+          document.hidden
+        ) {
+          stopNotificationsPolling();
+          return;
+        }
+        if (state.notificationsPollingToken !== state.token) {
+          stopNotificationsPolling();
+          state.notificationsPollingToken = state.token;
+        }
+        if (state.notificationsRefreshTimer) return;
+        state.notificationsRetryDelay = 5000;
+        refreshNotifications();
       }
 
       // =========================================================
@@ -8800,20 +8996,25 @@
         const grid = document.getElementById("products-grid");
         grid.innerHTML = visible
           .map(
-            (p) => `
+            (p) => {
+              const isOwnProduct = Boolean(
+                state.user && p.seller_id && p.seller_id === state.user.id,
+              );
+              const productId = escapeHtml(p.id);
+              return `
         <article class="bg-white rounded-3xl border border-slate-100 overflow-hidden shadow-2xs card-hover flex flex-col justify-between">
           <div>
-            <div class="relative aspect-[4/5] bg-sand-50 overflow-hidden cursor-pointer" onclick="openProductModal('${p.id}')">
-              <img src="${p.image_url}" alt="${p.name}" loading="lazy" decoding="async" onerror="handleImageFallback(this)" class="w-full h-full object-cover hover:scale-105 transition duration-500" />
+            <div data-product-id="${productId}" class="relative aspect-[4/5] bg-sand-50 overflow-hidden cursor-pointer" onclick="openProductModal(this.dataset.productId)">
+              <img src="${escapeHtml(normalizeProductImage(p.image_url))}" alt="${escapeHtml(p.name)}" loading="lazy" decoding="async" onerror="handleImageFallback(this)" class="w-full h-full object-cover hover:scale-105 transition duration-500" />
               <div class="absolute top-3 left-3 flex flex-col gap-1.5">
                 <span class="px-2.5 py-1 rounded-full bg-white/95 backdrop-blur text-eco-700 text-[11px] font-bold shadow-xs">
-                  Độ mới ${p.condition_percent}%
+                  Độ mới ${escapeHtml(p.condition_percent)}%
                 </span>
                 ${
                   (p.cycle || 1) >= 2
                     ? `
                   <span class="px-2.5 py-1 rounded-full bg-eco-600 text-white text-[10px] font-semibold shadow-xs">
-                    ♻️ Vòng đời #${p.cycle} • Đã kiểm định
+                    ♻️ Vòng đời #${escapeHtml(p.cycle)} • Đã kiểm định
                   </span>
                 `
                     : ""
@@ -8822,23 +9023,24 @@
               <button
                 type="button"
                 class="quick-view-button"
-                onclick="event.stopPropagation(); openProductModal('${p.id}')"
+                data-product-id="${productId}"
+                onclick="event.stopPropagation(); openProductModal(this.dataset.productId)"
                 aria-label="Xem nhanh sản phẩm"
               >
                 Xem nhanh
               </button>
               <span class="absolute bottom-3 right-3 px-2.5 py-1 rounded-lg bg-ink-900/80 text-white text-[11px] font-semibold">
-                Size ${p.size}
+                Size ${escapeHtml(p.size)}
               </span>
             </div>
 
             <div class="p-4 space-y-2">
               <div class="flex items-center justify-between text-[11px] text-ink-500">
-                <span>${p.category} • ${p.material}</span>
-                <span>${p.color}</span>
+                <span>${escapeHtml(p.category)} • ${escapeHtml(p.material)}</span>
+                <span>${escapeHtml(p.color)}</span>
               </div>
-              <h3 onclick="openProductModal('${p.id}')" class="font-bold text-ink-900 text-sm line-clamp-2 cursor-pointer hover:text-eco-700 transition">
-                ${p.name}
+              <h3 data-product-id="${productId}" onclick="openProductModal(this.dataset.productId)" class="font-bold text-ink-900 text-sm line-clamp-2 cursor-pointer hover:text-eco-700 transition">
+                ${escapeHtml(p.name)}
               </h3>
               ${
                 (p.cycle || 1) >= 2
@@ -8861,19 +9063,22 @@
               ${
                 checkIsAdmin(state.user)
                   ? `
-                <button onclick="deleteProduct('${p.id}')" class="px-3 py-2 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 text-xs font-semibold transition">
+                <button data-product-id="${productId}" onclick="deleteProduct(this.dataset.productId)" class="px-3 py-2 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 text-xs font-semibold transition">
                   Xóa
                 </button>
               `
                   : ""
               }
-              <button onclick="addToCart('${p.id}')" class="px-3.5 py-2 rounded-xl bg-ink-900 hover:bg-eco-600 text-white text-xs font-semibold transition">
-                + Giỏ hàng
-              </button>
+              ${
+                isOwnProduct
+                  ? `<button type="button" disabled class="px-3.5 py-2 rounded-xl bg-slate-100 text-ink-500 text-xs font-semibold cursor-not-allowed">Tin của bạn</button>`
+                  : `<button data-product-id="${productId}" onclick="addToCart(this.dataset.productId)" class="px-3.5 py-2 rounded-xl bg-ink-900 hover:bg-eco-600 text-white text-xs font-semibold transition">+ Giỏ hàng</button>`
+              }
             </div>
           </div>
         </article>
-      `,
+      `;
+            },
           )
           .join("");
 
@@ -9471,22 +9676,26 @@
         const p = state.products.find((x) => x.id === id);
         if (!p) return;
         state.activeContextProductId = p.id;
+        const isOwnProduct = Boolean(
+          state.user && p.seller_id && p.seller_id === state.user.id,
+        );
+        const productId = escapeHtml(p.id);
 
         const modal = document.getElementById("product-modal");
         const box = document.getElementById("product-modal-content");
         box.innerHTML = `
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
           <div class="relative aspect-[4/5] rounded-2xl overflow-hidden bg-sand-50">
-            <img src="${p.image_url}" alt="${p.name}" loading="lazy" decoding="async" onerror="handleImageFallback(this)" class="w-full h-full object-cover" />
+            <img src="${escapeHtml(normalizeProductImage(p.image_url))}" alt="${escapeHtml(p.name)}" loading="lazy" decoding="async" onerror="handleImageFallback(this)" class="w-full h-full object-cover" />
             <span class="absolute top-3 left-3 px-3 py-1 rounded-full bg-white/95 text-eco-700 text-xs font-bold">
-              AI Chấm điểm: Độ mới ${p.condition_percent}%
+              AI Chấm điểm: Độ mới ${escapeHtml(p.condition_percent)}%
             </span>
           </div>
           <div class="space-y-4">
             <div class="flex items-start justify-between gap-2">
               <div>
-                <span class="text-xs font-semibold text-eco-700">${p.category} • Vòng đời #${p.cycle || 1}</span>
-                <h3 class="text-2xl font-bold text-ink-900 mt-1">${p.name}</h3>
+                <span class="text-xs font-semibold text-eco-700">${escapeHtml(p.category)} • Vòng đời #${escapeHtml(p.cycle || 1)}</span>
+                <h3 class="text-2xl font-bold text-ink-900 mt-1">${escapeHtml(p.name)}</h3>
               </div>
               <button onclick="document.getElementById('product-modal').classList.add('hidden')" class="p-2 rounded-xl hover:bg-slate-100" aria-label="Đóng chi tiết sản phẩm">✕</button>
             </div>
@@ -9507,15 +9716,15 @@
             </div>
 
             <div class="grid grid-cols-2 gap-2.5 text-xs">
-              <div class="p-3 rounded-xl bg-slate-50"><span class="text-ink-500 block">Chất liệu</span><strong>${p.material}</strong></div>
-              <div class="p-3 rounded-xl bg-slate-50"><span class="text-ink-500 block">Màu sắc</span><strong>${p.color}</strong></div>
-              <div class="p-3 rounded-xl bg-slate-50"><span class="text-ink-500 block">Kích cỡ</span><strong>Size ${p.size}</strong></div>
+              <div class="p-3 rounded-xl bg-slate-50"><span class="text-ink-500 block">Chất liệu</span><strong>${escapeHtml(p.material)}</strong></div>
+              <div class="p-3 rounded-xl bg-slate-50"><span class="text-ink-500 block">Màu sắc</span><strong>${escapeHtml(p.color)}</strong></div>
+              <div class="p-3 rounded-xl bg-slate-50"><span class="text-ink-500 block">Kích cỡ</span><strong>Size ${escapeHtml(p.size)}</strong></div>
               <div class="p-3 rounded-xl bg-slate-50"><span class="text-ink-500 block">Thưởng Điểm Xanh</span><strong class="text-eco-700">+50 ĐX</strong></div>
             </div>
 
             <div class="p-3.5 rounded-2xl bg-sand-50 border border-sand-200 text-xs text-ink-700">
               <strong class="block text-ink-900 mb-1">Nhận xét kiểm định AI:</strong>
-              ${p.condition_note}
+              ${escapeHtml(p.condition_note)}
             </div>
 
             ${
@@ -9533,25 +9742,27 @@
               ${
                 checkIsAdmin(state.user)
                   ? `
-                <button onclick="deleteProduct('${p.id}')" class="px-4 py-3 rounded-2xl bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 text-sm font-semibold">
+                <button data-product-id="${productId}" onclick="deleteProduct(this.dataset.productId)" class="px-4 py-3 rounded-2xl bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 text-sm font-semibold">
                   Xóa sản phẩm
                 </button>
               `
                   : ""
               }
-              <button onclick="addToCart('${p.id}'); document.getElementById('product-modal').classList.add('hidden')" class="flex-1 py-3 rounded-2xl bg-eco-600 hover:bg-eco-700 text-white text-sm font-semibold">
-                Thêm vào giỏ hàng
-              </button>
+              ${
+                isOwnProduct
+                  ? `<button type="button" disabled class="flex-1 py-3 rounded-2xl bg-slate-100 text-ink-500 text-sm font-semibold cursor-not-allowed">Bạn không thể mua sản phẩm của mình</button>`
+                  : `<button data-product-id="${productId}" onclick="addProductToCartFromModal(this.dataset.productId)" class="flex-1 py-3 rounded-2xl bg-eco-600 hover:bg-eco-700 text-white text-sm font-semibold">Thêm vào giỏ hàng</button>`
+              }
               ${
                 p.seller_id && p.seller_name && p.seller_id !== state.user?.id
                   ? `
-                <button onclick="openSellerConversation('${p.id}')" class="px-4 py-3 rounded-2xl bg-white border border-eco-600 text-eco-700 hover:bg-eco-50 text-sm font-semibold">
+                <button data-product-id="${productId}" onclick="openSellerConversation(this.dataset.productId)" class="px-4 py-3 rounded-2xl bg-white border border-eco-600 text-eco-700 hover:bg-eco-50 text-sm font-semibold">
                   💬 Nhắn tin người bán
                 </button>
               `
                   : ""
               }
-              <button onclick="document.getElementById('product-modal').classList.add('hidden'); toggleChat(true); askQuickQuestion('Sản phẩm ${p.name} (Size ${p.size}) này có vừa với số đo của mình không?')" class="px-4 py-3 rounded-2xl bg-ink-900 text-white text-xs font-semibold">
+              <button data-product-id="${productId}" onclick="askAboutProduct(this.dataset.productId)" class="px-4 py-3 rounded-2xl bg-ink-900 text-white text-xs font-semibold">
                 💬 Hỏi AI về món này
               </button>
             </div>
@@ -9559,6 +9770,21 @@
         </div>
       `;
         modal.classList.remove("hidden");
+      }
+
+      function addProductToCartFromModal(productId) {
+        addToCart(productId);
+        document.getElementById("product-modal").classList.add("hidden");
+      }
+
+      function askAboutProduct(productId) {
+        const product = state.products.find((item) => item.id === productId);
+        if (!product) return;
+        document.getElementById("product-modal").classList.add("hidden");
+        toggleChat(true);
+        askQuickQuestion(
+          `Sản phẩm ${product.name} (Size ${product.size}) này có vừa với số đo của mình không?`,
+        );
       }
 
       async function deleteProduct(productId) {
@@ -10009,22 +10235,22 @@
           <div class="bg-white rounded-3xl border border-slate-200 overflow-hidden flex flex-col justify-between">
             <div>
               <div class="relative aspect-[4/5] bg-sand-50">
-                <img src="${w.image_url}" alt="${w.name}" loading="lazy" decoding="async" class="w-full h-full object-cover" />
+                <img src="${escapeHtml(normalizeProductImage(w.image_url))}" alt="${escapeHtml(w.name)}" loading="lazy" decoding="async" class="w-full h-full object-cover" />
                 <span class="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-ink-900/80 text-white text-[11px] font-semibold">
-                  Vòng đời #${w.cycle || 1}
+                  Vòng đời #${escapeHtml(w.cycle || 1)}
                 </span>
               </div>
               <div class="p-4 space-y-1">
-                <span class="text-[11px] text-eco-700 font-semibold">${w.category} • ${w.material}</span>
-                <h4 class="font-bold text-sm text-ink-900 line-clamp-1">${w.name}</h4>
-                <p class="text-xs text-ink-500">Màu: ${w.color} • Size ${w.size || "M"}</p>
+                <span class="text-[11px] text-eco-700 font-semibold">${escapeHtml(w.category)} • ${escapeHtml(w.material)}</span>
+                <h4 class="font-bold text-sm text-ink-900 line-clamp-1">${escapeHtml(w.name)}</h4>
+                <p class="text-xs text-ink-500">Màu: ${escapeHtml(w.color)} • Size ${escapeHtml(w.size || "M")}</p>
               </div>
             </div>
             <div class="px-4 pb-4 grid grid-cols-2 gap-2">
-              <button onclick="generateAIOutfits(true, '${w.id}')" class="py-2 px-2 rounded-xl bg-sand-100 hover:bg-sand-200 text-ink-900 text-[11px] font-semibold transition">
+              <button data-wardrobe-id="${escapeHtml(w.id)}" onclick="generateAIOutfits(true, this.dataset.wardrobeId)" class="py-2 px-2 rounded-xl bg-sand-100 hover:bg-sand-200 text-ink-900 text-[11px] font-semibold transition">
                 🪄 Phối đồ món này
               </button>
-              <button onclick="openReconsignModal('${w.id}')" class="py-2 px-2 rounded-xl bg-eco-600 hover:bg-eco-700 text-white text-[11px] font-semibold transition">
+              <button data-wardrobe-id="${escapeHtml(w.id)}" onclick="openReconsignModal(this.dataset.wardrobeId)" class="py-2 px-2 rounded-xl bg-eco-600 hover:bg-eco-700 text-white text-[11px] font-semibold transition">
                 ♻️ Ký gửi lại
               </button>
             </div>
@@ -10058,6 +10284,21 @@
         }
         oList.innerHTML = state.orders
           .map((o) => {
+            const orderStatusLabels = {
+              pending_payment: "Chờ thanh toán",
+              processing: "Chờ giao hàng COD",
+              completed: "Đã hoàn tất",
+              cancelled: "Đã hủy",
+              expired: "Hết hạn thanh toán",
+              confirmed: "Đã xử lý",
+            };
+            const paymentStatusLabels = {
+              pending: "Thanh toán đang chờ xác nhận",
+              unpaid: "Chưa thu tiền",
+              paid: "Đã thanh toán",
+              expired: "Hết hạn",
+              cancelled: "Đã hủy",
+            };
             const complaintAction = o.complaint_id
               ? `<button type="button" data-complaint-id="${escapeHtml(o.complaint_id)}" onclick="openComplaintDetailFromOrder(this.dataset.complaintId)" class="min-h-11 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">Xem khiếu nại</button>`
               : o.can_complain
@@ -10069,12 +10310,13 @@
             return `
               <article class="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
                 <div class="flex min-w-0 items-center gap-4">
-                  <img src="${escapeHtml(o.image_url)}" alt="${escapeHtml(o.title)}" loading="lazy" decoding="async" class="h-24 w-20 shrink-0 rounded-xl bg-sand-50 object-cover" />
+                  <img src="${escapeHtml(normalizeProductImage(o.image_url))}" alt="${escapeHtml(o.title)}" loading="lazy" decoding="async" class="h-24 w-20 shrink-0 rounded-xl bg-sand-50 object-cover" />
                   <div class="min-w-0 space-y-1">
                     <div class="flex flex-wrap items-center gap-2">
                       <span class="rounded-full bg-eco-50 px-2.5 py-1 text-[11px] font-bold text-eco-700">Đơn #${escapeHtml(o.order_id)}</span>
                       <span class="text-xs text-ink-400">Ngày mua: ${escapeHtml(formatNotificationDate(o.created_at))}</span>
                     </div>
+                    <p class="text-xs font-semibold text-ink-700">${escapeHtml(orderStatusLabels[o.order_status] || "Đang xử lý")} · ${escapeHtml(paymentStatusLabels[o.payment_status] || "Chưa có trạng thái thanh toán")}</p>
                     <h3 class="break-words font-bold text-base text-ink-900">${escapeHtml(o.title)}</h3>
                     <p class="text-xs text-ink-600">Chất liệu: ${escapeHtml(o.material)} • Màu: ${escapeHtml(o.color)} • Size ${escapeHtml(o.size || "—")}</p>
                     <p class="text-sm font-bold text-ink-900">${formatVND(o.price)}</p>
@@ -10116,6 +10358,9 @@
               order_id: order.order_id,
               created_at: order.created_at,
               order_status: order.order_status,
+              payment_status: order.payment_status,
+              payment_method: order.payment_method,
+              reservation_expires_at: order.reservation_expires_at,
             })),
           );
         } catch (error) {
@@ -10297,10 +10542,13 @@
         if (!complaint || !panel) return;
         const snapshot = complaint.product_snapshot || {};
         const canAct = ["open", "seller_responded", "escalated"].includes(complaint.status);
-        const evidence = (complaint.evidence_images || []).map((image, index) => `
-          <a href="${escapeHtml(image)}" target="_blank" rel="noopener noreferrer" class="block overflow-hidden rounded-xl border border-slate-200">
-            <img src="${escapeHtml(image)}" alt="Ảnh bằng chứng ${index + 1}" loading="lazy" decoding="async" class="aspect-square w-full object-cover" />
-          </a>`).join("");
+        const evidence = (complaint.evidence_images || []).map((image, index) => {
+          const safeImage = escapeHtml(normalizeProductImage(image, ""));
+          return `
+          <a href="${safeImage}" target="_blank" rel="noopener noreferrer" class="block overflow-hidden rounded-xl border border-slate-200">
+            <img src="${safeImage}" alt="Ảnh bằng chứng ${index + 1}" loading="lazy" decoding="async" class="aspect-square w-full object-cover" />
+          </a>`;
+        }).join("");
         const events = (complaint.events || []).map((event) => `
           <li class="relative border-l-2 border-eco-200 pb-5 pl-4 last:pb-0">
             <span class="absolute -left-[5px] top-1 h-2 w-2 rounded-full bg-eco-600"></span>
@@ -10569,7 +10817,7 @@
         document.getElementById("complaint-product-summary").innerHTML = `
           <div class="rounded-2xl border border-slate-200 bg-sand-50 p-4">
             <div class="flex items-start gap-3">
-              <img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.title)}" class="h-24 w-20 shrink-0 rounded-xl bg-white object-cover" />
+              <img src="${escapeHtml(normalizeProductImage(item.image_url))}" alt="${escapeHtml(item.title)}" class="h-24 w-20 shrink-0 rounded-xl bg-white object-cover" />
               <div class="min-w-0">
                 <h3 class="break-words font-bold text-ink-900">${escapeHtml(item.title)}</h3>
                 <p class="mt-1 text-xs text-ink-600">Đơn #${escapeHtml(orderId)} • ${escapeHtml(item.category)}</p>
@@ -10843,11 +11091,11 @@
               : "";
             const action =
               listing.status === "available"
-                ? `<button onclick="cancelSellerListing('${escapeHtml(listing.id)}')" class="px-3 py-2 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 text-xs font-semibold">Hủy tin</button>`
+                ? `<button data-listing-id="${escapeHtml(listing.id)}" onclick="cancelSellerListing(this.dataset.listingId)" class="px-3 py-2 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 text-xs font-semibold">Hủy tin</button>`
                 : `<span class="text-xs font-semibold ${listing.status === "sold" ? "text-eco-700" : "text-ink-500"}">${statusLabels[listing.status] || "Không xác định"}</span>`;
             return `
               <article class="flex flex-col sm:flex-row sm:items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4">
-                <img src="${escapeHtml(listing.image_url)}" alt="${escapeHtml(listing.name)}" loading="lazy" decoding="async" class="h-28 w-24 rounded-xl bg-sand-50 object-cover" />
+                <img src="${escapeHtml(normalizeProductImage(listing.image_url))}" alt="${escapeHtml(listing.name)}" loading="lazy" decoding="async" class="h-28 w-24 rounded-xl bg-sand-50 object-cover" />
                 <div class="min-w-0 flex-1">
                   <div class="flex flex-wrap items-center gap-2">
                     <span class="rounded-full bg-eco-50 px-2.5 py-1 text-[11px] font-semibold text-eco-700">${statusLabels[listing.status] || "Không xác định"}</span>
@@ -11013,24 +11261,24 @@
             (set) => `
         <div class="bg-white rounded-3xl border border-sand-200 p-5 space-y-4 shadow-2xs">
           <div class="flex items-center justify-between">
-            <h4 class="font-bold text-base text-ink-900">${set.title}</h4>
+            <h4 class="font-bold text-base text-ink-900">${escapeHtml(set.title)}</h4>
             <span class="text-[11px] font-semibold text-eco-700 bg-eco-50 px-2.5 py-1 rounded-full">Đề xuất theo phong cách</span>
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div class="rounded-2xl bg-sand-50 p-3 border border-sand-200 space-y-2">
               <span class="inline-block px-2 py-0.5 rounded-md bg-ink-900 text-white text-[10px] font-bold">✓ Có sẵn trong Tủ đồ</span>
-              <img src="${set.owned.image_url}" loading="lazy" decoding="async" class="w-full h-32 object-cover rounded-xl" />
-              <p class="text-xs font-bold text-ink-900 line-clamp-1">${set.owned.name}</p>
+              <img src="${escapeHtml(normalizeProductImage(set.owned.image_url))}" alt="${escapeHtml(set.owned.name)}" loading="lazy" decoding="async" class="w-full h-32 object-cover rounded-xl" />
+              <p class="text-xs font-bold text-ink-900 line-clamp-1">${escapeHtml(set.owned.name)}</p>
             </div>
             <div class="rounded-2xl bg-eco-50/40 p-3 border border-eco-200 space-y-2">
               <span class="inline-block px-2 py-0.5 rounded-md bg-eco-600 text-white text-[10px] font-bold">+ Đang bán trên sàn</span>
-              <img src="${set.storeItem.image_url}" loading="lazy" decoding="async" class="w-full h-32 object-cover rounded-xl" />
-              <p class="text-xs font-bold text-ink-900 line-clamp-1">${set.storeItem.name}</p>
+              <img src="${escapeHtml(normalizeProductImage(set.storeItem.image_url))}" alt="${escapeHtml(set.storeItem.name)}" loading="lazy" decoding="async" class="w-full h-32 object-cover rounded-xl" />
+              <p class="text-xs font-bold text-ink-900 line-clamp-1">${escapeHtml(set.storeItem.name)}</p>
               <p class="text-xs font-bold text-eco-700">${formatVND(set.storeItem.price)}</p>
             </div>
           </div>
-          <p class="text-xs text-ink-600 leading-relaxed">💡 <strong>Gợi ý AI:</strong> ${set.tip}</p>
-          <button onclick="addToCart('${set.storeItem.id}')" class="w-full py-2.5 rounded-xl bg-ink-900 hover:bg-eco-600 text-white text-xs font-semibold transition">
+          <p class="text-xs text-ink-600 leading-relaxed">💡 <strong>Gợi ý AI:</strong> ${escapeHtml(set.tip)}</p>
+          <button data-product-id="${escapeHtml(set.storeItem.id)}" onclick="addToCart(this.dataset.productId)" class="w-full py-2.5 rounded-xl bg-ink-900 hover:bg-eco-600 text-white text-xs font-semibold transition">
             + Thêm món còn thiếu vào giỏ (${formatVND(set.storeItem.price)})
           </button>
         </div>
@@ -11048,6 +11296,10 @@
       function addToCart(productId) {
         const prod = state.products.find((p) => p.id === productId);
         if (!prod) return;
+        if (state.user && prod.seller_id === state.user.id) {
+          showToast("Bạn không thể mua sản phẩm do chính mình đăng bán.", "warning");
+          return;
+        }
         if (state.cart.some((c) => c.id === productId)) {
           showToast("Sản phẩm này đã có trong giỏ hàng của bạn.", "info");
           toggleCart(true);
@@ -11081,13 +11333,13 @@
             .map(
               (item) => `
           <div class="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 border border-slate-100">
-            <img src="${item.image_url}" loading="lazy" decoding="async" class="w-16 h-20 rounded-xl object-cover shrink-0" />
+            <img src="${escapeHtml(normalizeProductImage(item.image_url))}" alt="${escapeHtml(item.name)}" loading="lazy" decoding="async" class="w-16 h-20 rounded-xl object-cover shrink-0" />
             <div class="flex-1 min-w-0">
-              <h4 class="text-xs font-bold text-ink-900 truncate">${item.name}</h4>
-              <p class="text-[11px] text-ink-500">Size ${item.size} • Độ mới ${item.condition_percent}%</p>
+              <h4 class="text-xs font-bold text-ink-900 truncate">${escapeHtml(item.name)}</h4>
+              <p class="text-[11px] text-ink-500">Size ${escapeHtml(item.size)} • Độ mới ${escapeHtml(item.condition_percent)}%</p>
               <p class="text-sm font-bold text-eco-700 mt-1">${formatVND(item.price)}</p>
             </div>
-            <button onclick="removeFromCart('${item.id}')" class="text-xs text-rose-500 hover:underline px-2">Xóa</button>
+            <button data-product-id="${escapeHtml(item.id)}" onclick="removeFromCart(this.dataset.productId)" class="text-xs text-rose-500 hover:underline px-2">Xóa</button>
           </div>
         `,
             )
@@ -11095,9 +11347,23 @@
         }
 
         const subtotal = state.cart.reduce((s, x) => s + x.price, 0);
-        const discount =
-          Number(document.getElementById("cart-voucher-select").value) || 0;
+        const voucherSelect = document.getElementById("cart-voucher-select");
+        const selectedVoucher = state.vouchers.find(
+          (voucher) => voucher.id === voucherSelect.value,
+        );
+        const voucherEligible =
+          selectedVoucher && subtotal >= Number(selectedVoucher.min_order || 0);
+        const discount = voucherEligible
+          ? Math.min(subtotal, Number(selectedVoucher.discount_amount || 0))
+          : 0;
         const total = Math.max(0, subtotal - discount);
+        const voucherStatus = document.getElementById("cart-voucher-status");
+        if (voucherStatus) {
+          voucherStatus.textContent =
+            selectedVoucher && !voucherEligible
+              ? `Đơn hàng cần tối thiểu ${formatVND(selectedVoucher.min_order)} để dùng voucher này.`
+              : "";
+        }
 
         document.getElementById("cart-subtotal").textContent =
           formatVND(subtotal);
@@ -11141,7 +11407,14 @@
           return;
         }
         if (phone.length < 8) {
-          showToast("Vui lòng nhập số điện thoại hợp lệ.", "warning");
+          showToast("Vui lòng nhập số điện thoại Việt Nam hợp lệ.", "warning");
+          return;
+        }
+        const normalizedPhone = phone
+          .replace(/[\s().-]/g, "")
+          .replace(/^\+84/, "0");
+        if (!/^0\d{9}$/.test(normalizedPhone)) {
+          showToast("Số điện thoại cần đúng 10 chữ số Việt Nam.", "warning");
           return;
         }
         if (shippingAddress.length < 10) {
@@ -11149,41 +11422,52 @@
           return;
         }
 
-        const discount =
-          Number(document.getElementById("cart-voucher-select").value) || 0;
+        const voucherSelect = document.getElementById("cart-voucher-select");
+        const voucherId = voucherSelect.value || null;
+        const selectedVoucher = state.vouchers.find(
+          (voucher) => voucher.id === voucherId,
+        );
+        const subtotal = state.cart.reduce((sum, item) => sum + item.price, 0);
+        if (
+          selectedVoucher &&
+          subtotal < Number(selectedVoucher.min_order || 0)
+        ) {
+          showToast("Đơn hàng chưa đạt giá trị tối thiểu để dùng voucher.", "warning");
+          return;
+        }
+        const checkoutButton = document.getElementById("checkout-submit-btn");
+        if (checkoutButton.disabled) return;
+        const originalButtonText = checkoutButton.textContent;
+        checkoutButton.disabled = true;
+        checkoutButton.textContent = "Đang tạo đơn...";
         let checkoutResult;
         try {
           checkoutResult = await apiFetch("/api/orders/checkout", {
             method: "POST",
             body: JSON.stringify({
               product_ids: state.cart.map((c) => c.id),
-              voucher_id: null,
+              voucher_id: voucherId,
               recipient_name: recipientName,
-              phone,
+              phone: normalizedPhone,
               shipping_address: shippingAddress,
               payment_method: paymentMethod,
             }),
           });
           await syncFromBackend(false);
         } catch (err) {
-          showToast(`Thanh toán thất bại: ${err.message}`, "error");
+          showToast(`Không thể tạo đơn hàng: ${err.message}`, "error");
           return;
+        } finally {
+          checkoutButton.disabled = false;
+          checkoutButton.textContent = originalButtonText;
         }
 
-        if (discount > 0 && state.vouchers.length > 0) {
-          state.vouchers.shift();
-          updateVoucherDropdown();
-        }
-
-        const count = state.cart.length;
         state.cart = [];
         toggleCart(false);
         refreshAllUI();
-        switchTab("wardrobe");
-        showToast(
-          `Thanh toán thành công ${count} món! Đã lưu vào Tủ đồ số (+${checkoutResult.points_earned} ĐX)`,
-          "success",
-        );
+        switchTab("orders");
+        await loadMyOrders();
+        showToast(checkoutResult.message || "Đơn hàng đã được tạo.", "success");
       }
 
       // =========================================================
@@ -11216,75 +11500,88 @@
       }
 
       async function redeemVoucher(costPoints, amountVND) {
-        if (getPoints() < costPoints) {
-          showToast(
-            `Bạn cần tối thiểu ${costPoints} Điểm Xanh để đổi ưu đãi này!`,
-            "warning",
-          );
+        if (!state.token || isLocalAuthToken(state.token)) {
+          showToast("Vui lòng đăng nhập tài khoản trực tuyến để đổi voucher.", "warning");
           return;
         }
+        const buttons = [...document.querySelectorAll(".redeem-voucher-button")];
+        buttons.forEach((button) => (button.disabled = true));
         try {
-          await apiFetch("/api/points/redeem-voucher", {
+          const result = await apiFetch("/api/points/redeem-voucher", {
             method: "POST",
             body: JSON.stringify({
-              points: costPoints,
+              points_cost: costPoints,
               discount_amount: amountVND,
+              code_prefix: "RELOOP",
             }),
           });
-        } catch {}
-
-        addGreenPoints(-costPoints);
-        const code = `RELOOP${amountVND / 1000}K`;
-        state.vouchers.push({ code, amount: amountVND });
-        updateVoucherDropdown();
-        renderGreenSection();
-        showToast(
-          `Đã đổi thành công mã ${code} giảm ${formatVND(amountVND)}!`,
-          "success",
-        );
+          if (!result.voucher || !result.voucher.id) {
+            throw new Error("Máy chủ chưa trả về voucher hợp lệ.");
+          }
+          state.user.points = result.green_points;
+          state.vouchers.push(result.voucher);
+          updateVoucherDropdown();
+          renderGreenSection();
+          refreshPointsDisplay();
+          showToast(result.message, "success");
+        } catch (error) {
+          showToast(`Không thể đổi voucher: ${error.message}`, "error");
+        } finally {
+          buttons.forEach((button) => (button.disabled = false));
+        }
       }
 
       function updateVoucherDropdown() {
         const sel = document.getElementById("cart-voucher-select");
+        if (!sel) return;
+        const selectedId = sel.value;
         sel.innerHTML =
-          `<option value="0">-- Không dùng mã giảm giá --</option>` +
+          `<option value="">-- Không dùng mã giảm giá --</option>` +
           state.vouchers
             .map(
               (v) =>
-                `<option value="${v.amount}">${v.code} (-${formatVND(v.amount)})</option>`,
+                `<option value="${escapeHtml(v.id)}">${escapeHtml(v.code)} (-${formatVND(v.discount_amount)}) · Đơn từ ${formatVND(v.min_order)}</option>`,
             )
             .join("");
+        if (state.vouchers.some((voucher) => voucher.id === selectedId)) {
+          sel.value = selectedId;
+        }
       }
 
       async function donateToCharity(projectId) {
         const cost = 100;
-        const vndValue = 25000;
-        if (getPoints() < cost) {
-          showToast(
-            "Bạn cần tối thiểu 100 Điểm Xanh để quy đổi đóng góp quỹ!",
-            "warning",
-          );
+        if (!state.token || isLocalAuthToken(state.token)) {
+          showToast("Vui lòng đăng nhập tài khoản trực tuyến để quyên góp.", "warning");
           return;
         }
+        const buttons = [...document.querySelectorAll(".charity-donate-button")];
+        buttons.forEach((button) => (button.disabled = true));
         try {
-          await apiFetch("/api/charity/donate", {
+          const result = await apiFetch("/api/charity/donate", {
             method: "POST",
-            body: JSON.stringify({ project_id: projectId, points: cost }),
+            body: JSON.stringify({
+              project_id: projectId,
+              points_to_donate: cost,
+            }),
           });
-        } catch {}
-
-        addGreenPoints(-cost);
-        const proj = state.charityProjects.find((p) => p.id === projectId);
-        if (proj) proj.raised += vndValue;
-        renderGreenSection();
-        showToast(
-          `Cảm ơn bạn! Đã quy đổi 100 ĐX = 25.000đ ủng hộ "${proj.title}"`,
-          "success",
-        );
+          const project = state.charityProjects.find((item) => item.id === result.project_id);
+          if (!project || !Number.isFinite(result.raised_vnd)) {
+            throw new Error("Máy chủ chưa trả về số liệu quỹ hợp lệ.");
+          }
+          state.user.points = result.green_points;
+          project.raised = result.raised_vnd;
+          renderGreenSection();
+          showToast(result.message, "success");
+        } catch (error) {
+          showToast(`Không thể quyên góp: ${error.message}`, "error");
+        } finally {
+          buttons.forEach((button) => (button.disabled = false));
+        }
       }
 
       function renderGreenSection() {
         refreshPointsDisplay();
+        updateVoucherDropdown();
         document.getElementById("my-vouchers-count").textContent =
           state.vouchers.length;
         const vList = document.getElementById("my-vouchers-list");
@@ -11294,11 +11591,19 @@
             : state.vouchers
                 .map(
                   (v) =>
-                    `<div class="px-3 py-2 rounded-xl bg-eco-50 border border-eco-200 text-eco-800 font-semibold flex justify-between"><span>🎟️ ${v.code}</span><span>-${formatVND(v.amount)}</span></div>`,
+                    `<div class="px-3 py-2 rounded-xl bg-eco-50 border border-eco-200 text-eco-800 font-semibold flex justify-between"><span>🎟️ ${escapeHtml(v.code)}</span><span>-${formatVND(v.discount_amount)}</span></div>`,
                 )
                 .join("");
 
         const cList = document.getElementById("charity-projects-list");
+        if (state.charityProjectsError) {
+          cList.innerHTML = `<p class="rounded-xl bg-amber-50 p-4 text-sm text-amber-800">${escapeHtml(state.charityProjectsError)}</p>`;
+          return;
+        }
+        if (!state.charityProjects.length) {
+          cList.innerHTML = `<p class="text-sm text-ink-500">Hiện chưa có dự án quỹ nào.</p>`;
+          return;
+        }
         cList.innerHTML = state.charityProjects
           .map((p) => {
             const pct = Math.min(100, Math.round((p.raised / p.goal) * 100));
@@ -11306,10 +11611,10 @@
           <div class="p-5 rounded-2xl bg-white border border-slate-200 space-y-3">
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
-                <h4 class="font-bold text-base text-ink-900">${p.title}</h4>
-                <p class="text-xs text-ink-600 mt-0.5">${p.desc}</p>
+                <h4 class="font-bold text-base text-ink-900">${escapeHtml(p.title)}</h4>
+                <p class="text-xs text-ink-600 mt-0.5">${escapeHtml(p.desc)}</p>
               </div>
-              <button onclick="donateToCharity('${p.id}')" class="px-4 py-2 rounded-xl bg-eco-600 hover:bg-eco-700 text-white text-xs font-semibold shrink-0 transition">
+              <button onclick="donateToCharity(this.dataset.projectId)" data-project-id="${escapeHtml(p.id)}" class="charity-donate-button px-4 py-2 rounded-xl bg-eco-600 hover:bg-eco-700 text-white text-xs font-semibold shrink-0 transition">
                 🌱 Góp 100 ĐX (25.000đ)
               </button>
             </div>
@@ -11557,8 +11862,12 @@
           adminDropdown.classList.toggle("hidden", !isAdmin);
           if (state.token && !isLocalAuthToken(state.token)) {
             connectMessagesSocket();
+            startNotificationsPolling();
+          } else {
+            stopNotificationsPolling();
           }
         } else {
+          stopNotificationsPolling();
           guestArea.classList.remove("hidden");
           userArea.classList.add("hidden");
           userArea.classList.remove("flex");
@@ -11611,7 +11920,13 @@
         const requestedTab = window.location.hash.match(/^#([a-z]+)$/)?.[1];
         switchTab(validTabs.includes(requestedTab) ? requestedTab : "intro");
         syncFromBackend(false);
-        setInterval(refreshNotifications, 5000);
+        document.addEventListener("visibilitychange", () => {
+          if (document.hidden) {
+            stopNotificationsPolling();
+          } else {
+            startNotificationsPolling();
+          }
+        });
       });
     </script>
     <script>
