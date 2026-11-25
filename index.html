@@ -2599,13 +2599,19 @@
         }
       }
 
+      @media (max-width: 1279px) {
+        .intro-skip {
+          top: calc(8.5rem + env(safe-area-inset-top, 0px));
+        }
+      }
+
       @media (max-width: 640px) {
         .intro-page {
           overflow: clip;
         }
 
         .intro-skip {
-          top: 5rem;
+          top: calc(7.5rem + env(safe-area-inset-top, 0px));
           right: 0.75rem;
           min-height: 2.5rem;
           padding: 0.55rem 0.7rem;
@@ -6176,6 +6182,12 @@
                   ...buildFallbackCatalog().slice(0, 15 - mapped.length),
                 ];
 
+          try {
+            await loadCharityProjects();
+          } catch (error) {
+            console.warn("Could not load charity projects:", error.message);
+          }
+
           if (state.token) {
             try {
               const me = await apiFetch("/api/auth/me");
@@ -6232,12 +6244,25 @@
               } else {
                 state.orders = [];
               }
-              if (Array.isArray(me.vouchers)) state.vouchers = me.vouchers;
+              const activeVouchers = Array.isArray(me.active_vouchers)
+                ? me.active_vouchers
+                : Array.isArray(me.vouchers)
+                  ? me.vouchers
+                  : [];
+              state.vouchers = activeVouchers.map((voucher) => ({
+                id: voucher.id,
+                code: voucher.code,
+                amount: Number(
+                  voucher.discount_amount ?? voucher.amount ?? 0,
+                ),
+                min_order: Number(voucher.min_order ?? 0),
+              }));
             } catch (e) {
               console.warn("Token expired or /api/auth/me format:", e.message);
               if (e.status === 401 || e.status === 404) {
                 state.token = null;
                 state.user = null;
+                state.vouchers = [];
                 localStorage.removeItem("reloop_token");
               }
             }
@@ -6597,6 +6622,7 @@
         closeMessagesSocket();
         state.token = null;
         state.user = null;
+        state.vouchers = [];
         state.notifications = [];
         state.conversations = [];
         state.activeConversationId = null;
@@ -8388,8 +8414,16 @@
         }
 
         const subtotal = state.cart.reduce((s, x) => s + x.price, 0);
+        const selectedVoucherId = document.getElementById(
+          "cart-voucher-select",
+        ).value;
+        const selectedVoucher = state.vouchers.find(
+          (voucher) => voucher.id === selectedVoucherId,
+        );
         const discount =
-          Number(document.getElementById("cart-voucher-select").value) || 0;
+          selectedVoucher && subtotal >= selectedVoucher.min_order
+            ? Math.min(subtotal, selectedVoucher.amount)
+            : 0;
         const total = Math.max(0, subtotal - discount);
 
         document.getElementById("cart-subtotal").textContent =
@@ -8442,30 +8476,49 @@
           return;
         }
 
-        const discount =
-          Number(document.getElementById("cart-voucher-select").value) || 0;
+        const voucherSelect = document.getElementById("cart-voucher-select");
+        const voucherId = voucherSelect.value || null;
+        const selectedVoucher = voucherId
+          ? state.vouchers.find((voucher) => voucher.id === voucherId)
+          : null;
+        if (voucherId && !selectedVoucher) {
+          showToast(
+            "Voucher đã thay đổi hoặc không còn khả dụng. Vui lòng tải lại danh sách voucher.",
+            "error",
+          );
+          return;
+        }
+        const subtotal = state.cart.reduce((sum, item) => sum + item.price, 0);
+        if (selectedVoucher && subtotal < selectedVoucher.min_order) {
+          showToast(
+            `Đơn hàng cần tối thiểu ${formatVND(selectedVoucher.min_order)} để dùng voucher này.`,
+            "warning",
+          );
+          return;
+        }
         let checkoutResult;
         try {
           checkoutResult = await apiFetch("/api/orders/checkout", {
             method: "POST",
             body: JSON.stringify({
               product_ids: state.cart.map((c) => c.id),
-              voucher_id: null,
+              voucher_id: voucherId,
               recipient_name: recipientName,
               phone,
               shipping_address: shippingAddress,
               payment_method: paymentMethod,
             }),
           });
+          if (voucherId) {
+            state.vouchers = state.vouchers.filter(
+              (voucher) => voucher.id !== voucherId,
+            );
+            updateVoucherDropdown();
+          }
           await syncFromBackend(false);
         } catch (err) {
           showToast(`Thanh toán thất bại: ${err.message}`, "error");
           return;
-        }
-
-        if (discount > 0 && state.vouchers.length > 0) {
-          state.vouchers.shift();
-          updateVoucherDropdown();
         }
 
         const count = state.cart.length;
@@ -8509,6 +8562,11 @@
       }
 
       async function redeemVoucher(costPoints, amountVND) {
+        if (!state.user || !state.token) {
+          showToast("Vui lòng đăng nhập để đổi voucher bằng Điểm Xanh.", "info");
+          openAuthModal("login");
+          return;
+        }
         if (getPoints() < costPoints) {
           showToast(
             `Bạn cần tối thiểu ${costPoints} Điểm Xanh để đổi ưu đãi này!`,
@@ -8516,40 +8574,59 @@
           );
           return;
         }
+        let result;
         try {
-          await apiFetch("/api/points/redeem-voucher", {
+          result = await apiFetch("/api/points/redeem-voucher", {
             method: "POST",
             body: JSON.stringify({
-              points: costPoints,
+              points_cost: costPoints,
               discount_amount: amountVND,
+              code_prefix: "RELOOP",
             }),
           });
-        } catch {}
+        } catch (error) {
+          showToast(`Đổi voucher thất bại: ${error.message}`, "error");
+          return;
+        }
 
         addGreenPoints(-costPoints);
-        const code = `RELOOP${amountVND / 1000}K`;
-        state.vouchers.push({ code, amount: amountVND });
+        const voucher = result.voucher;
+        state.vouchers.push({
+          id: voucher.id,
+          code: voucher.code,
+          amount: Number(voucher.discount_amount),
+          min_order: Number(voucher.min_order),
+        });
         updateVoucherDropdown();
         renderGreenSection();
         showToast(
-          `Đã đổi thành công mã ${code} giảm ${formatVND(amountVND)}!`,
+          `Đã đổi thành công mã ${voucher.code} giảm ${formatVND(amountVND)}!`,
           "success",
         );
       }
 
       function updateVoucherDropdown() {
         const sel = document.getElementById("cart-voucher-select");
+        const selectedVoucherId = sel.value;
         sel.innerHTML =
-          `<option value="0">-- Không dùng mã giảm giá --</option>` +
+          `<option value="">-- Không dùng mã giảm giá --</option>` +
           state.vouchers
             .map(
               (v) =>
-                `<option value="${v.amount}">${v.code} (-${formatVND(v.amount)})</option>`,
+                `<option value="${v.id}">${v.code} (-${formatVND(v.amount)})</option>`,
             )
             .join("");
+        if (state.vouchers.some((voucher) => voucher.id === selectedVoucherId)) {
+          sel.value = selectedVoucherId;
+        }
       }
 
       async function donateToCharity(projectId) {
+        if (!state.user || !state.token) {
+          showToast("Vui lòng đăng nhập để quy đổi Điểm Xanh đóng góp quỹ.", "info");
+          openAuthModal("login");
+          return;
+        }
         const cost = 100;
         const vndValue = 25000;
         if (getPoints() < cost) {
@@ -8559,21 +8636,48 @@
           );
           return;
         }
+        let result;
         try {
-          await apiFetch("/api/charity/donate", {
+          result = await apiFetch("/api/charity/donate", {
             method: "POST",
-            body: JSON.stringify({ project_id: projectId, points: cost }),
+            body: JSON.stringify({
+              project_id: projectId,
+              points_to_donate: cost,
+            }),
           });
-        } catch {}
+        } catch (error) {
+          showToast(`Quyên góp thất bại: ${error.message}`, "error");
+          return;
+        }
 
         addGreenPoints(-cost);
         const proj = state.charityProjects.find((p) => p.id === projectId);
-        if (proj) proj.raised += vndValue;
+        if (proj) proj.raised += Number(result.donated_vnd_added) || vndValue;
+        try {
+          await loadCharityProjects();
+        } catch (error) {
+          console.warn("Could not refresh charity projects:", error.message);
+        }
         renderGreenSection();
         showToast(
-          `Cảm ơn bạn! Đã quy đổi 100 ĐX = 25.000đ ủng hộ "${proj.title}"`,
+          result.message ||
+            `Cảm ơn bạn! Đã quy đổi 100 ĐX = 25.000đ ủng hộ "${proj?.title || "Quỹ Xanh"}"`,
           "success",
         );
+      }
+
+      async function loadCharityProjects() {
+        const result = await apiFetch("/api/charity/projects");
+        if (!Array.isArray(result.projects)) {
+          throw new Error("Backend trả về danh sách dự án không hợp lệ.");
+        }
+        state.charityProjects = result.projects.map((project) => ({
+          id: project.id,
+          title: project.name,
+          desc: project.description,
+          raised: Number(project.raised_vnd) || 0,
+          goal: Number(project.goal_vnd) || 0,
+        }));
       }
 
       function renderGreenSection() {
@@ -8832,6 +8936,7 @@
         }
 
         refreshPointsDisplay();
+        updateVoucherDropdown();
         renderProducts();
         renderWardrobeAndOrders();
         renderGreenSection();
