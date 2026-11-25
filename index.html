@@ -3973,6 +3973,44 @@
         }
       }
 
+      @media (max-width: 767px) {
+        .messages-columns {
+          height: min(68vh, 42rem);
+          height: min(68dvh, 42rem);
+          min-height: 24rem;
+          grid-template-rows: minmax(8rem, 0.8fr) minmax(0, 1.2fr);
+        }
+
+        .conversation-list-panel {
+          display: flex;
+          min-height: 0;
+          flex-direction: column;
+        }
+
+        #conversations-list {
+          min-height: 0;
+          max-height: none;
+          flex: 1 1 0%;
+          overflow-y: auto;
+          overscroll-behavior: contain;
+          -webkit-overflow-scrolling: touch;
+        }
+
+        #conversation-thread {
+          height: 100%;
+          min-height: 0;
+          min-width: 0;
+        }
+
+        #conversation-thread #conversation-messages {
+          min-height: 0;
+          flex: 1 1 0%;
+          overflow-y: auto;
+          overscroll-behavior: contain;
+          -webkit-overflow-scrolling: touch;
+        }
+      }
+
       @media (max-width: 640px) {
         button:focus-visible,
         a[href]:focus-visible,
@@ -4087,6 +4125,7 @@
               class="nav-tab whitespace-nowrap px-0.5 md:px-1 lg:px-2 py-2 rounded-xl text-[10px] lg:text-xs font-medium text-ink-700 hover:text-ink-900 transition"
             >
               Tin nhắn
+              <span class="message-unread-badge hidden inline-flex min-w-4 h-4 items-center justify-center px-1 rounded-full bg-rose-600 text-white text-[11px] font-bold leading-4 text-center" aria-hidden="true">0</span>
             </button>
             <button
               onclick="switchTab('green')"
@@ -4428,6 +4467,7 @@
             class="nav-tab shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-100 text-ink-700"
           >
             Tin nhắn
+            <span class="message-unread-badge hidden inline-flex min-w-4 h-4 items-center justify-center px-1 rounded-full bg-rose-600 text-white text-[11px] font-bold leading-4 text-center" aria-hidden="true">0</span>
           </button>
           <button
             onclick="switchTab('green')"
@@ -4451,7 +4491,7 @@
         <span class="mobile-nav-icon" aria-hidden="true">♧</span><span>Tủ đồ</span>
       </button>
       <button onclick="switchTab('messages')" data-tab="messages" class="nav-tab" aria-label="Tin nhắn">
-        <span class="mobile-nav-icon" aria-hidden="true">✉</span><span>Tin nhắn</span>
+        <span class="mobile-nav-icon relative" aria-hidden="true">✉<span class="message-unread-badge hidden absolute -top-1 -right-2 inline-flex min-w-4 h-4 items-center justify-center px-1 rounded-full bg-rose-600 text-white text-[11px] font-bold leading-4 text-center">0</span></span><span>Tin nhắn</span>
       </button>
       <button onclick="switchTab('green')" data-tab="green" class="nav-tab" aria-label="Tài khoản và Điểm Xanh">
         <span class="mobile-nav-icon" aria-hidden="true">🌱</span><span>Tài khoản</span>
@@ -7378,6 +7418,9 @@
         }
 
         refreshAllUI();
+        if (state.token && !isLocalAuthToken(state.token)) {
+          await loadConversations(true);
+        }
       }
 
       // =========================================================
@@ -7882,6 +7925,8 @@
             const isComplaintNotification =
               notification.notification_type === "complaint_created" ||
               notification.notification_type === "complaint_update";
+            const isMessageNotification =
+              notification.notification_type === "message_received";
             const buyerInfo = notification.buyer_name
               ? `<div class="mt-2 rounded-xl bg-slate-50 p-2.5 text-[11px] text-ink-600 space-y-0.5">
               <p><strong>Người mua:</strong> ${escapeHtml(notification.buyer_name)}</p>
@@ -7893,7 +7938,7 @@
             return `
           <button type="button" data-notification-id="${escapeHtml(notification.id)}" onclick="openNotification(this.dataset.notificationId)" class="min-h-11 w-full text-left p-3 rounded-xl hover:bg-slate-50 ${notification.is_read ? "" : "bg-eco-50/70"}">
             <div class="flex items-start gap-2">
-              <span class="text-base">${isComplaintNotification ? "📝" : "🛍️"}</span>
+              <span class="text-base">${isComplaintNotification ? "📝" : isMessageNotification ? "✉️" : "🛍️"}</span>
               <div class="min-w-0 flex-1">
                 <p class="text-xs font-bold text-ink-900">${escapeHtml(notification.title)}</p>
                 <p class="mt-1 text-[11px] text-ink-600">${escapeHtml(notification.message)}</p>
@@ -7906,7 +7951,45 @@
           .join("");
       }
 
+      function updateMessageUnreadBadge() {
+        const unreadCount = state.conversations.reduce(
+          (total, conversation) =>
+            total + Math.max(0, Number(conversation.unread_count) || 0),
+          0,
+        );
+        document
+          .querySelectorAll('[data-tab="messages"]')
+          .forEach((button) => {
+            const badge = button.querySelector(".message-unread-badge");
+            if (!badge) return;
+            badge.textContent = unreadCount > 99 ? "99+" : unreadCount;
+            badge.classList.toggle("hidden", unreadCount === 0);
+            button.setAttribute(
+              "aria-label",
+              unreadCount
+                ? `Tin nhắn, ${unreadCount} chưa đọc`
+                : "Tin nhắn",
+            );
+          });
+      }
+
+      function markConversationNotificationsRead(conversationId) {
+        let changed = false;
+        state.notifications.forEach((notification) => {
+          if (
+            notification.notification_type === "message_received" &&
+            notification.conversation_id === conversationId &&
+            !notification.is_read
+          ) {
+            notification.is_read = 1;
+            changed = true;
+          }
+        });
+        if (changed) renderNotifications();
+      }
+
       function renderConversations() {
+        updateMessageUnreadBadge();
         const list = document.getElementById("conversations-list");
         if (!list) return;
         const signature = JSON.stringify([
@@ -7976,7 +8059,7 @@
         presence.textContent = isOnline ? "● Đang hoạt động" : "";
       }
 
-      async function loadConversations() {
+      async function loadConversations(silent = false) {
         if (!state.token) return;
         try {
           const result = await apiFetch("/api/conversations");
@@ -7991,7 +8074,11 @@
           }
           renderConversations();
         } catch (err) {
-          showToast(`Không thể tải hội thoại: ${err.message}`, "error");
+          if (silent) {
+            console.warn("Không thể cập nhật số tin nhắn chưa đọc:", err.message);
+          } else {
+            showToast(`Không thể tải hội thoại: ${err.message}`, "error");
+          }
         }
       }
 
@@ -8030,6 +8117,12 @@
               renderConversationMessages(
                 Array.isArray(messagesResult.items) ? messagesResult.items : [],
               );
+              const activeConversation = state.conversations.find(
+                (item) => item.id === conversationId,
+              );
+              if (activeConversation) activeConversation.unread_count = 0;
+              markConversationNotificationsRead(conversationId);
+              renderConversations();
             }
           }
           state.messagesRefreshErrorLogged = false;
@@ -8296,10 +8389,26 @@
 
       async function handleMessagesSocketEvent(payload) {
         if (payload.type === "message") {
-          if (payload.conversation_id === state.activeConversationId) {
+          const messagesSection =
+            document.getElementById("section-messages");
+          const isViewingConversation =
+            payload.conversation_id === state.activeConversationId &&
+            !messagesSection.classList.contains("hidden") &&
+            (!window.matchMedia("(max-width: 767px)").matches ||
+              messagesSection.classList.contains("messages-detail-open"));
+          if (isViewingConversation) {
             await refreshMessagesWhileOpen();
           } else {
             await loadConversations();
+          }
+          if (payload.sender_id && payload.sender_id !== state.user?.id) {
+            await refreshNotifications();
+            if (!isViewingConversation) {
+              showToast(
+                `Tin nhắn mới từ ${payload.sender_name || "thành viên RE:LOOP"}.`,
+                "info",
+              );
+            }
           }
           return;
         }
@@ -8473,6 +8582,7 @@
               </button>
             </form>`;
           renderConversationMessages(messages, true);
+          markConversationNotificationsRead(conversationId);
           await loadConversations();
         } catch (err) {
           thread.innerHTML = `<p class="p-6 text-center text-sm text-rose-600">Không thể tải tin nhắn: ${escapeHtml(err.message)}</p>`;
@@ -8527,6 +8637,16 @@
         ) {
           toggleNotifications(false);
           await openComplaintDetailFromOrder(notification.complaint_id);
+          return;
+        }
+        if (
+          notification.notification_type === "message_received" &&
+          notification.conversation_id
+        ) {
+          toggleNotifications(false);
+          switchTab("messages");
+          await loadConversations(true);
+          await selectConversation(notification.conversation_id);
         }
       }
 
@@ -8552,6 +8672,7 @@
         } catch (err) {
           console.warn("Không thể tự động cập nhật thông báo:", err);
         }
+        await loadConversations(true);
       }
 
       // =========================================================

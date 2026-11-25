@@ -468,11 +468,16 @@ def init_db():
                 buyer_address TEXT,
                 is_read INTEGER DEFAULT 0,
                 created_at TEXT NOT NULL,
+                conversation_id TEXT,
                 FOREIGN KEY (user_id) REFERENCES users(id)
             )
         """)
         try:
             cursor.execute("ALTER TABLE notifications ADD COLUMN complaint_id TEXT")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            cursor.execute("ALTER TABLE notifications ADD COLUMN conversation_id TEXT")
         except sqlite3.OperationalError:
             pass
 
@@ -1516,6 +1521,12 @@ def list_conversation_messages(
             WHERE conversation_id = ? AND recipient_id = ? AND read_at IS NULL
         """, (now, conversation_id, user["id"]))
         cursor.execute("""
+            UPDATE notifications
+            SET is_read = 1
+            WHERE user_id = ? AND conversation_id = ?
+              AND notification_type = 'message_received' AND is_read = 0
+        """, (user["id"], conversation_id))
+        cursor.execute("""
             SELECT messages.id, messages.sender_id, users.name AS sender_name,
                    messages.content, messages.created_at, messages.read_at
             FROM messages
@@ -1568,6 +1579,20 @@ async def send_conversation_message(
             f"m-{uuid.uuid4().hex[:12]}", conversation_id,
             user["id"], recipient_id, content, now,
         ))
+        cursor.execute("""
+            INSERT INTO notifications (
+                id, user_id, notification_type, title, message,
+                is_read, created_at, conversation_id
+            )
+            VALUES (?, ?, 'message_received', ?, ?, 0, ?, ?)
+        """, (
+            f"noti-{uuid.uuid4().hex[:8]}",
+            recipient_id,
+            "Tin nhắn mới",
+            f"{user['name']}: {content[:160]}",
+            now,
+            conversation_id,
+        ))
         cursor.execute(
             "UPDATE conversations SET updated_at = ? WHERE id = ?",
             (now, conversation_id),
@@ -1575,7 +1600,12 @@ async def send_conversation_message(
 
     await message_connections.broadcast(
         [conversation["buyer_id"], conversation["seller_id"]],
-        {"type": "message", "conversation_id": conversation_id},
+        {
+            "type": "message",
+            "conversation_id": conversation_id,
+            "sender_id": user["id"],
+            "sender_name": user["name"],
+        },
     )
     return {"message": "Đã gửi tin nhắn.", "created_at": now}
 
