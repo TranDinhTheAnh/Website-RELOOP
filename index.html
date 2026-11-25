@@ -2503,22 +2503,24 @@
                 : [];
               renderNotifications();
               if (Array.isArray(me.wardrobe)) {
-                state.wardrobe = me.wardrobe.map((item) => ({
-                  id: item.id,
-                  source_product_id: item.source_product_id,
-                  name: item.name || item.title,
-                  category: item.category,
-                  color: item.color,
-                  material: item.material,
-                  size: item.size,
-                  price: item.price ?? item.paid_price,
-                  original_price: item.original_price,
-                  condition_percent:
-                    item.condition_percent ?? item.condition_score ?? 95,
-                  cycle: item.cycle,
-                  purchased_at: item.purchased_at,
-                  image_url: item.image_url,
-                }));
+                state.wardrobe = me.wardrobe
+                  .filter((item) => !item.reconsigned)
+                  .map((item) => ({
+                    id: item.id,
+                    source_product_id: item.source_product_id,
+                    name: item.name || item.title,
+                    category: item.category,
+                    color: item.color,
+                    material: item.material,
+                    size: item.size,
+                    price: item.price ?? item.paid_price,
+                    original_price: item.original_price,
+                    condition_percent:
+                      item.condition_percent ?? item.condition_score ?? 95,
+                    cycle: item.cycle,
+                    purchased_at: item.purchased_at,
+                    image_url: item.image_url,
+                  }));
               }
               if (Array.isArray(me.orders)) {
                 state.orders = state.wardrobe.filter((item) =>

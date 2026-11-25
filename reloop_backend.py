@@ -804,7 +804,7 @@ def get_me(user: Dict[str, Any] = Depends(get_current_user)):
 
         cursor.execute("""
             SELECT * FROM wardrobe_items
-            WHERE user_id = ?
+            WHERE user_id = ? AND COALESCE(reconsigned, 0) = 0
             ORDER BY purchased_at DESC
         """, (user["id"],))
         wardrobe = [dict(r) for r in cursor.fetchall()]
