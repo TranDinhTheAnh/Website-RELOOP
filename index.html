@@ -3200,7 +3200,6 @@
         messagesHeartbeatTimeoutTimer: null,
         messagesVisibilityHandler: null,
         messagesSocketAuthFailedToken: null,
-        messagesRealtimeWarned: false,
         typingIndicatorTimer: null,
         lastTypingSentAt: 0,
         charityProjects: [
@@ -4405,7 +4404,6 @@
             state.messagesSocketConnectingToken = null;
             state.messagesReconnectAttempts = 0;
             state.messagesSocketAuthFailedToken = null;
-            state.messagesRealtimeWarned = false;
             if (state.messagesHeartbeatTimer) {
               clearInterval(state.messagesHeartbeatTimer);
             }
@@ -4489,13 +4487,6 @@
             }
             setTypingIndicator(false);
             if (state.token === token) {
-              if (!state.messagesRealtimeWarned) {
-                showToast(
-                  "Kết nối tin nhắn trực tiếp bị gián đoạn. Hệ thống đang kết nối lại...",
-                  "warning",
-                );
-                state.messagesRealtimeWarned = true;
-              }
               scheduleMessagesReconnect();
             }
           };
@@ -4517,13 +4508,6 @@
             return;
           }
           console.warn("Không thể kết nối WebSocket tin nhắn:", err.message);
-          if (!state.messagesRealtimeWarned) {
-            showToast(
-              "Kết nối tin nhắn trực tiếp bị gián đoạn. Hệ thống đang kết nối lại...",
-              "warning",
-            );
-            state.messagesRealtimeWarned = true;
-          }
           scheduleMessagesReconnect();
         }
       }
