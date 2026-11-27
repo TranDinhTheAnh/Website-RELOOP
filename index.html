@@ -5786,7 +5786,7 @@
       </section>
 
       <!-- ========================================================= -->
-      <!-- TAB 4: ĐƠN ĐÃ MUA & KÝ GỬI LẠI 1 CHẠM                     -->
+      <!-- TAB 4: ĐƠN HÀNG ĐÃ MUA                                  -->
       <!-- ========================================================= -->
       <section id="section-orders" class="hidden max-w-5xl mx-auto space-y-6">
         <div
@@ -5795,23 +5795,16 @@
           <div>
             <span
               class="text-xs font-semibold uppercase tracking-wider text-eco-700"
-              >1-Click Circular Re-consignment</span
+              >Đơn hàng của bạn</span
             >
             <h2 class="text-3xl font-bold text-ink-900 mt-1">
-              Đơn hàng đã mua & Ký gửi lại 1 chạm
+              Đơn hàng đã mua
             </h2>
             <p class="text-sm text-ink-600 mt-1">
-              Khi đã mặc một thời gian, bạn chỉ cần bấm
-              <strong>"Ký gửi lại"</strong> và tải 1–2 ảnh hiện trạng — AI tự
-              đồng bộ toàn bộ thông tin gốc từ vòng trước. Nếu sản phẩm không
-              giống mô tả, bạn có thể gửi khiếu nại trong thời hạn quy định.
+              Chọn một đơn hàng để xem trạng thái giao hàng, thông tin sản phẩm
+              và các thao tác liên quan.
             </p>
           </div>
-          <span
-            class="px-4 py-2 rounded-2xl bg-eco-50 border border-eco-200 text-eco-800 text-xs font-semibold"
-          >
-            🎁 +150 Điểm Xanh mỗi lần ký gửi lại
-          </span>
         </div>
 
         <div id="orders-list" class="space-y-4">
@@ -6943,6 +6936,7 @@
         cart: [],
         wardrobe: [],
         orders: [],
+        expandedOrderId: null,
         ordersLoading: false,
         ordersError: null,
         ordersPollTimer: null,
@@ -10398,7 +10392,7 @@
           let card = existing.get(orderId);
           if (!card) {
             card = document.createElement("article");
-            card.className = "order-card space-y-4 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5";
+            card.className = "order-card rounded-2xl border border-slate-200 bg-white p-4 sm:p-5";
             card.dataset.orderId = orderId;
             card.dataset.orderCard = "true";
             card.innerHTML = createOrderCardMarkup(order);
@@ -10505,7 +10499,33 @@
       }
 
       function createOrderCardMarkup(order) {
-        return `<div class="flex flex-wrap items-start justify-between gap-3"><div><p class="text-xs text-ink-500">Mã đơn <b class="text-ink-800">#${escapeHtml(order.order_id)}</b> · ${escapeHtml(formatNotificationDate(order.created_at))}</p><p class="mt-1 text-sm font-bold text-eco-800" data-order-status aria-live="polite"></p><p class="mt-1 text-xs text-ink-600"><span data-payment-method></span> · <span data-payment-status></span></p></div><div class="text-right"><p class="text-xs text-ink-500">Tổng đơn</p><p class="text-lg font-bold text-ink-900" data-order-total></p></div></div><div class="order-scene rounded-2xl bg-gradient-to-br from-eco-50 to-sand-50" data-order-scene>${orderScene(order)}</div><p class="text-xs font-semibold text-eco-800" data-order-countdown aria-live="polite"></p><div data-order-shipping>${orderShippingMarkup(order)}</div><div data-order-timeline-wrap>${orderTimelineMarkup(order)}</div><div data-order-items>${orderItemsMarkup(order)}</div><div data-order-actions-wrap>${orderActionsMarkup(order)}</div>`;
+        const orderId = escapeHtml(order.order_id);
+        const itemCount = (order.items || []).length;
+        const firstItemTitle = (order.items || []).map((item) => item.title).find(Boolean);
+        const expanded = state.expandedOrderId === order.order_id;
+        return `<button type="button" class="flex min-h-16 w-full items-center justify-between gap-4 rounded-xl px-2 py-2 text-left transition hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-eco-600" data-order-toggle aria-expanded="${expanded}" aria-controls="order-detail-${orderId}" onclick="toggleOrderDetails(this)"><span class="min-w-0"><span class="block text-sm font-bold text-ink-900">Đơn hàng #${orderId}</span><span class="mt-1 block text-xs text-ink-500">${escapeHtml(formatNotificationDate(order.created_at))}${itemCount ? ` · ${itemCount} sản phẩm` : ""}</span><span class="mt-1 block truncate text-xs text-ink-600">${escapeHtml(firstItemTitle || "Xem chi tiết đơn hàng")}</span></span><span class="flex shrink-0 items-center gap-3"><span class="text-sm font-bold text-ink-900" data-order-summary-total>${formatVND(order.total_vnd || 0)}</span><span class="text-ink-500" data-order-chevron aria-hidden="true">${expanded ? "⌃" : "⌄"}</span></span></button><div id="order-detail-${orderId}" class="mt-4 space-y-4 border-t border-slate-100 pt-4"${expanded ? "" : " hidden"} data-order-details><div class="flex flex-wrap items-start justify-between gap-3"><div><p class="text-xs text-ink-500">Mã đơn <b class="text-ink-800">#${orderId}</b> · ${escapeHtml(formatNotificationDate(order.created_at))}</p><p class="mt-1 text-sm font-bold text-eco-800" data-order-status aria-live="polite"></p><p class="mt-1 text-xs text-ink-600"><span data-payment-method></span> · <span data-payment-status></span></p></div><div class="text-right"><p class="text-xs text-ink-500">Tổng đơn</p><p class="text-lg font-bold text-ink-900" data-order-total></p></div></div><div class="order-scene rounded-2xl bg-gradient-to-br from-eco-50 to-sand-50" data-order-scene>${orderScene(order)}</div><p class="text-xs font-semibold text-eco-800" data-order-countdown aria-live="polite"></p><div data-order-shipping>${orderShippingMarkup(order)}</div><div data-order-timeline-wrap>${orderTimelineMarkup(order)}</div><div data-order-items>${orderItemsMarkup(order)}</div><div data-order-actions-wrap>${orderActionsMarkup(order)}</div></div>`;
+      }
+
+      function setOrderDetailsExpanded(card, expanded) {
+        const details = card.querySelector("[data-order-details]");
+        const toggle = card.querySelector("[data-order-toggle]");
+        if (!details || !toggle) return;
+        details.hidden = !expanded;
+        toggle.setAttribute("aria-expanded", String(expanded));
+        const chevron = toggle.querySelector("[data-order-chevron]");
+        if (chevron) chevron.textContent = expanded ? "⌃" : "⌄";
+      }
+
+      function toggleOrderDetails(button) {
+        const card = button.closest("[data-order-card]");
+        if (!card) return;
+        const details = card.querySelector("[data-order-details]");
+        const expanded = Boolean(details?.hidden);
+        state.expandedOrderId = expanded ? card.dataset.orderId : null;
+        document.querySelectorAll("#orders-list [data-order-card]").forEach((orderCard) => {
+          setOrderDetailsExpanded(orderCard, orderCard.dataset.orderId === state.expandedOrderId);
+        });
+        updateAppPath("orders", state.expandedOrderId, "push");
       }
 
       function updateOrderTimeline(card, order) {
@@ -10576,6 +10596,8 @@
         card.querySelector("[data-payment-method]").textContent = ({ COD: "Thanh toán khi nhận", BANK_TRANSFER: "Chuyển khoản mô phỏng", E_WALLET: "Ví điện tử mô phỏng" })[order.payment_method] || "Thanh toán";
         card.querySelector("[data-payment-status]").textContent = paymentStateLabels[order.payment_status] || "Chưa có trạng thái thanh toán";
         card.querySelector("[data-order-total]").textContent = formatVND(order.total_vnd || 0);
+        card.querySelector("[data-order-summary-total]").textContent = formatVND(order.total_vnd || 0);
+        setOrderDetailsExpanded(card, state.expandedOrderId === order.order_id);
         const itemMarkup = orderItemsMarkup(order);
         if (card.dataset.itemsMarkup !== itemMarkup) {
           card.querySelector("[data-order-items]").innerHTML = itemMarkup;
@@ -12174,7 +12196,52 @@
       // =========================================================
       // NAVIGATION & UI HELPERS
       // =========================================================
-      function switchTab(tabName) {
+      const appTabPaths = Object.freeze({
+        intro: "/",
+        store: "/kham-pha",
+        sell: "/dang-ban",
+        wardrobe: "/tu-do",
+        orders: "/damua",
+        complaints: "/khieu-nai",
+        seller: "/don-ban",
+        messages: "/tin-nhan",
+        green: "/diem-xanh",
+        "admin-users": "/quan-tri/nguoi-dung",
+      });
+
+      function appPathFor(tabName, orderId = null) {
+        if (tabName === "orders" && orderId) {
+          return `${appTabPaths.orders}/${encodeURIComponent(orderId)}`;
+        }
+        return appTabPaths[tabName] || appTabPaths.intro;
+      }
+
+      function updateAppPath(tabName, orderId = null, historyMode = "push") {
+        if (historyMode === "none") return;
+        const path = appPathFor(tabName, orderId);
+        if (window.location.pathname === path && !window.location.search && !window.location.hash) return;
+        const method = historyMode === "replace" ? "replaceState" : "pushState";
+        window.history[method]({ tab: tabName, orderId }, "", path);
+      }
+
+      function routeFromPath(pathname) {
+        const normalizedPath = pathname.replace(/\/+$/, "") || "/";
+        if (normalizedPath === appTabPaths.orders) {
+          return { tab: "orders", orderId: null };
+        }
+        const orderMatch = normalizedPath.match(/^\/damua\/([^/]+)$/);
+        if (orderMatch) {
+          try {
+            return { tab: "orders", orderId: decodeURIComponent(orderMatch[1]) };
+          } catch {
+            return null;
+          }
+        }
+        const route = Object.entries(appTabPaths).find(([, path]) => path === normalizedPath);
+        return route ? { tab: route[0], orderId: null } : null;
+      }
+
+      function switchTab(tabName, options = {}) {
         if (tabName === "admin-users" && !checkIsAdmin(state.user)) {
           showToast(
             "Chức năng này chỉ dành cho tài khoản Quản trị viên.",
@@ -12200,6 +12267,11 @@
           return;
         }
         if (tabName === "complaints") closeComplaintDetail();
+        state.expandedOrderId = tabName === "orders" ? options.orderId || null : null;
+        updateAppPath(tabName, state.expandedOrderId, options.historyMode || "push");
+        document.querySelectorAll("#orders-list [data-order-card]").forEach((card) => {
+          setOrderDetailsExpanded(card, card.dataset.orderId === state.expandedOrderId);
+        });
         [
           "intro",
           "store",
@@ -12378,8 +12450,27 @@
           "messages",
           "green",
         ];
-        const requestedTab = window.location.hash.match(/^#([a-z]+)$/)?.[1];
-        switchTab(validTabs.includes(requestedTab) ? requestedTab : "intro");
+        const route = routeFromPath(window.location.pathname);
+        const legacyTab = window.location.pathname === "/"
+          ? window.location.hash.match(/^#([a-z]+)$/)?.[1]
+          : null;
+        const requestedTab = validTabs.includes(legacyTab) ? legacyTab : route?.tab;
+        const historyMode = validTabs.includes(legacyTab)
+          ? "replace"
+          : window.location.pathname === "/" && window.location.hash
+            ? "none"
+            : "replace";
+        switchTab(requestedTab || "intro", {
+          historyMode,
+          orderId: route?.orderId || null,
+        });
+        window.addEventListener("popstate", () => {
+          const currentRoute = routeFromPath(window.location.pathname);
+          switchTab(currentRoute?.tab || "intro", {
+            historyMode: currentRoute ? "none" : "replace",
+            orderId: currentRoute?.orderId || null,
+          });
+        });
         syncFromBackend(false);
         document.addEventListener("visibilitychange", () => {
           document.body.classList.toggle("orders-page-hidden", document.hidden);
