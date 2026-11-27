@@ -21,6 +21,7 @@ import hashlib
 import secrets
 import sqlite3
 import threading
+import time
 import re
 import html
 import logging
@@ -99,9 +100,13 @@ VILAO_API_BASE_URL = (
 KIMI_MODEL = os.getenv("KIMI_MODEL", "").strip() or "kimi-2.7"
 MAX_GARMENT_IMAGE_BYTES = 10 * 1024 * 1024
 ORDER_RESERVATION_MINUTES = 15
+ORDER_SIM_STEP_SECONDS = max(
+    20, min(30, int(os.getenv("ORDER_SIM_STEP_SECONDS", "25")))
+)
+PAYMENT_SIMULATION_ENABLED = os.getenv("PAYMENT_SIMULATION_ENABLED", "1") == "1"
 LOGIN_MAX_FAILED_ATTEMPTS = 10
 LOGIN_ATTEMPT_WINDOW = timedelta(minutes=15)
-COMPLAINT_WINDOW_DAYS = 7  # Tính từ orders.created_at; đổi sang mốc giao hàng khi có trạng thái giao hàng.
+COMPLAINT_WINDOW_DAYS = 7
 MESSAGE_ONLINE_THRESHOLD_SECONDS = 75
 CIRCULAR_BADGE_TEXT = "Sản phẩm chính hãng thuộc hệ tuần hoàn, đã được kiểm định từ vòng trước"
 EMAIL_PATTERN = re.compile(
@@ -466,7 +471,14 @@ _postgres_pool = (
 def get_db():
     """Use Neon Postgres in production and SQLite for local tests."""
     if _postgres_pool:
-        raw_connection = _postgres_pool.getconn()
+        for attempt in range(3):
+            try:
+                raw_connection = _postgres_pool.getconn()
+                break
+            except psycopg.OperationalError:
+                if attempt == 2:
+                    raise
+                time.sleep(0.2 * (attempt + 1))
         conn = PostgresConnection(raw_connection)
     else:
         raw_connection = sqlite3.connect(DB_PATH, check_same_thread=False)
@@ -496,7 +508,14 @@ def get_migration_db():
         raise RuntimeError(
             "DATABASE_URL_UNPOOLED is required to safely initialize the Neon schema."
         )
-    connection = psycopg.connect(DATABASE_URL_UNPOOLED, row_factory=dict_row)
+    for attempt in range(3):
+        try:
+            connection = psycopg.connect(DATABASE_URL_UNPOOLED, row_factory=dict_row)
+            break
+        except psycopg.OperationalError:
+            if attempt == 2:
+                raise
+            time.sleep(0.2 * (attempt + 1))
     try:
         connection.execute("SELECT pg_advisory_lock(731904221)")
         yield PostgresConnection(connection)
@@ -554,7 +573,7 @@ message_connections = MessageConnectionManager()
 
 
 def _mark_message_user_active(user_id: str) -> None:
-    now = datetime.utcnow().isoformat()
+    now = datetime.utcnow()
     with get_db() as conn:
         conn.execute(
             """
@@ -721,6 +740,13 @@ def init_db():
             "ALTER TABLE orders ADD COLUMN voucher_id TEXT",
             "ALTER TABLE orders ADD COLUMN reservation_expires_at TEXT",
             "ALTER TABLE orders ADD COLUMN completed_at TEXT",
+            "ALTER TABLE orders ADD COLUMN paid_at TEXT",
+            "ALTER TABLE orders ADD COLUMN delivered_at TEXT",
+            "ALTER TABLE orders ADD COLUMN sim_started_at TEXT",
+            "ALTER TABLE orders ADD COLUMN carrier_name TEXT",
+            "ALTER TABLE orders ADD COLUMN tracking_code TEXT",
+            "ALTER TABLE orders ADD COLUMN courier_name TEXT",
+            "ALTER TABLE orders ADD COLUMN courier_phone TEXT",
         )
         for column_sql in order_columns:
             if DATABASE_URL:
@@ -730,6 +756,68 @@ def init_db():
                     cursor.execute(column_sql)
                 except sqlite3.OperationalError:
                     pass
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS order_status_history (
+                id TEXT PRIMARY KEY,
+                order_id TEXT NOT NULL,
+                status TEXT NOT NULL,
+                note TEXT,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (order_id) REFERENCES orders(id)
+            )
+        """)
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_order_status_history_order_created "
+            "ON order_status_history (order_id, created_at)"
+        )
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS payments (
+                id TEXT PRIMARY KEY,
+                order_id TEXT NOT NULL,
+                method TEXT NOT NULL,
+                amount_vnd INTEGER NOT NULL,
+                status TEXT NOT NULL,
+                transaction_ref TEXT,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (order_id) REFERENCES orders(id)
+            )
+        """)
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_payments_order ON payments (order_id)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_orders_user_created ON orders (user_id, created_at)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_orders_status ON orders (order_status)"
+        )
+        cursor.execute(
+            "SELECT id, created_at FROM orders WHERE order_status = 'processing'"
+        )
+        for legacy_order in cursor.fetchall():
+            order = dict(legacy_order)
+            cursor.execute(
+                """
+                UPDATE orders SET order_status = 'pending_confirmation',
+                    sim_started_at = COALESCE(sim_started_at, ?)
+                WHERE id = ? AND order_status = 'processing'
+                """,
+                (order["created_at"], order["id"]),
+            )
+            if cursor.rowcount == 1:
+                cursor.execute(
+                    """
+                    INSERT INTO order_status_history (id, order_id, status, note, created_at)
+                    VALUES (?, ?, 'pending_confirmation', ?, ?)
+                    """,
+                    (
+                        f"osh-{uuid.uuid4().hex}",
+                        order["id"],
+                        "Đơn hàng đã được tạo",
+                        order["created_at"],
+                    ),
+                )
 
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS product_reservations (
@@ -1289,6 +1377,10 @@ class CheckoutRequest(BaseModel):
     payment_method: str = Field(default="COD", pattern="^(COD|BANK_TRANSFER|E_WALLET)$")
 
 
+class SimulatedPaymentRequest(BaseModel):
+    outcome: Literal["success", "failed"]
+
+
 def normalize_vietnamese_phone(value: str) -> str:
     phone = re.sub(r"[\s().-]", "", value)
     if phone.startswith("+84"):
@@ -1314,6 +1406,19 @@ def _release_expired_order_reservations(cursor: sqlite3.Cursor, now: datetime) -
     )
     expired_orders = [dict(row) for row in cursor.fetchall()]
     for order in expired_orders:
+        if DATABASE_URL:
+            cursor.execute("SELECT id FROM orders WHERE id = ? FOR UPDATE", (order["id"],))
+            if not cursor.fetchone():
+                continue
+        cursor.execute(
+            """
+            UPDATE orders SET order_status = 'expired', payment_status = 'expired'
+            WHERE id = ? AND order_status = 'pending_payment'
+            """,
+            (order["id"],),
+        )
+        if cursor.rowcount != 1:
+            continue
         cursor.execute(
             "SELECT product_id FROM product_reservations WHERE order_id = ?",
             (order["id"],),
@@ -1327,11 +1432,15 @@ def _release_expired_order_reservations(cursor: sqlite3.Cursor, now: datetime) -
         cursor.execute("DELETE FROM product_reservations WHERE order_id = ?", (order["id"],))
         cursor.execute(
             """
-            UPDATE orders
-            SET order_status = 'expired', payment_status = 'expired'
-            WHERE id = ? AND order_status = 'pending_payment'
+            INSERT INTO order_status_history (id, order_id, status, note, created_at)
+            VALUES (?, ?, 'expired', ?, ?)
             """,
-            (order["id"],),
+            (
+                f"osh-{uuid.uuid4().hex}",
+                order["id"],
+                "Đã hết thời gian giữ chỗ thanh toán",
+                now_text,
+            ),
         )
         if order.get("voucher_id"):
             cursor.execute(
@@ -1340,16 +1449,191 @@ def _release_expired_order_reservations(cursor: sqlite3.Cursor, now: datetime) -
             )
 
 
-def _complete_cod_order(cursor: sqlite3.Cursor, order_id: str, now: datetime) -> bool:
-    cursor.execute("SELECT * FROM orders WHERE id = ?", (order_id,))
-    order_row = cursor.fetchone()
+ORDER_SIM_STATUSES = (
+    "pending_confirmation",
+    "preparing",
+    "shipping",
+    "out_for_delivery",
+    "delivered",
+)
+ORDER_SIM_NOTES = {
+    "pending_confirmation": "Đơn hàng đã được tạo",
+    "preparing": "Người bán đã xác nhận và đang chuẩn bị hàng",
+    "shipping": "Shipper đã lấy hàng",
+    "out_for_delivery": "Đơn hàng sắp tới nơi",
+    "delivered": "Đơn hàng đã được giao",
+}
+MOCK_COURIER_NAMES = ("Nguyễn Minh An", "Trần Gia Bảo", "Lê Hoàng Phúc", "Phạm Khánh Linh")
+
+
+def _set_order_status(
+    cursor: sqlite3.Cursor,
+    order_id: str,
+    from_status: str,
+    to_status: str,
+    note: str,
+    at: datetime,
+) -> bool:
+    cursor.execute(
+        "UPDATE orders SET order_status = ? WHERE id = ? AND order_status = ?",
+        (to_status, order_id, from_status),
+    )
+    if cursor.rowcount != 1:
+        return False
+    cursor.execute(
+        """
+        INSERT INTO order_status_history (id, order_id, status, note, created_at)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (f"osh-{uuid.uuid4().hex}", order_id, to_status, note, at.isoformat()),
+    )
+    return True
+
+
+def _advance_simulated_orders(
+    cursor: sqlite3.Cursor, user_id: str, now: datetime
+) -> None:
+    placeholders = ",".join("?" for _ in ORDER_SIM_STATUSES[:-1])
+    cursor.execute(
+        f"""
+        SELECT * FROM orders
+        WHERE user_id = ? AND sim_started_at IS NOT NULL
+          AND order_status IN ({placeholders})
+        """,
+        (user_id, *ORDER_SIM_STATUSES[:-1]),
+    )
+    for row in cursor.fetchall():
+        order = dict(row)
+        started = _utc_naive_datetime(order.get("sim_started_at"))
+        if not started:
+            continue
+        steps = max(0, int((now - started).total_seconds() // ORDER_SIM_STEP_SECONDS))
+        target = min(steps, len(ORDER_SIM_STATUSES) - 1)
+        try:
+            current = ORDER_SIM_STATUSES.index(order["order_status"])
+        except ValueError:
+            continue
+        for index in range(current + 1, target + 1):
+            previous = ORDER_SIM_STATUSES[index - 1]
+            next_status = ORDER_SIM_STATUSES[index]
+            at = started + timedelta(seconds=index * ORDER_SIM_STEP_SECONDS)
+            if next_status == "shipping":
+                tracking_code = "RLX" + "".join(
+                    random.choices("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", k=9)
+                )
+                cursor.execute(
+                    """
+                    UPDATE orders SET carrier_name = ?, tracking_code = ?,
+                        courier_name = ?, courier_phone = ?
+                    WHERE id = ? AND order_status = ?
+                    """,
+                    (
+                        "RE:LOOP Express",
+                        tracking_code,
+                        random.choice(MOCK_COURIER_NAMES),
+                        f"0900 000 {random.randint(100, 999)}",
+                        order["id"],
+                        previous,
+                    ),
+                )
+                if cursor.rowcount != 1:
+                    break
+            if not _set_order_status(
+                cursor,
+                order["id"],
+                previous,
+                next_status,
+                ORDER_SIM_NOTES[next_status],
+                at,
+            ):
+                break
+            if next_status == "delivered":
+                cursor.execute(
+                    "UPDATE orders SET delivered_at = ? WHERE id = ? AND order_status = 'delivered'",
+                    (at.isoformat(), order["id"]),
+                )
+
+
+def _lock_order(cursor: sqlite3.Cursor, order_id: str):
+    suffix = " FOR UPDATE" if DATABASE_URL else ""
+    cursor.execute("SELECT * FROM orders WHERE id = ?" + suffix, (order_id,))
+    return cursor.fetchone()
+
+
+def _cancel_order(cursor: sqlite3.Cursor, order_id: str, now: datetime) -> None:
+    order_row = _lock_order(cursor, order_id)
+    if not order_row:
+        raise HTTPException(status_code=404, detail="Không tìm thấy đơn hàng.")
+    order = dict(order_row)
+    if order.get("order_status") not in (
+        "pending_payment",
+        "pending_confirmation",
+        "preparing",
+    ):
+        raise HTTPException(status_code=409, detail="Đơn hàng không còn ở trạng thái có thể hủy.")
+    old_status = order["order_status"]
+    cursor.execute(
+        """
+        UPDATE orders SET order_status = 'cancelled', payment_status = 'cancelled'
+        WHERE id = ? AND order_status = ?
+        """,
+        (order_id, old_status),
+    )
+    if cursor.rowcount != 1:
+        raise HTTPException(status_code=409, detail="Đơn hàng vừa được cập nhật bởi thao tác khác.")
+    now_text = now.isoformat()
+    cursor.execute(
+        """
+        INSERT INTO order_status_history (id, order_id, status, note, created_at)
+        VALUES (?, ?, 'cancelled', ?, ?)
+        """,
+        (f"osh-{uuid.uuid4().hex}", order_id, "Đơn hàng đã bị hủy", now_text),
+    )
+    cursor.execute(
+        "SELECT product_id FROM product_reservations WHERE order_id = ?",
+        (order_id,),
+    )
+    reserved_ids = [row["product_id"] for row in cursor.fetchall()]
+    for product_id in reserved_ids:
+        cursor.execute(
+            "UPDATE products SET status = 'available' WHERE id = ? AND status = 'reserved'",
+            (product_id,),
+        )
+    cursor.execute("DELETE FROM product_reservations WHERE order_id = ?", (order_id,))
+    if order.get("voucher_id"):
+        cursor.execute("UPDATE vouchers SET is_used = 0 WHERE id = ?", (order["voucher_id"],))
+    for product_id in reserved_ids:
+        cursor.execute("SELECT seller_id, title FROM products WHERE id = ?", (product_id,))
+        product = cursor.fetchone()
+        if product and product["seller_id"]:
+            cursor.execute(
+                """
+                INSERT INTO notifications (
+                    id, user_id, notification_type, title, message, product_id, order_id,
+                    is_read, created_at
+                ) VALUES (?, ?, 'order_cancelled', ?, ?, ?, ?, 0, ?)
+                """,
+                (
+                    f"noti-{uuid.uuid4().hex[:8]}",
+                    product["seller_id"],
+                    "Đơn hàng đã bị hủy",
+                    f"{product['title']} đã được trả lại gian hàng.",
+                    product_id,
+                    order_id,
+                    now_text,
+                ),
+            )
+
+
+def _finalize_order(cursor: sqlite3.Cursor, order_id: str, now: datetime) -> bool:
+    order_row = _lock_order(cursor, order_id)
     if not order_row:
         raise HTTPException(status_code=404, detail="Không tìm thấy đơn hàng.")
     order = dict(order_row)
     if order["order_status"] == "completed":
         return False
-    if order["payment_method"] != "COD" or order["order_status"] != "processing":
-        raise HTTPException(status_code=409, detail="Đơn COD không ở trạng thái có thể xác nhận giao hàng.")
+    if order["order_status"] != "delivered":
+        raise HTTPException(status_code=409, detail="Đơn hàng chưa được giao.")
 
     product_ids = _parse_json_list(order.get("items_json"))
     products = []
@@ -1375,9 +1659,9 @@ def _complete_cod_order(cursor: sqlite3.Cursor, order_id: str, now: datetime) ->
     cursor.execute(
         """
         UPDATE orders
-        SET order_status = 'completed', payment_status = 'paid',
+        SET         order_status = 'completed', payment_status = 'paid',
             completed_at = ?, points_earned = ?
-        WHERE id = ? AND order_status = 'processing' AND payment_method = 'COD'
+        WHERE id = ? AND order_status = 'delivered'
         """,
         (now_text, points_earned, order_id),
     )
@@ -1422,7 +1706,7 @@ def _complete_cod_order(cursor: sqlite3.Cursor, order_id: str, now: datetime) ->
                 """,
                 (
                     f"noti-{uuid.uuid4().hex[:8]}", seller_id,
-                    "Đơn COD đã giao thành công",
+                    "Đơn hàng đã giao thành công",
                     f"{product['title']} đã được giao trong đơn hàng #{order_id}.",
                     product["id"], order_id, order["recipient_name"], buyer_email,
                     order["phone"], order["shipping_address"], now_text,
@@ -1447,6 +1731,18 @@ def _complete_cod_order(cursor: sqlite3.Cursor, order_id: str, now: datetime) ->
         (
             f"l-{uuid.uuid4().hex[:8]}", order["user_id"],
             f"Hoàn tất đơn hàng #{order_id}", points_earned, now_text,
+        ),
+    )
+    cursor.execute(
+        """
+        INSERT INTO order_status_history (id, order_id, status, note, created_at)
+        VALUES (?, ?, 'completed', ?, ?)
+        """,
+        (
+            f"osh-{uuid.uuid4().hex}",
+            order_id,
+            "Người mua đã xác nhận nhận hàng",
+            now_text,
         ),
     )
     return True
@@ -2971,6 +3267,7 @@ def get_my_orders(user: Dict[str, Any] = Depends(get_current_user)):
     with get_db() as conn:
         cursor = conn.cursor()
         _release_expired_order_reservations(cursor, now)
+        _advance_simulated_orders(cursor, user["id"], now)
         cursor.execute(
             "SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC",
             (user["id"],),
@@ -3008,17 +3305,22 @@ def get_my_orders(user: Dict[str, Any] = Depends(get_current_user)):
                 )
                 complaint_row = cursor.fetchone()
                 complaint = dict(complaint_row) if complaint_row else None
-                created_at = _utc_naive_datetime(order.get("created_at"))
                 order_status = order.get("order_status") or "confirmed"
+                if order_status == "confirmed":
+                    order_status = "completed"
+                complaint_anchor = (
+                    _utc_naive_datetime(order.get("completed_at"))
+                    or _utc_naive_datetime(order.get("created_at"))
+                )
                 within_window = bool(
-                    created_at
-                    and now <= created_at + timedelta(days=COMPLAINT_WINDOW_DAYS)
+                    complaint_anchor
+                    and now <= complaint_anchor + timedelta(days=COMPLAINT_WINDOW_DAYS)
                 )
                 reconsigned = bool(wardrobe_item.get("reconsigned"))
                 seller_id = product.get("seller_id")
                 product_exists = bool(product)
                 can_complain = bool(
-                    order_status in ("completed", "confirmed")
+                    order_status == "completed"
                     and within_window
                     and not reconsigned
                     and not complaint
@@ -3027,7 +3329,7 @@ def get_my_orders(user: Dict[str, Any] = Depends(get_current_user)):
                 )
                 if complaint:
                     blocked_reason = "Đơn hàng này đã có khiếu nại."
-                elif order_status not in ("completed", "confirmed"):
+                elif order_status != "completed":
                     blocked_reason = "Đơn hàng chưa hoàn tất."
                 elif not within_window:
                     blocked_reason = f"Đã quá thời hạn khiếu nại {COMPLAINT_WINDOW_DAYS} ngày."
@@ -3064,6 +3366,34 @@ def get_my_orders(user: Dict[str, Any] = Depends(get_current_user)):
                         "complaint_status": complaint["status"] if complaint else None,
                     }
                 )
+            cursor.execute(
+                """
+                SELECT status, note, created_at FROM order_status_history
+                WHERE order_id = ? ORDER BY created_at ASC,
+                    CASE status
+                        WHEN 'pending_payment' THEN 0
+                        WHEN 'pending_confirmation' THEN 1
+                        WHEN 'preparing' THEN 2
+                        WHEN 'shipping' THEN 3
+                        WHEN 'out_for_delivery' THEN 4
+                        WHEN 'delivered' THEN 5
+                        WHEN 'completed' THEN 6
+                        ELSE 7
+                    END,
+                    id ASC
+                """,
+                (order["id"],),
+            )
+            timeline = [dict(entry) for entry in cursor.fetchall()]
+            stored_status = order.get("order_status") or "confirmed"
+            order_status = "completed" if stored_status == "confirmed" else stored_status
+            started = _utc_naive_datetime(order.get("sim_started_at"))
+            next_status_at = None
+            if started and order_status in ORDER_SIM_STATUSES[:-1]:
+                index = ORDER_SIM_STATUSES.index(order_status)
+                next_status_at = (
+                    started + timedelta(seconds=(index + 1) * ORDER_SIM_STEP_SECONDS)
+                ).isoformat()
             orders.append(
                 {
                     "order_id": order["id"],
@@ -3072,6 +3402,19 @@ def get_my_orders(user: Dict[str, Any] = Depends(get_current_user)):
                     "payment_status": order.get("payment_status"),
                     "payment_method": order.get("payment_method"),
                     "reservation_expires_at": order.get("reservation_expires_at"),
+                    "paid_at": order.get("paid_at"),
+                    "delivered_at": order.get("delivered_at"),
+                    "completed_at": order.get("completed_at"),
+                    "total_vnd": order.get("total_vnd", 0),
+                    "points_earned": order.get("points_earned", 0),
+                    "timeline": timeline,
+                    "server_time": now.isoformat() + "Z",
+                    "next_status_at": next_status_at,
+                    "step_seconds": ORDER_SIM_STEP_SECONDS,
+                    "carrier_name": order.get("carrier_name"),
+                    "tracking_code": order.get("tracking_code"),
+                    "courier_name": order.get("courier_name"),
+                    "courier_phone": order.get("courier_phone"),
                     "items": product_items,
                 }
             )
@@ -3141,7 +3484,7 @@ def checkout_order(
         order_id = f"ord-{uuid.uuid4().hex[:8]}"
         is_cod = payload.payment_method == "COD"
         payment_status = "unpaid" if is_cod else "pending"
-        order_status = "processing" if is_cod else "pending_payment"
+        order_status = "pending_confirmation" if is_cod else "pending_payment"
         reservation_expires_at = (
             None
             if is_cod
@@ -3152,16 +3495,29 @@ def checkout_order(
                 id, user_id, items_json, subtotal_vnd, discount_vnd, total_vnd,
                 voucher_code, points_earned, created_at, recipient_name, phone,
                 shipping_address, payment_method, payment_status, order_status,
-                voucher_id, reservation_expires_at
+                voucher_id, reservation_expires_at, sim_started_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             order_id, user["id"], json.dumps([p["id"] for p in products]),
             subtotal, discount, total_paid, applied_voucher_code, now,
             payload.recipient_name.strip(), normalized_phone, payload.shipping_address.strip(),
             payload.payment_method, payment_status, order_status, applied_voucher_id,
-            reservation_expires_at,
+            reservation_expires_at, now if is_cod else None,
         ))
+        cursor.execute(
+            """
+            INSERT INTO order_status_history (id, order_id, status, note, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                f"osh-{uuid.uuid4().hex}",
+                order_id,
+                order_status,
+                "Đơn hàng đã được tạo",
+                now,
+            ),
+        )
 
         for product in products:
             cursor.execute(
@@ -3226,7 +3582,142 @@ def checkout_order(
     }
 
 
-@app.get("/api/admin/orders/cod", summary="Đơn COD cần quản trị viên xử lý")
+@app.post("/api/orders/{order_id}/pay-simulated", summary="Thanh toán mô phỏng nội bộ")
+def pay_simulated_order(
+    order_id: str,
+    payload: SimulatedPaymentRequest,
+    user: Dict[str, Any] = Depends(get_current_user),
+):
+    # Demo-only endpoint; replace with a signed VNPay/MoMo sandbox webhook before production.
+    if not PAYMENT_SIMULATION_ENABLED:
+        raise HTTPException(status_code=403, detail="Thanh toán mô phỏng đang bị tắt.")
+    now = datetime.utcnow()
+    with get_db() as conn:
+        cursor = conn.cursor()
+        if not DATABASE_URL:
+            cursor.execute("BEGIN IMMEDIATE")
+        _release_expired_order_reservations(cursor, now)
+        order_row = _lock_order(cursor, order_id)
+        if not order_row:
+            raise HTTPException(status_code=404, detail="Không tìm thấy đơn hàng.")
+        order = dict(order_row)
+        if order.get("user_id") != user["id"]:
+            raise HTTPException(status_code=403, detail="Bạn không có quyền thanh toán đơn hàng này.")
+        if order.get("payment_method") not in ("BANK_TRANSFER", "E_WALLET"):
+            raise HTTPException(status_code=409, detail="Đơn hàng này không dùng thanh toán trực tuyến.")
+        if order.get("order_status") != "pending_payment":
+            raise HTTPException(status_code=409, detail="Đơn hàng không còn chờ thanh toán.")
+        transaction_ref = "SIM-" + secrets.token_hex(5).upper()
+        now_text = now.isoformat()
+        payment_status = payload.outcome
+        cursor.execute(
+            """
+            INSERT INTO payments (id, order_id, method, amount_vnd, status, transaction_ref, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                f"pay-{uuid.uuid4().hex}",
+                order_id,
+                order["payment_method"],
+                order["total_vnd"],
+                payment_status,
+                transaction_ref,
+                now_text,
+            ),
+        )
+        if payload.outcome == "failed":
+            cursor.execute(
+                """
+                UPDATE orders SET payment_status = 'failed'
+                WHERE id = ? AND order_status = 'pending_payment'
+                """,
+                (order_id,),
+            )
+            if cursor.rowcount != 1:
+                raise HTTPException(status_code=409, detail="Đơn hàng vừa được cập nhật bởi thao tác khác.")
+            return {
+                "message": "Giao dịch mô phỏng thất bại. Bạn có thể thử thanh toán lại.",
+                "transaction_ref": transaction_ref,
+                "order_status": "pending_payment",
+            }
+        cursor.execute(
+            """
+            UPDATE orders SET payment_status = 'paid', paid_at = ?, sim_started_at = ?,
+                reservation_expires_at = NULL
+            WHERE id = ? AND order_status = 'pending_payment'
+            """,
+            (now_text, now_text, order_id),
+        )
+        if cursor.rowcount != 1:
+            raise HTTPException(status_code=409, detail="Đơn hàng vừa được cập nhật bởi thao tác khác.")
+        cursor.execute(
+            "UPDATE product_reservations SET expires_at = NULL WHERE order_id = ?",
+            (order_id,),
+        )
+        if not _set_order_status(
+            cursor,
+            order_id,
+            "pending_payment",
+            "pending_confirmation",
+            f"Thanh toán mô phỏng thành công · {transaction_ref}",
+            now,
+        ):
+            raise HTTPException(status_code=409, detail="Đơn hàng vừa được cập nhật bởi thao tác khác.")
+    return {
+        "message": "Thanh toán mô phỏng thành công.",
+        "transaction_ref": transaction_ref,
+        "order_status": "pending_confirmation",
+    }
+
+
+@app.post("/api/orders/{order_id}/confirm-received", summary="Người mua xác nhận đã nhận hàng")
+def confirm_order_received(
+    order_id: str,
+    user: Dict[str, Any] = Depends(get_current_user),
+):
+    now = datetime.utcnow()
+    with get_db() as conn:
+        cursor = conn.cursor()
+        if not DATABASE_URL:
+            cursor.execute("BEGIN IMMEDIATE")
+        _advance_simulated_orders(cursor, user["id"], now)
+        order_row = _lock_order(cursor, order_id)
+        if not order_row:
+            raise HTTPException(status_code=404, detail="Không tìm thấy đơn hàng.")
+        if order_row["user_id"] != user["id"]:
+            raise HTTPException(status_code=403, detail="Bạn không có quyền xác nhận đơn hàng này.")
+        if order_row["order_status"] == "completed":
+            completed = False
+        elif order_row["order_status"] != "delivered":
+            raise HTTPException(status_code=409, detail="Đơn hàng chưa được giao.")
+        else:
+            completed = _finalize_order(cursor, order_id, now)
+    return {
+        "message": "Đã xác nhận nhận hàng thành công." if completed else "Đơn hàng đã hoàn tất trước đó.",
+        "order_status": "completed",
+    }
+
+
+@app.post("/api/orders/{order_id}/cancel", summary="Người mua hủy đơn hàng")
+def cancel_order(
+    order_id: str,
+    user: Dict[str, Any] = Depends(get_current_user),
+):
+    now = datetime.utcnow()
+    with get_db() as conn:
+        cursor = conn.cursor()
+        if not DATABASE_URL:
+            cursor.execute("BEGIN IMMEDIATE")
+        order_row = _lock_order(cursor, order_id)
+        if not order_row:
+            raise HTTPException(status_code=404, detail="Không tìm thấy đơn hàng.")
+        if order_row["user_id"] != user["id"]:
+            raise HTTPException(status_code=403, detail="Bạn không có quyền hủy đơn hàng này.")
+        _cancel_order(cursor, order_id, now)
+    return {"message": "Đã hủy đơn hàng và nhả sản phẩm.", "order_status": "cancelled"}
+
+
+@app.get("/api/admin/orders/cod", summary="Đơn COD chưa kết thúc cần quản trị viên xử lý")
 def list_admin_cod_orders(user: Dict[str, Any] = Depends(get_current_user)):
     if not _is_admin_user(user):
         raise HTTPException(status_code=403, detail="Chỉ quản trị viên mới được xử lý đơn COD.")
@@ -3239,7 +3730,8 @@ def list_admin_cod_orders(user: Dict[str, Any] = Depends(get_current_user)):
             SELECT id, user_id, items_json, total_vnd, created_at, recipient_name,
                    phone, shipping_address, order_status, payment_status
             FROM orders
-            WHERE payment_method = 'COD' AND order_status = 'processing'
+            WHERE payment_method = 'COD'
+              AND order_status NOT IN ('completed', 'cancelled', 'expired')
             ORDER BY created_at ASC
             """
         )
@@ -3270,7 +3762,46 @@ def complete_admin_cod_order(
         cursor = conn.cursor()
         if not DATABASE_URL:
             cursor.execute("BEGIN IMMEDIATE")
-        completed = _complete_cod_order(cursor, order_id, now)
+        order_row = _lock_order(cursor, order_id)
+        if not order_row:
+            raise HTTPException(status_code=404, detail="Không tìm thấy đơn hàng.")
+        order = dict(order_row)
+        if order.get("payment_method") != "COD":
+            raise HTTPException(status_code=409, detail="Chỉ có thể ghi đè đơn COD.")
+        if order.get("order_status") == "completed":
+            completed = False
+        elif order.get("order_status") in ("cancelled", "expired"):
+            raise HTTPException(status_code=409, detail="Đơn hàng đã kết thúc.")
+        else:
+            status = order["order_status"]
+            while status in ORDER_SIM_STATUSES[:-1]:
+                next_index = ORDER_SIM_STATUSES.index(status) + 1
+                next_status = ORDER_SIM_STATUSES[next_index]
+                if not _set_order_status(
+                    cursor, order_id, status, next_status, "Quản trị viên cập nhật trạng thái giao hàng", now
+                ):
+                    raise HTTPException(status_code=409, detail="Đơn hàng vừa được cập nhật bởi thao tác khác.")
+                if next_status == "shipping":
+                    cursor.execute(
+                        """
+                        UPDATE orders SET carrier_name = 'RE:LOOP Express', tracking_code = ?,
+                            courier_name = ?, courier_phone = ?
+                        WHERE id = ? AND order_status = 'shipping'
+                        """,
+                        (
+                            "RLX" + "".join(random.choices("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", k=9)),
+                            random.choice(MOCK_COURIER_NAMES),
+                            f"0900 000 {random.randint(100, 999)}",
+                            order_id,
+                        ),
+                    )
+                if next_status == "delivered":
+                    cursor.execute(
+                        "UPDATE orders SET delivered_at = ? WHERE id = ? AND order_status = 'delivered'",
+                        (now.isoformat(), order_id),
+                    )
+                status = next_status
+            completed = _finalize_order(cursor, order_id, now)
     return {
         "message": "Đã xác nhận giao hàng và hoàn tất đơn COD." if completed else "Đơn hàng đã hoàn tất trước đó.",
         "order_status": "completed",
@@ -3289,53 +3820,13 @@ def cancel_admin_cod_order(
         cursor = conn.cursor()
         if not DATABASE_URL:
             cursor.execute("BEGIN IMMEDIATE")
-        cursor.execute("SELECT * FROM orders WHERE id = ?", (order_id,))
-        order_row = cursor.fetchone()
+        order_row = _lock_order(cursor, order_id)
         if not order_row:
             raise HTTPException(status_code=404, detail="Không tìm thấy đơn hàng.")
         order = dict(order_row)
-        if order.get("payment_method") != "COD" or order.get("order_status") != "processing":
-            raise HTTPException(status_code=409, detail="Chỉ có thể hủy đơn COD đang chờ giao hàng.")
-        cursor.execute(
-            """
-            UPDATE orders SET order_status = 'cancelled', payment_status = 'cancelled'
-            WHERE id = ? AND order_status = 'processing' AND payment_method = 'COD'
-            """,
-            (order_id,),
-        )
-        if cursor.rowcount != 1:
-            raise HTTPException(status_code=409, detail="Đơn hàng vừa được cập nhật bởi thao tác khác.")
-        cursor.execute(
-            "SELECT product_id FROM product_reservations WHERE order_id = ?",
-            (order_id,),
-        )
-        reserved_ids = [row["product_id"] for row in cursor.fetchall()]
-        for product_id in reserved_ids:
-            cursor.execute(
-                "UPDATE products SET status = 'available' WHERE id = ? AND status = 'reserved'",
-                (product_id,),
-            )
-        cursor.execute("DELETE FROM product_reservations WHERE order_id = ?", (order_id,))
-        if order.get("voucher_id"):
-            cursor.execute("UPDATE vouchers SET is_used = 0 WHERE id = ?", (order["voucher_id"],))
-        for product_id in reserved_ids:
-            cursor.execute("SELECT seller_id, title FROM products WHERE id = ?", (product_id,))
-            product = cursor.fetchone()
-            if product and product["seller_id"]:
-                cursor.execute(
-                    """
-                    INSERT INTO notifications (
-                        id, user_id, notification_type, title, message, product_id, order_id,
-                        is_read, created_at
-                    ) VALUES (?, ?, 'order_cancelled', ?, ?, ?, ?, 0, ?)
-                    """,
-                    (
-                        f"noti-{uuid.uuid4().hex[:8]}", product["seller_id"],
-                        "Đơn COD đã bị hủy",
-                        f"{product['title']} đã được trả lại gian hàng.",
-                        product_id, order_id, now,
-                    ),
-                )
+        if order.get("payment_method") != "COD":
+            raise HTTPException(status_code=409, detail="Chỉ có thể hủy đơn COD.")
+        _cancel_order(cursor, order_id, now)
     return {"message": "Đã hủy đơn COD và nhả sản phẩm.", "order_status": "cancelled"}
 
 
@@ -3621,11 +4112,14 @@ def create_complaint(
         if payload.product_id not in _parse_json_list(order.get("items_json")):
             raise HTTPException(status_code=400, detail="Sản phẩm không thuộc đơn hàng đã chọn.")
 
-        created_at = _utc_naive_datetime(order.get("created_at"))
-        if not created_at or datetime.utcnow() > created_at + timedelta(days=COMPLAINT_WINDOW_DAYS):
+        complaint_anchor = (
+            _utc_naive_datetime(order.get("completed_at"))
+            or _utc_naive_datetime(order.get("created_at"))
+        )
+        if not complaint_anchor or datetime.utcnow() > complaint_anchor + timedelta(days=COMPLAINT_WINDOW_DAYS):
             raise HTTPException(
                 status_code=400,
-                detail=f"Đã quá thời hạn khiếu nại {COMPLAINT_WINDOW_DAYS} ngày tính từ ngày tạo đơn.",
+                detail=f"Đã quá thời hạn khiếu nại {COMPLAINT_WINDOW_DAYS} ngày tính từ ngày hoàn tất đơn.",
             )
 
         cursor.execute("SELECT * FROM products WHERE id = ?", (payload.product_id,))

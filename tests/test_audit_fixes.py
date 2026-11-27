@@ -50,6 +50,36 @@ class AuditFixTests(unittest.TestCase):
             payment_method=method,
         )
 
+    def test_order_migration_is_idempotent_and_preserves_legacy_confirmed(self):
+        created_at = datetime.utcnow().isoformat()
+        with self.connect() as conn:
+            for order_id, status in (("ord-legacy-processing", "processing"), ("ord-legacy-confirmed", "confirmed")):
+                conn.execute(
+                    """
+                    INSERT INTO orders (
+                        id, user_id, items_json, subtotal_vnd, total_vnd, created_at,
+                        order_status, payment_method, payment_status
+                    ) VALUES (?, 'u-demo', '[]', 0, 0, ?, ?, 'COD', 'unpaid')
+                    """,
+                    (order_id, created_at, status),
+                )
+        backend.init_db()
+        backend.init_db()
+        with self.connect() as conn:
+            processing = conn.execute(
+                "SELECT order_status, sim_started_at FROM orders WHERE id = 'ord-legacy-processing'"
+            ).fetchone()
+            confirmed = conn.execute(
+                "SELECT order_status FROM orders WHERE id = 'ord-legacy-confirmed'"
+            ).fetchone()
+            history_count = conn.execute(
+                "SELECT COUNT(*) FROM order_status_history WHERE order_id = 'ord-legacy-processing'"
+            ).fetchone()[0]
+        self.assertEqual(processing[0], "pending_confirmation")
+        self.assertEqual(processing[1], created_at)
+        self.assertEqual(confirmed[0], "confirmed")
+        self.assertEqual(history_count, 1)
+
     def test_postgres_adapter_preserves_literal_percent_without_parameters(self):
         class FakeCursor:
             def execute(self, *args):
@@ -347,7 +377,7 @@ class AuditFixTests(unittest.TestCase):
             self.assertEqual(conn.execute("SELECT is_used FROM vouchers WHERE id = 'v-test'").fetchone()[0], 0)
 
         cod = backend.checkout_order(self.checkout_payload("p-2"), self.user)
-        self.assertEqual(cod["order_status"], "processing")
+        self.assertEqual(cod["order_status"], "pending_confirmation")
         with self.connect() as conn:
             self.assertEqual(conn.execute("SELECT COUNT(*) FROM wardrobe_items").fetchone()[0], 0)
         backend.complete_admin_cod_order(cod["order_id"], self.admin)
@@ -365,6 +395,145 @@ class AuditFixTests(unittest.TestCase):
                 conn.execute("SELECT COUNT(*) FROM wardrobe_items WHERE source_product_id = 'p-2'").fetchone()[0],
                 1,
             )
+
+    def test_simulated_payment_delivery_confirmation_is_idempotent(self):
+        order = backend.checkout_order(
+            self.checkout_payload("p-1", method="BANK_TRANSFER"), self.user
+        )
+        with self.assertRaises(backend.HTTPException) as unauthorized:
+            backend.pay_simulated_order(
+                order["order_id"],
+                backend.SimulatedPaymentRequest(outcome="success"),
+                {"id": "u-other"},
+            )
+        self.assertEqual(unauthorized.exception.status_code, 403)
+
+        failure = backend.pay_simulated_order(
+            order["order_id"],
+            backend.SimulatedPaymentRequest(outcome="failed"),
+            self.user,
+        )
+        self.assertEqual(failure["order_status"], "pending_payment")
+        payment = backend.pay_simulated_order(
+            order["order_id"],
+            backend.SimulatedPaymentRequest(outcome="success"),
+            self.user,
+        )
+        self.assertEqual(payment["order_status"], "pending_confirmation")
+        simulated_start = datetime.utcnow() - timedelta(
+            seconds=backend.ORDER_SIM_STEP_SECONDS * 4 + 1
+        )
+        with self.connect() as conn:
+            conn.execute(
+                "UPDATE orders SET sim_started_at = ?, created_at = ? WHERE id = ?",
+                (
+                    simulated_start.isoformat(),
+                    (simulated_start - timedelta(seconds=1)).isoformat(),
+                    order["order_id"],
+                ),
+            )
+            conn.execute(
+                """
+                UPDATE order_status_history SET created_at = ?
+                WHERE order_id = ? AND status = 'pending_confirmation'
+                """,
+                (simulated_start.isoformat(), order["order_id"]),
+            )
+            conn.execute(
+                """
+                UPDATE order_status_history SET created_at = ?
+                WHERE order_id = ? AND status = 'pending_payment'
+                """,
+                ((simulated_start - timedelta(seconds=1)).isoformat(), order["order_id"]),
+            )
+        result = backend.get_my_orders(self.user)
+        current = next(item for item in result["items"] if item["order_id"] == order["order_id"])
+        self.assertEqual(current["order_status"], "delivered")
+        self.assertEqual(current["tracking_code"][:3], "RLX")
+        self.assertEqual(
+            [entry["status"] for entry in current["timeline"]],
+            ["pending_payment", "pending_confirmation", "preparing", "shipping", "out_for_delivery", "delivered"],
+        )
+
+        backend.confirm_order_received(order["order_id"], self.user)
+        backend.confirm_order_received(order["order_id"], self.user)
+        with self.connect() as conn:
+            self.assertEqual(
+                conn.execute("SELECT order_status FROM orders WHERE id = ?", (order["order_id"],)).fetchone()[0],
+                "completed",
+            )
+            self.assertEqual(
+                conn.execute("SELECT COUNT(*) FROM wardrobe_items WHERE source_product_id = 'p-1'").fetchone()[0],
+                1,
+            )
+            self.assertEqual(
+                conn.execute(
+                    "SELECT COUNT(*) FROM payments WHERE order_id = ? AND status IN ('failed', 'success')",
+                    (order["order_id"],),
+                ).fetchone()[0],
+                2,
+            )
+
+    def test_buyer_cannot_confirm_undelivered_order_and_can_cancel(self):
+        order = backend.checkout_order(self.checkout_payload("p-1"), self.user)
+        with self.assertRaises(backend.HTTPException) as early:
+            backend.confirm_order_received(order["order_id"], self.user)
+        self.assertEqual(early.exception.status_code, 409)
+        with self.assertRaises(backend.HTTPException) as unauthorized:
+            backend.cancel_order(order["order_id"], {"id": "u-other"})
+        self.assertEqual(unauthorized.exception.status_code, 403)
+        backend.cancel_order(order["order_id"], self.user)
+        with self.connect() as conn:
+            self.assertEqual(
+                conn.execute("SELECT status FROM products WHERE id = 'p-1'").fetchone()[0],
+                "available",
+            )
+            self.assertEqual(
+                conn.execute("SELECT COUNT(*) FROM product_reservations WHERE order_id = ?", (order["order_id"],)).fetchone()[0],
+                0,
+            )
+
+    def test_complaint_window_starts_at_completion(self):
+        order = backend.checkout_order(self.checkout_payload("p-1"), self.user)
+        complaint_payload = backend.CreateComplaintRequest(
+            order_id=order["order_id"],
+            product_id="p-1",
+            reason_code="condition_worse",
+            description="Tình trạng sản phẩm khác với mô tả ban đầu.",
+            desired_resolution="exchange",
+            evidence_images=["data:image/png;base64,iVBORw0KGgo="],
+        )
+        with self.assertRaises(backend.HTTPException) as before_completion:
+            backend.create_complaint(complaint_payload, self.user)
+        self.assertEqual(before_completion.exception.status_code, 409)
+
+        backend.complete_admin_cod_order(order["order_id"], self.admin)
+        completed_at = datetime.utcnow().isoformat()
+        with self.connect() as conn:
+            conn.execute(
+                "UPDATE orders SET created_at = ?, completed_at = ? WHERE id = ?",
+                (
+                    (datetime.utcnow() - timedelta(days=30)).isoformat(),
+                    completed_at,
+                    order["order_id"],
+                ),
+            )
+        purchased = backend.get_my_orders(self.user)["items"][0]
+        self.assertTrue(purchased["items"][0]["can_complain"])
+
+        with self.connect() as conn:
+            conn.execute(
+                "UPDATE orders SET completed_at = ? WHERE id = ?",
+                (
+                    (datetime.utcnow() - timedelta(days=8)).isoformat(),
+                    order["order_id"],
+                ),
+            )
+        purchased = backend.get_my_orders(self.user)["items"][0]
+        self.assertFalse(purchased["items"][0]["can_complain"])
+        with self.assertRaises(backend.HTTPException) as expired_window:
+            backend.create_complaint(complaint_payload, self.user)
+        self.assertEqual(expired_window.exception.status_code, 400)
 
     def test_email_phone_and_ledger_reconciliation(self):
         with self.assertRaises(backend.HTTPException) as invalid_email:

@@ -528,6 +528,86 @@
         animation: tab-enter 280ms var(--ease-smooth) both;
       }
 
+      @keyframes order-dots {
+        0%, 80%, 100% { opacity: .25; transform: translateY(0); }
+        40% { opacity: 1; transform: translateY(-4px); }
+      }
+      @keyframes order-pulse {
+        0%, 100% { opacity: .45; transform: scale(.88); }
+        50% { opacity: 1; transform: scale(1.05); }
+      }
+      @keyframes order-spin { to { transform: rotate(360deg); } }
+      @keyframes order-fall {
+        0% { opacity: 0; transform: translateY(-18px) rotate(-8deg); }
+        65% { opacity: 1; transform: translateY(3px) rotate(4deg); }
+        100% { opacity: 1; transform: translateY(0) rotate(0); }
+      }
+      @keyframes order-drive {
+        0%, 100% { transform: translateX(-8px) translateY(0); }
+        50% { transform: translateX(8px) translateY(-2px); }
+      }
+      @keyframes order-road { to { transform: translateX(-32px); } }
+      @keyframes order-dash { to { stroke-dashoffset: -24; } }
+      @keyframes order-check { to { stroke-dashoffset: 0; } }
+      @keyframes order-scene-in {
+        from { opacity: 0; transform: translateX(12px); }
+        to { opacity: 1; transform: translateX(0); }
+      }
+      @keyframes order-scene-out {
+        to { opacity: 0; transform: translateX(-12px); }
+      }
+      @keyframes order-shake {
+        0%, 100% { transform: translateX(0); }
+        25% { transform: translateX(-3px); }
+        75% { transform: translateX(3px); }
+      }
+      @keyframes order-glow {
+        0%, 100% { box-shadow: 0 0 0 rgba(16, 185, 129, 0); }
+        50% { box-shadow: 0 0 20px rgba(16, 185, 129, .35); }
+      }
+      .order-scene { min-height: 150px; overflow: hidden; position: relative; }
+      .order-scene-layer { position: absolute; inset: 0; display: grid; place-items: center; }
+      .order-scene-layer.scene-entering { animation: order-scene-in 400ms ease both; }
+      .order-scene-layer.scene-leaving { animation: order-scene-out 400ms ease both; }
+      .order-timeline { overflow-x: auto; padding: 4px 2px 10px; }
+      .order-timeline-track { min-width: 600px; position: relative; display: grid; grid-template-columns: repeat(6,minmax(0,1fr)); }
+      .order-timeline-line { height: 3px; position: absolute; top: 11px; left: 8%; right: 8%; background: #e7e5e4; overflow: hidden; }
+      .order-timeline-progress { height: 100%; width: 100%; background: #10b981; transform: scaleX(0); transform-origin: left center; transition: transform 400ms ease; }
+      .order-timeline-step { position: relative; z-index: 1; text-align: center; color: #78716c; font-size: 11px; }
+      .order-timeline-dot { width: 22px; height: 22px; margin: 0 auto 6px; border: 2px solid #d6d3d1; border-radius: 999px; background: white; display: grid; place-items: center; }
+      .order-timeline-step.is-done .order-timeline-dot,.order-timeline-step.is-current .order-timeline-dot { border-color: #059669; background: #059669; color: white; }
+      .order-timeline-step.is-current { color: #047857; font-weight: 700; }
+      .order-timeline-step.is-current .order-timeline-dot { animation: order-pulse 1.8s ease-in-out infinite; }
+      .order-courier-skeleton { min-height: 50px; border-radius: 14px; background: #f5f5f4; animation: order-pulse 1.4s ease-in-out infinite; }
+      .order-scene svg { width: min(100%, 430px); height: 142px; }
+      .order-animate-pulse { transform-box: fill-box; transform-origin: center; animation: order-pulse 1.8s ease-in-out infinite; }
+      .order-animate-spin { transform-box: fill-box; transform-origin: center; animation: order-spin 3s linear infinite; }
+      .order-animate-fall { animation: order-fall 1.8s ease-out infinite; }
+      .order-animate-drive { animation: order-drive 1.2s ease-in-out infinite; }
+      .order-animate-road { animation: order-road 1s linear infinite; }
+      .order-animate-dash { stroke-dasharray: 6 6; animation: order-dash 1.2s linear infinite; }
+      .order-animate-check { stroke-dasharray: 36; stroke-dashoffset: 36; animation: order-check 700ms ease forwards; }
+      .order-animate-dots span { display: inline-block; animation: order-dots 1.2s infinite; }
+      .order-animate-dots span:nth-child(2) { animation-delay: .15s; }
+      .order-animate-dots span:nth-child(3) { animation-delay: .3s; }
+      .order-terminal-scene { animation: order-shake 350ms ease 1; }
+      .order-confirm-button { animation: order-glow 2s ease-in-out infinite; }
+      .order-payment-button { animation: order-pulse 1.8s ease-in-out infinite; }
+      .order-card:not(.order-in-view) .order-scene *,
+      .order-card:not(.order-in-view) .order-courier-skeleton,
+      .order-card:not(.order-in-view) .order-confirm-button,
+      .order-card:not(.order-in-view) .order-payment-button,
+      body.orders-page-hidden .order-scene *,
+      body.orders-page-hidden .order-courier-skeleton,
+      body.orders-page-hidden .order-confirm-button,
+      body.orders-page-hidden .order-payment-button { animation-play-state: paused !important; }
+      @media (prefers-reduced-motion: reduce) {
+        .order-scene *, .order-timeline *, .order-courier-skeleton, .order-confirm-button, .order-payment-button {
+          animation: none !important;
+          transition: none !important;
+        }
+      }
+
       .card-hover {
         box-shadow: var(--shadow-card);
         transition:
@@ -6865,6 +6945,8 @@
         orders: [],
         ordersLoading: false,
         ordersError: null,
+        ordersPollTimer: null,
+        orderServerOffset: 0,
         complaints: [],
         complaintsLoading: false,
         complaintsError: null,
@@ -10278,69 +10360,432 @@
           oList.innerHTML = `<div class="rounded-2xl bg-slate-50 p-8 text-center text-sm text-ink-600">Vui lòng đăng nhập để xem đơn hàng đã mua.</div>`;
           return;
         }
-        if (state.ordersLoading) {
-          oList.innerHTML = `<div class="rounded-2xl bg-slate-50 p-8 text-center text-sm text-ink-600" role="status">Đang tải đơn hàng...</div>`;
+        if (state.ordersLoading && !state.orders.length) {
+          oList.innerHTML = `<div class="space-y-4" role="status" aria-label="Đang tải đơn hàng">${[1, 2].map(() => `<div class="animate-pulse rounded-2xl border border-slate-200 bg-white p-5"><div class="h-4 w-1/3 rounded bg-slate-100"></div><div class="mt-4 h-36 rounded-xl bg-slate-100"></div><div class="mt-4 h-4 rounded bg-slate-100"></div></div>`).join("")}</div>`;
           return;
         }
-        if (state.ordersError) {
+        if (state.ordersError && !state.orders.length) {
           oList.innerHTML = `<div class="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700">Không tải được đơn hàng: ${escapeHtml(state.ordersError)} <button type="button" onclick="loadMyOrders()" class="ml-2 underline">Thử lại</button></div>`;
           return;
+        }
+        if (state.ordersError && state.orders.length) {
+          const error = document.getElementById("orders-refresh-error");
+          if (error) error.textContent = `Chưa thể cập nhật trạng thái. ${state.ordersError}`;
         }
         if (state.orders.length === 0) {
           oList.innerHTML = `<div class="rounded-2xl bg-slate-50 p-8 text-center text-sm text-ink-600">Bạn chưa có đơn hàng nào.</div>`;
           return;
         }
-        oList.innerHTML = state.orders
-          .map((o) => {
-            const orderStatusLabels = {
-              pending_payment: "Chờ thanh toán",
-              processing: "Chờ giao hàng COD",
-              completed: "Đã hoàn tất",
-              cancelled: "Đã hủy",
-              expired: "Hết hạn thanh toán",
-              confirmed: "Đã xử lý",
-            };
-            const paymentStatusLabels = {
-              pending: "Thanh toán đang chờ xác nhận",
-              unpaid: "Chưa thu tiền",
-              paid: "Đã thanh toán",
-              expired: "Hết hạn",
-              cancelled: "Đã hủy",
-            };
-            const complaintAction = o.complaint_id
-              ? `<button type="button" data-complaint-id="${escapeHtml(o.complaint_id)}" onclick="openComplaintDetailFromOrder(this.dataset.complaintId)" class="min-h-11 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">Xem khiếu nại</button>`
-              : o.can_complain
-                ? `<button type="button" data-order-id="${escapeHtml(o.order_id)}" data-product-id="${escapeHtml(o.product_id)}" onclick="openComplaintModal(this.dataset.orderId,this.dataset.productId)" class="min-h-11 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 hover:bg-amber-100">⚠️ Khiếu nại</button>`
-                : `<button type="button" disabled title="${escapeHtml(o.complaint_blocked_reason || "Không thể khiếu nại sản phẩm này.")}" class="min-h-11 cursor-not-allowed rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-xs font-semibold text-ink-500">⚠️ Khiếu nại</button>`;
-            const reconsignAction = o.wardrobe_item_id && !o.reconsigned
-              ? `<button type="button" data-wardrobe-id="${escapeHtml(o.wardrobe_item_id)}" onclick="openReconsignModal(this.dataset.wardrobeId)" class="min-h-11 rounded-xl bg-eco-600 px-4 py-2 text-xs font-bold text-white shadow-xs transition hover:bg-eco-700">♻️ Ký gửi lại</button>`
-              : `<button type="button" disabled title="Món đồ không còn đủ điều kiện ký gửi lại." class="min-h-11 cursor-not-allowed rounded-xl bg-slate-100 px-4 py-2 text-xs font-semibold text-ink-500">♻️ Ký gửi lại</button>`;
-            return `
-              <article class="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
-                <div class="flex min-w-0 items-center gap-4">
-                  <img src="${escapeHtml(normalizeProductImage(o.image_url))}" alt="${escapeHtml(o.title)}" loading="lazy" decoding="async" class="h-24 w-20 shrink-0 rounded-xl bg-sand-50 object-cover" />
-                  <div class="min-w-0 space-y-1">
-                    <div class="flex flex-wrap items-center gap-2">
-                      <span class="rounded-full bg-eco-50 px-2.5 py-1 text-[11px] font-bold text-eco-700">Đơn #${escapeHtml(o.order_id)}</span>
-                      <span class="text-xs text-ink-400">Ngày mua: ${escapeHtml(formatNotificationDate(o.created_at))}</span>
-                    </div>
-                    <p class="text-xs font-semibold text-ink-700">${escapeHtml(orderStatusLabels[o.order_status] || "Đang xử lý")} · ${escapeHtml(paymentStatusLabels[o.payment_status] || "Chưa có trạng thái thanh toán")}</p>
-                    <h3 class="break-words font-bold text-base text-ink-900">${escapeHtml(o.title)}</h3>
-                    <p class="text-xs text-ink-600">Chất liệu: ${escapeHtml(o.material)} • Màu: ${escapeHtml(o.color)} • Size ${escapeHtml(o.size || "—")}</p>
-                    <p class="text-sm font-bold text-ink-900">${formatVND(o.price)}</p>
-                  </div>
-                </div>
-                <div class="flex flex-wrap gap-2 sm:shrink-0">${reconsignAction}${complaintAction}</div>
-              </article>`;
-          })
-          .join("");
+        const groups = new Map();
+        state.orders.forEach((item) => {
+          if (!groups.has(item.order_id)) groups.set(item.order_id, { ...item, items: [item] });
+          else groups.get(item.order_id).items.push(item);
+        });
+        let errorBanner = document.getElementById("orders-refresh-error");
+        if (!errorBanner) {
+          errorBanner = document.createElement("p");
+          errorBanner.id = "orders-refresh-error";
+          errorBanner.className = "text-sm text-amber-800";
+          errorBanner.setAttribute("role", "status");
+          oList.prepend(errorBanner);
+        }
+        errorBanner.textContent = state.ordersError ? `Chưa thể cập nhật trạng thái. ${state.ordersError}` : "";
+        const existing = new Map(
+          Array.from(oList.querySelectorAll("[data-order-card]")).map((card) => [card.dataset.orderId, card]),
+        );
+        ensureOrdersSceneObserver();
+        groups.forEach((order, orderId) => {
+          let card = existing.get(orderId);
+          if (!card) {
+            card = document.createElement("article");
+            card.className = "order-card space-y-4 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5";
+            card.dataset.orderId = orderId;
+            card.dataset.orderCard = "true";
+            card.innerHTML = createOrderCardMarkup(order);
+            card.dataset.status = order.order_status;
+            updateOrderCard(card, order);
+            oList.appendChild(card);
+            if (state.ordersSceneObserver) state.ordersSceneObserver.observe(card);
+          } else {
+            updateOrderCard(card, order);
+          }
+          if (state.ordersSceneObserver) state.ordersSceneObserver.observe(card);
+          existing.delete(orderId);
+        });
+        existing.forEach((card) => card.remove());
+        updateOrderClocks();
+        updateOrdersPolling();
       }
 
-      async function loadMyOrders() {
+      const orderStageLabels = ["Chờ xác nhận", "Đang chuẩn bị", "Đang giao", "Sắp tới nơi", "Đã giao", "Đã nhận hàng"];
+      const orderStateLabels = {
+        pending_payment: "Chờ thanh toán",
+        pending_confirmation: "Chờ xác nhận",
+        preparing: "Đang chuẩn bị",
+        shipping: "Đang giao",
+        out_for_delivery: "Sắp tới nơi",
+        delivered: "Đã giao",
+        completed: "Đã nhận hàng",
+        cancelled: "Đã hủy",
+        expired: "Hết hạn thanh toán",
+      };
+      const paymentStateLabels = {
+        pending: "Chờ thanh toán",
+        failed: "Thanh toán thất bại",
+        unpaid: "Thanh toán khi nhận hàng",
+        paid: "Đã thanh toán",
+        expired: "Hết hạn",
+        cancelled: "Đã hủy",
+      };
+
+      function parseOrderUtc(value) {
+        if (!value) return NaN;
+        const text = String(value);
+        return Date.parse(/[zZ]|[+-]\d{2}:\d{2}$/.test(text) ? text : `${text}Z`);
+      }
+
+      function orderScene(order) {
+        const status = order.order_status;
+        const labels = {
+          pending_payment: "Ví thanh toán mô phỏng, đơn đang chờ thanh toán",
+          pending_confirmation: "Cửa hàng đang xác nhận đơn",
+          preparing: "Người bán đang đóng gói đơn hàng",
+          shipping: "Xe giao hàng đang trên đường",
+          out_for_delivery: "Shipper sắp tới địa chỉ nhận hàng",
+          delivered: "Đơn hàng đã giao trước cửa",
+          completed: "Đã nhận hàng, đơn hoàn tất",
+          cancelled: "Đơn hàng đã hủy",
+          expired: "Đơn hàng hết hạn thanh toán",
+        };
+        let art = "";
+        if (status === "pending_payment") art = `<svg viewBox="0 0 360 140" role="img" aria-label="${escapeHtml(labels[status])}"><circle cx="180" cy="68" r="52" fill="#ecfdf5"/><rect x="139" y="40" width="82" height="55" rx="10" fill="white" stroke="#059669" stroke-width="3"/><path d="M140 54h80" stroke="#059669" stroke-width="7"/><rect x="151" y="69" width="28" height="6" rx="3" fill="#a7f3d0"/><circle data-countdown-ring cx="180" cy="68" r="60" fill="none" stroke="#10b981" stroke-dasharray="377" stroke-width="3"/></svg>`;
+        else if (status === "pending_confirmation") art = `<svg viewBox="0 0 360 140" role="img" aria-label="${escapeHtml(labels[status])}"><circle class="order-animate-pulse" cx="180" cy="69" r="58" fill="#d1fae5" opacity=".55"/><path d="M125 95V55l55-28 55 28v40z" fill="#fff" stroke="#047857" stroke-width="3"/><path d="M115 57h130M145 95V70h25v25m27-36h17v18h-17z" fill="none" stroke="#059669" stroke-width="3"/><circle class="order-animate-spin" cx="237" cy="39" r="15" fill="white" stroke="#059669" stroke-width="3"/><path d="M237 30v10l7 4" fill="none" stroke="#047857" stroke-width="2"/></svg>`;
+        else if (status === "preparing") art = `<svg viewBox="0 0 360 140" role="img" aria-label="${escapeHtml(labels[status])}"><path d="M120 59l60-30 60 30v51h-120z" fill="#fef3c7" stroke="#b45309" stroke-width="3"/><path d="M120 59l60 31 60-31M180 90v20" fill="none" stroke="#b45309" stroke-width="3"/><path class="order-animate-fall" d="M151 45l10-12 10 12zM184 37h15v12h-15z" fill="#10b981"/><path d="M172 61l16-9 16 9-16 9z" fill="#34d399"/><path d="M175 88l34-17" stroke="#f59e0b" stroke-width="6" stroke-dasharray="8 5"/></svg>`;
+        else if (status === "shipping") art = `<svg viewBox="0 0 360 140" role="img" aria-label="${escapeHtml(labels[status])}"><path d="M0 110h360" stroke="#a8a29e" stroke-width="4"/><g class="order-animate-road" stroke="#d6d3d1" stroke-width="4"><path d="M15 124h22m28 0h22m28 0h22m28 0h22m28 0h22m28 0h22m28 0h22"/></g><path d="M42 96V57h20v39m8 0V39h29v57m180 0V65h22v31m8 0V48h21v48" fill="#d1fae5"/><g class="order-animate-drive"><circle cx="151" cy="99" r="12" fill="white" stroke="#334155" stroke-width="4"/><circle cx="211" cy="99" r="12" fill="white" stroke="#334155" stroke-width="4"/><path d="M151 98l18-25h20l22 26h-33l-9-18m9-8h18" fill="none" stroke="#059669" stroke-width="5"/><rect x="183" y="55" width="22" height="19" rx="3" fill="#f59e0b"/></g><path d="M121 64h-20m14 11H96m20 11h-25" stroke="#10b981" stroke-width="3"/></svg>`;
+        else if (status === "out_for_delivery") art = `<svg viewBox="0 0 360 140" role="img" aria-label="${escapeHtml(labels[status])}"><path d="M54 100c26-70 74 28 111-30s78 27 131-39" fill="none" stroke="#059669" stroke-width="4" class="order-animate-dash"/><circle cx="53" cy="100" r="10" fill="#10b981"/><path class="order-animate-pulse" d="M297 35c0-15 12-25 25-25s25 10 25 25c0 19-25 46-25 46s-25-27-25-46z" fill="#f87171"/><circle cx="322" cy="35" r="8" fill="white"/><circle class="order-animate-drive" cx="157" cy="68" r="10" fill="#f59e0b" stroke="#92400e" stroke-width="3"/></svg>`;
+        else if (status === "delivered") art = `<svg viewBox="0 0 360 140" role="img" aria-label="${escapeHtml(labels[status])}"><path d="M238 22h68v98h-68z" fill="#ecfdf5" stroke="#047857" stroke-width="3"/><path d="M251 36h41v84h-41z" fill="#d1fae5"/><circle cx="282" cy="78" r="3" fill="#047857"/><g class="order-animate-fall"><path d="M158 88l27-14 28 14v29h-55z" fill="#fde68a" stroke="#b45309" stroke-width="3"/><path d="M158 88l27 14 28-14m-28 14v15" fill="none" stroke="#b45309" stroke-width="2"/></g><path class="order-animate-check" d="M95 69l17 17 34-40" fill="none" stroke="#059669" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+        else if (status === "completed") art = `<svg viewBox="0 0 360 140" role="img" aria-label="${escapeHtml(labels[status])}"><circle cx="180" cy="70" r="52" fill="#d1fae5"/><path d="M180 105V60m0 22c-24 0-35-14-35-31 22 0 35 10 35 31zm0-12c0-22 12-35 33-36 0 22-10 36-33 36z" fill="#10b981"/><path d="M93 42l5 8 9 2-7 6 1 9-8-4-8 4 2-9-7-6 9-2zm175 32l4 7 8 2-6 5 1 8-7-4-7 4 1-8-6-5 8-2z" fill="#34d399"/></svg>`;
+        else art = `<svg viewBox="0 0 360 140" role="img" aria-label="${escapeHtml(labels[status] || "Trạng thái đơn hàng")}"><circle cx="180" cy="70" r="44" fill="#f5f5f4"/><path d="M160 53l40 40m0-40l-40 40" stroke="#78716c" stroke-width="7" stroke-linecap="round"/></svg>`;
+        return `<div class="order-scene-layer" data-scene-layer>${art}${status === "completed" ? `<p class="absolute top-2 text-sm font-bold text-eco-800" data-point-count data-point-target="${Math.max(0, Number(order.points_earned) || 0)}">+0 Điểm Xanh</p>` : ""}<p class="absolute bottom-3 text-xs font-semibold text-ink-700">${escapeHtml(status === "pending_confirmation" ? "Người bán đang xác nhận" : labels[status] || "Đơn hàng")}${status === "pending_confirmation" ? `<span class="order-animate-dots" aria-hidden="true"> <span>.</span><span>.</span><span>.</span></span>` : ""}</p></div>`;
+      }
+
+      function orderTimelineMarkup(order) {
+        const entries = Array.isArray(order.timeline) ? order.timeline : [];
+        return `<div class="order-timeline" data-order-timeline><div class="order-timeline-track"><div class="order-timeline-line"><div class="order-timeline-progress" data-timeline-progress></div></div>${orderStageLabels.map((label, index) => {
+          const historyStatus = ["pending_confirmation", "preparing", "shipping", "out_for_delivery", "delivered", "completed"][index];
+          const entry = entries.find((item) => item.status === historyStatus);
+          return `<div class="order-timeline-step" data-stage="${index}"><span class="order-timeline-dot" data-stage-dot></span><span data-stage-label>${escapeHtml(label)}</span><span class="mt-1 block min-h-4 text-[10px] text-ink-400" data-stage-time>${entry ? escapeHtml(new Date(parseOrderUtc(entry.created_at)).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })) : ""}</span></div>`;
+        }).join("")}</div></div>`;
+      }
+
+      function orderItemsMarkup(order) {
+        return (order.items || []).map((item) => {
+          const complaintAction = item.complaint_id
+            ? `<button type="button" data-complaint-id="${escapeHtml(item.complaint_id)}" onclick="openComplaintDetailFromOrder(this.dataset.complaintId)" class="min-h-11 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">Xem khiếu nại</button>`
+            : item.can_complain
+              ? `<button type="button" data-order-id="${escapeHtml(order.order_id)}" data-product-id="${escapeHtml(item.product_id)}" onclick="openComplaintModal(this.dataset.orderId,this.dataset.productId)" class="min-h-11 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">⚠️ Khiếu nại</button>`
+              : `<button type="button" disabled title="${escapeHtml(item.complaint_blocked_reason || "Không thể khiếu nại sản phẩm này.")}" class="min-h-11 cursor-not-allowed rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-xs font-semibold text-ink-500">⚠️ Khiếu nại</button>`;
+          const consign = item.wardrobe_item_id && !item.reconsigned
+            ? `<button type="button" data-wardrobe-id="${escapeHtml(item.wardrobe_item_id)}" onclick="openReconsignModal(this.dataset.wardrobeId)" class="min-h-11 rounded-xl bg-eco-600 px-3 py-2 text-xs font-bold text-white">♻️ Ký gửi lại</button>`
+            : "";
+          return `<div class="flex flex-col gap-3 border-t border-slate-100 py-4 sm:flex-row sm:items-center"><img src="${escapeHtml(normalizeProductImage(item.image_url))}" alt="${escapeHtml(item.title)}" loading="lazy" decoding="async" class="h-20 w-16 shrink-0 rounded-xl bg-sand-50 object-cover"/><div class="min-w-0 flex-1"><h4 class="break-words font-bold text-sm text-ink-900">${escapeHtml(item.title)}</h4><p class="mt-1 text-xs text-ink-600">Chất liệu: ${escapeHtml(item.material)} · Màu: ${escapeHtml(item.color)} · Size ${escapeHtml(item.size || "—")}</p><p class="mt-1 text-sm font-bold text-ink-900">${formatVND(item.price)}</p></div><div class="flex flex-wrap gap-2">${consign}${complaintAction}</div></div>`;
+        }).join("");
+      }
+
+      function orderActionsMarkup(order) {
+        const cancelable = ["pending_payment", "pending_confirmation", "preparing"].includes(order.order_status);
+        return `<div class="flex flex-wrap gap-2" data-order-actions>${order.order_status === "pending_payment" ? `<button type="button" class="order-payment-button min-h-11 rounded-xl bg-eco-600 px-4 py-2 text-sm font-bold text-white" data-payment-order="${escapeHtml(order.order_id)}" onclick="openSimulatedPayment(this.dataset.paymentOrder)">Thanh toán</button>` : ""}${order.order_status === "delivered" ? `<button type="button" class="order-confirm-button min-h-11 rounded-xl bg-eco-700 px-5 py-2 text-sm font-bold text-white" data-confirm-order="${escapeHtml(order.order_id)}" onclick="confirmReceived(this)">Đã nhận hàng</button>` : ""}${cancelable ? `<button type="button" class="min-h-11 rounded-xl border border-rose-300 px-4 py-2 text-sm font-semibold text-rose-700" data-cancel-order="${escapeHtml(order.order_id)}" onclick="cancelBuyerOrder(this)">Hủy đơn</button>` : ""}</div>`;
+      }
+
+      function orderShippingMarkup(order) {
+        if (!["shipping", "out_for_delivery", "delivered", "completed"].includes(order.order_status)) {
+          return `<div class="order-courier-skeleton" aria-label="Thông tin vận chuyển sẽ xuất hiện khi shipper nhận hàng"></div>`;
+        }
+        return `<div class="grid grid-cols-2 gap-2 rounded-xl bg-slate-50 p-3 text-xs text-ink-700 sm:grid-cols-4"><span>Đơn vị: <b>${escapeHtml(order.carrier_name || "RE:LOOP Express")}</b></span><span>Mã vận đơn: <b>${escapeHtml(order.tracking_code || "Đang cập nhật")}</b></span><span>Shipper: <b>${escapeHtml(order.courier_name || "Đang cập nhật")}</b></span><span>Điện thoại: <b>${escapeHtml(order.courier_phone || "Đang cập nhật")}</b></span></div>`;
+      }
+
+      function createOrderCardMarkup(order) {
+        return `<div class="flex flex-wrap items-start justify-between gap-3"><div><p class="text-xs text-ink-500">Mã đơn <b class="text-ink-800">#${escapeHtml(order.order_id)}</b> · ${escapeHtml(formatNotificationDate(order.created_at))}</p><p class="mt-1 text-sm font-bold text-eco-800" data-order-status aria-live="polite"></p><p class="mt-1 text-xs text-ink-600"><span data-payment-method></span> · <span data-payment-status></span></p></div><div class="text-right"><p class="text-xs text-ink-500">Tổng đơn</p><p class="text-lg font-bold text-ink-900" data-order-total></p></div></div><div class="order-scene rounded-2xl bg-gradient-to-br from-eco-50 to-sand-50" data-order-scene>${orderScene(order)}</div><p class="text-xs font-semibold text-eco-800" data-order-countdown aria-live="polite"></p><div data-order-shipping>${orderShippingMarkup(order)}</div><div data-order-timeline-wrap>${orderTimelineMarkup(order)}</div><div data-order-items>${orderItemsMarkup(order)}</div><div data-order-actions-wrap>${orderActionsMarkup(order)}</div>`;
+      }
+
+      function updateOrderTimeline(card, order) {
+        const wrap = card.querySelector("[data-order-timeline-wrap]");
+        const timeline = wrap.querySelector("[data-order-timeline]");
+        const terminal = ["cancelled", "expired"].includes(order.order_status);
+        wrap.classList.toggle("hidden", terminal);
+        if (terminal) {
+          wrap.innerHTML = `<span class="inline-flex rounded-full bg-slate-100 px-3 py-2 text-sm font-bold text-ink-700">${escapeHtml(orderStateLabels[order.order_status])}</span>`;
+          return;
+        }
+        if (!timeline) wrap.innerHTML = orderTimelineMarkup(order);
+        const currentIndex = order.order_status === "pending_payment" ? -1 : order.order_status === "completed" ? 5 : ["pending_confirmation", "preparing", "shipping", "out_for_delivery", "delivered"].indexOf(order.order_status);
+        const entries = Array.isArray(order.timeline) ? order.timeline : [];
+        wrap.querySelectorAll("[data-stage]").forEach((step) => {
+          const index = Number(step.dataset.stage);
+          step.classList.toggle("is-done", index < currentIndex);
+          step.classList.toggle("is-current", index === currentIndex);
+          const statuses = ["pending_confirmation", "preparing", "shipping", "out_for_delivery", "delivered", "completed"];
+          const entry = entries.find((item) => item.status === statuses[index]);
+          const time = step.querySelector("[data-stage-time]");
+          if (time) time.textContent = entry ? new Date(parseOrderUtc(entry.created_at)).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "";
+          const dot = step.querySelector("[data-stage-dot]");
+          if (dot) dot.textContent = index < currentIndex ? "✓" : "";
+        });
+        const progress = wrap.querySelector("[data-timeline-progress]");
+        if (progress) progress.style.transform = `scaleX(${Math.max(0, currentIndex) / 5})`;
+      }
+
+      function updateOrderCard(card, order) {
+        const priorStatus = card.dataset.status;
+        if (priorStatus !== order.order_status) {
+          const scene = card.querySelector("[data-order-scene]");
+          const previous = scene.querySelector("[data-scene-layer]");
+          if (previous) previous.classList.add("scene-leaving");
+          const layer = document.createElement("div");
+          layer.innerHTML = orderScene(order);
+          const next = layer.firstElementChild;
+          next.classList.add("scene-entering");
+          scene.appendChild(next);
+          if (order.order_status === "completed") {
+            const countNode = next.querySelector("[data-point-count]");
+            const target = Number(countNode?.dataset.pointTarget) || 0;
+            const start = performance.now();
+            const countFrame = (time) => {
+              const progress = Math.min(1, (time - start) / 1000);
+              if (countNode?.isConnected) countNode.textContent = `+${Math.floor(target * progress)} Điểm Xanh`;
+              if (progress < 1) window.requestAnimationFrame(countFrame);
+            };
+            window.requestAnimationFrame(countFrame);
+            card.dataset.pointsAnimated = "true";
+          }
+          window.setTimeout(() => previous?.remove(), 420);
+          card.dataset.status = order.order_status;
+        } else if (order.order_status === "completed" && !card.dataset.pointsAnimated) {
+          const countNode = card.querySelector("[data-point-count]");
+          const target = Number(countNode?.dataset.pointTarget) || 0;
+          const start = performance.now();
+          const countFrame = (time) => {
+            const progress = Math.min(1, (time - start) / 1000);
+            if (countNode?.isConnected) countNode.textContent = `+${Math.floor(target * progress)} Điểm Xanh`;
+            if (progress < 1) window.requestAnimationFrame(countFrame);
+          };
+          window.requestAnimationFrame(countFrame);
+          card.dataset.pointsAnimated = "true";
+        }
+        card.querySelector("[data-order-status]").textContent = orderStateLabels[order.order_status] || "Đang xử lý";
+        card.querySelector("[data-payment-method]").textContent = ({ COD: "Thanh toán khi nhận", BANK_TRANSFER: "Chuyển khoản mô phỏng", E_WALLET: "Ví điện tử mô phỏng" })[order.payment_method] || "Thanh toán";
+        card.querySelector("[data-payment-status]").textContent = paymentStateLabels[order.payment_status] || "Chưa có trạng thái thanh toán";
+        card.querySelector("[data-order-total]").textContent = formatVND(order.total_vnd || 0);
+        const itemMarkup = orderItemsMarkup(order);
+        if (card.dataset.itemsMarkup !== itemMarkup) {
+          card.querySelector("[data-order-items]").innerHTML = itemMarkup;
+          card.dataset.itemsMarkup = itemMarkup;
+        }
+        const actionsMarkup = orderActionsMarkup(order);
+        if (card.dataset.actionsMarkup !== actionsMarkup) {
+          card.querySelector("[data-order-actions-wrap]").innerHTML = actionsMarkup;
+          card.dataset.actionsMarkup = actionsMarkup;
+        }
+        const shippingMarkup = orderShippingMarkup(order);
+        if (card.dataset.shippingMarkup !== shippingMarkup) {
+          card.querySelector("[data-order-shipping]").innerHTML = shippingMarkup;
+          card.dataset.shippingMarkup = shippingMarkup;
+        }
+        updateOrderTimeline(card, order);
+        card.dataset.nextStatusAt = order.next_status_at || "";
+        card.dataset.reservationExpiresAt = order.reservation_expires_at || "";
+        card.dataset.status = order.order_status;
+        card.__order = order;
+      }
+
+      function updateOrderClocks() {
+        const now = Date.now() + (state.orderServerOffset || 0);
+        document.querySelectorAll("#orders-list [data-order-card]").forEach((card) => {
+          const order = card.__order || {};
+          const countdown = card.querySelector("[data-order-countdown]");
+          if (!countdown) return;
+          if (order.order_status === "pending_payment" && card.dataset.reservationExpiresAt) {
+            const expiresAt = parseOrderUtc(card.dataset.reservationExpiresAt);
+            const seconds = Math.max(0, Math.ceil((expiresAt - now) / 1000));
+            const ring = card.querySelector("[data-countdown-ring]");
+            if (ring) ring.style.strokeDashoffset = String(377 * (1 - Math.min(1, seconds / (15 * 60))));
+            countdown.textContent = seconds ? `Thời gian giữ chỗ còn ${seconds} giây` : "Đã hết thời gian giữ chỗ; đang cập nhật đơn";
+          } else if (card.dataset.nextStatusAt && order.order_status !== "delivered") {
+            const seconds = Math.max(0, Math.ceil((parseOrderUtc(card.dataset.nextStatusAt) - now) / 1000));
+            countdown.textContent = order.order_status === "out_for_delivery"
+              ? `Dự kiến giao trong ${seconds} giây`
+              : `Cập nhật tiếp theo sau ${seconds} giây`;
+          } else countdown.textContent = "";
+        });
+      }
+
+      async function confirmReceived(button) {
+        const orderId = button?.dataset.confirmOrder;
+        if (!orderId || button.disabled) return;
+        button.disabled = true;
+        button.textContent = "Đang xác nhận...";
+        try {
+          const result = await apiFetch(`/api/orders/${encodeURIComponent(orderId)}/confirm-received`, { method: "POST" });
+          showToast(result.message || "Đã xác nhận nhận hàng.", "success");
+          await loadMyOrders();
+          await syncFromBackend(false);
+        } catch (error) {
+          showToast(`Không thể xác nhận nhận hàng: ${error.message}`, "error");
+          button.disabled = false;
+          button.textContent = "Đã nhận hàng";
+        }
+      }
+
+      async function cancelBuyerOrder(button) {
+        const orderId = button?.dataset.cancelOrder;
+        if (!orderId || button.disabled) return;
+        button.disabled = true;
+        try {
+          const result = await apiFetch(`/api/orders/${encodeURIComponent(orderId)}/cancel`, { method: "POST" });
+          showToast(result.message || "Đã hủy đơn hàng.", "success");
+          await loadMyOrders();
+        } catch (error) {
+          showToast(`Không thể hủy đơn: ${error.message}`, "error");
+          button.disabled = false;
+        }
+      }
+
+        let simulatedPaymentTimer = null;
+        let simulatedPaymentOrderId = null;
+
+        function simulatedQrMarkup(orderId) {
+          let seed = 0;
+          for (const char of String(orderId)) seed = (seed * 31 + char.charCodeAt(0)) >>> 0;
+          const cells = [];
+          for (let y = 0; y < 21; y++) {
+            for (let x = 0; x < 21; x++) {
+              seed = (seed * 1664525 + 1013904223) >>> 0;
+              const finder = (x < 7 && y < 7) || (x > 13 && y < 7) || (x < 7 && y > 13);
+              if (finder) {
+                const fx = x < 7 ? x : x - 14;
+                const fy = y < 7 ? y : y - 14;
+                if (fx === 0 || fx === 6 || fy === 0 || fy === 6 || (fx >= 2 && fx <= 4 && fy >= 2 && fy <= 4)) {
+                  cells.push(`<rect x="${x * 6}" y="${y * 6}" width="5" height="5" rx=".5"/>`);
+                }
+              } else if (seed % 3 === 0) cells.push(`<rect x="${x * 6}" y="${y * 6}" width="5" height="5" rx=".5"/>`);
+            }
+          }
+          return `<svg viewBox="0 0 126 126" role="img" aria-label="Mã QR minh họa, không dùng để thanh toán thật" class="h-36 w-36 rounded-lg bg-white p-2 text-ink-900">${cells.join("")}</svg>`;
+        }
+
+        function openSimulatedPayment(orderId) {
+          const order = state.orders.find((item) => item.order_id === orderId);
+          if (!order || order.order_status !== "pending_payment") {
+            showToast("Đơn hàng không còn chờ thanh toán.", "warning");
+            return;
+          }
+          simulatedPaymentOrderId = orderId;
+          const transfer = order.payment_method === "BANK_TRANSFER";
+          const modal = document.createElement("div");
+          modal.id = "simulated-payment-modal";
+          modal.className = "fixed inset-0 z-[80] grid place-items-center bg-ink-900/60 p-3";
+          modal.innerHTML = `<section class="max-h-[94vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-5 shadow-2xl sm:p-7" role="dialog" aria-modal="true" aria-labelledby="simulated-payment-title"><div class="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-center text-sm font-bold text-amber-900">Môi trường mô phỏng — không thu tiền thật</div><div class="flex items-start justify-between gap-3"><div><h2 id="simulated-payment-title" class="text-xl font-bold text-ink-900">Cổng thanh toán mô phỏng</h2><p class="mt-1 text-xs text-ink-600">Đơn #${escapeHtml(order.order_id)}</p></div><button type="button" class="min-h-11 min-w-11 rounded-xl bg-slate-100 text-xl" onclick="closeSimulatedPayment()" aria-label="Đóng">×</button></div><div class="mt-4 rounded-2xl bg-eco-50 p-4 text-center"><p class="text-xs text-ink-600">Số tiền mô phỏng</p><p class="text-2xl font-bold text-eco-800">${formatVND(order.total_vnd || 0)}</p><p id="simulated-payment-countdown" class="mt-1 text-xs font-semibold text-rose-700"></p></div>${transfer ? `<div class="mt-5 grid justify-items-center gap-3">${simulatedQrMarkup(orderId)}<p class="text-xs text-ink-600">QR minh họa · không quét bằng ứng dụng ngân hàng</p><div class="w-full rounded-xl bg-slate-50 p-4 text-sm"><p>Ngân hàng: <b>Ngân hàng Mô phỏng</b></p><p>Số tài khoản: <b>0000 1234 5678</b></p><p>Chủ tài khoản: <b>RELOOP DEMO</b></p><p>Nội dung: <b>RELOOP ${escapeHtml(order.order_id)}</b></p></div></div>` : `<div class="mt-5 space-y-3"><label class="block text-sm font-semibold">Chọn ví mô phỏng<select id="simulated-wallet-select" class="mt-1 min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3"><option>MoMo (mô phỏng)</option><option>ZaloPay (mô phỏng)</option><option>ShopeePay (mô phỏng)</option></select></label><label class="block text-sm font-semibold">Mã OTP demo<input id="simulated-otp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" class="mt-1 min-h-11 w-full rounded-xl border border-slate-300 px-3" placeholder="Nhập 123456"/></label><p class="text-xs text-ink-500">OTP minh họa: 123456. Không nhập OTP thật.</p></div>`}<p id="simulated-payment-error" class="mt-3 min-h-5 text-sm text-rose-700" role="alert"></p><div class="mt-3 grid gap-2 sm:grid-cols-2"><button type="button" id="simulated-payment-submit" class="min-h-11 rounded-xl bg-eco-700 px-4 py-3 text-sm font-bold text-white" onclick="submitSimulatedPayment()">Tôi đã chuyển khoản</button><button type="button" id="simulated-payment-fail" class="min-h-11 rounded-xl border border-rose-300 px-4 py-3 text-sm font-semibold text-rose-700" onclick="simulatePaymentFailure()">Mô phỏng thất bại</button></div><button type="button" class="mt-3 min-h-11 w-full rounded-xl text-sm text-ink-600 underline" onclick="closeSimulatedPayment()">Đóng, thanh toán sau</button></section>`;
+          document.body.appendChild(modal);
+          const submit = modal.querySelector("#simulated-payment-submit");
+          if (!transfer) submit.textContent = "Xác nhận OTP mô phỏng";
+          updateSimulatedPaymentCountdown(order.reservation_expires_at);
+          simulatedPaymentTimer = window.setInterval(() => updateSimulatedPaymentCountdown(order.reservation_expires_at), 1000);
+        }
+
+        function updateSimulatedPaymentCountdown(expiresAt) {
+          const output = document.getElementById("simulated-payment-countdown");
+          if (!output) return;
+          const seconds = Math.max(0, Math.ceil((parseOrderUtc(expiresAt) - (Date.now() + (state.orderServerOffset || 0))) / 1000));
+          output.textContent = seconds ? `Giữ chỗ còn ${seconds} giây` : "Đã hết thời gian giữ chỗ.";
+          if (!seconds) {
+            closeSimulatedPayment();
+            loadMyOrders(true);
+            showToast("Đơn hàng đã hết thời gian giữ chỗ thanh toán.", "warning");
+          }
+        }
+
+        function closeSimulatedPayment() {
+          if (simulatedPaymentTimer) window.clearInterval(simulatedPaymentTimer);
+          simulatedPaymentTimer = null;
+          simulatedPaymentOrderId = null;
+          document.getElementById("simulated-payment-modal")?.remove();
+        }
+
+        async function sendSimulatedPayment(outcome) {
+          const orderId = simulatedPaymentOrderId;
+          if (!orderId) return;
+          const submit = document.getElementById("simulated-payment-submit");
+          const fail = document.getElementById("simulated-payment-fail");
+          const errorBox = document.getElementById("simulated-payment-error");
+          if (outcome === "success" && state.orders.find((item) => item.order_id === orderId)?.payment_method === "E_WALLET") {
+            if (document.getElementById("simulated-otp")?.value !== "123456") {
+              errorBox.textContent = "OTP chưa đúng. Hãy nhập mã demo 123456.";
+              return;
+            }
+          }
+          submit.disabled = true;
+          fail.disabled = true;
+          submit.textContent = outcome === "success" ? "Đang xác nhận giao dịch..." : "Đang ghi nhận...";
+          if (outcome === "success") await new Promise((resolve) => window.setTimeout(resolve, 3200));
+          try {
+            const result = await apiFetch(`/api/orders/${encodeURIComponent(orderId)}/pay-simulated`, {
+              method: "POST",
+              body: JSON.stringify({ outcome }),
+            });
+            if (outcome === "failed") {
+              errorBox.textContent = result.message || "Giao dịch thất bại. Bạn có thể thử lại.";
+              submit.disabled = false;
+              fail.disabled = false;
+              submit.textContent = state.orders.find((item) => item.order_id === orderId)?.payment_method === "E_WALLET" ? "Xác nhận OTP mô phỏng" : "Tôi đã chuyển khoản";
+              return;
+            }
+            closeSimulatedPayment();
+            showToast(result.message || "Thanh toán mô phỏng thành công.", "success");
+            await loadMyOrders();
+          } catch (error) {
+            errorBox.textContent = `Không thể hoàn tất thanh toán: ${error.message}`;
+            submit.disabled = false;
+            fail.disabled = false;
+            submit.textContent = "Thử thanh toán lại";
+          }
+        }
+
+        function submitSimulatedPayment() {
+          return sendSimulatedPayment("success");
+        }
+
+        function simulatePaymentFailure() {
+          return sendSimulatedPayment("failed");
+        }
+
+      function updateOrdersPolling() {
+          const active = Boolean(state.token) && !document.hidden &&
+            !document.getElementById("section-orders")?.classList.contains("hidden") &&
+            state.orders.some((order) => !["completed", "cancelled", "expired"].includes(order.order_status));
+          if (active && !state.ordersPollTimer) {
+            state.ordersPollTimer = window.setInterval(() => {
+              if (!document.hidden && !document.getElementById("section-orders")?.classList.contains("hidden")) loadMyOrders(true);
+              else updateOrdersPolling();
+            }, 5000);
+          } else if (!active && state.ordersPollTimer) {
+            window.clearInterval(state.ordersPollTimer);
+            state.ordersPollTimer = null;
+          }
+      }
+
+      function ensureOrdersSceneObserver() {
+        if (state.ordersSceneObserver || !("IntersectionObserver" in window)) return;
+        state.ordersSceneObserver = new IntersectionObserver((entries) => {
+          entries.forEach((entry) => entry.target.classList.toggle("order-in-view", entry.isIntersecting));
+        }, { threshold: 0.05 });
+      }
+
+      async function loadMyOrders(silent = false) {
         if (!state.token) {
           state.orders = [];
           state.ordersError = "Vui lòng đăng nhập để xem đơn hàng.";
           renderPurchasedOrders();
+          updateOrdersPolling();
           return;
         }
         if (isLocalAuthToken(state.token)) {
@@ -10348,35 +10793,39 @@
           state.ordersError = "Đơn hàng và khiếu nại cần kết nối máy chủ. Hãy đăng nhập khi dịch vụ trực tuyến.";
           renderPurchasedOrders();
           showToast(state.ordersError, "warning");
+          updateOrdersPolling();
           return;
         }
-        state.ordersLoading = true;
+        if (!silent) state.ordersLoading = true;
         state.ordersError = null;
-        renderPurchasedOrders();
+        if (!silent) renderPurchasedOrders();
         try {
           const response = await apiFetch("/api/orders/me");
           if (!Array.isArray(response.items)) {
             throw new Error("Máy chủ trả về danh sách đơn hàng không hợp lệ.");
           }
+          const oldStatuses = new Map();
+          state.orders.forEach((item) => oldStatuses.set(item.order_id, item.order_status));
+          state.orderServerOffset = parseOrderUtc(response.server_time) - Date.now();
           state.orders = response.items.flatMap((order) =>
             (Array.isArray(order.items) ? order.items : []).map((item) => ({
               ...item,
               id: item.wardrobe_item_id,
               name: item.title,
-              order_id: order.order_id,
-              created_at: order.created_at,
-              order_status: order.order_status,
-              payment_status: order.payment_status,
-              payment_method: order.payment_method,
-              reservation_expires_at: order.reservation_expires_at,
+              ...order,
             })),
           );
+          response.items.forEach((order) => {
+            const before = oldStatuses.get(order.order_id);
+            if (silent && before && before !== order.order_status) {
+              showToast(`Đơn #${order.order_id}: ${orderStateLabels[order.order_status] || "Đã cập nhật"}`, "info");
+            }
+          });
         } catch (error) {
-          state.orders = [];
           state.ordersError = error.message || "Không kết nối được máy chủ.";
-          showToast(`Không tải được đơn hàng: ${state.ordersError}`, "error");
+          if (!silent && !state.orders.length) showToast(`Không tải được đơn hàng: ${state.ordersError}`, "error");
         } finally {
-          state.ordersLoading = false;
+          if (!silent) state.ordersLoading = false;
           renderPurchasedOrders();
         }
       }
@@ -11476,6 +11925,9 @@
         switchTab("orders");
         await loadMyOrders();
         showToast(checkoutResult.message || "Đơn hàng đã được tạo.", "success");
+        if (checkoutResult.order_status === "pending_payment") {
+          openSimulatedPayment(checkoutResult.order_id);
+        }
       }
 
       // =========================================================
@@ -11806,6 +12258,7 @@
         }
         if (tabName === "wardrobe") generateAIOutfits(false);
         if (tabName === "orders") loadMyOrders();
+        updateOrdersPolling();
         if (tabName === "seller") loadSellerListings();
         if (tabName === "seller") loadSellerComplaints();
         if (tabName === "complaints") loadComplaints();
@@ -11929,6 +12382,9 @@
         switchTab(validTabs.includes(requestedTab) ? requestedTab : "intro");
         syncFromBackend(false);
         document.addEventListener("visibilitychange", () => {
+          document.body.classList.toggle("orders-page-hidden", document.hidden);
+          if (!document.hidden && !document.getElementById("section-orders")?.classList.contains("hidden")) loadMyOrders(true);
+          updateOrdersPolling();
           if (document.hidden) {
             stopNotificationsPolling();
           } else {
