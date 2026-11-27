@@ -60,6 +60,16 @@ DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 DATABASE_URL_UNPOOLED = os.getenv("DATABASE_URL_UNPOOLED", "").strip()
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "").strip().lower()
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
+RELOOP_CORS_ORIGINS = tuple(
+    origin.strip().rstrip("/")
+    for origin in os.getenv(
+        "RELOOP_CORS_ORIGINS",
+        "https://website-reloop-1.onrender.com,http://localhost:8080,http://127.0.0.1:8080",
+    ).split(",")
+    if origin.strip()
+)
+if "*" in RELOOP_CORS_ORIGINS:
+    raise RuntimeError("RELOOP_CORS_ORIGINS must contain explicit origins, not '*'.")
 VILAO_API_KEY = (
     os.getenv("VILAO_API_KEY", "").strip()
     or os.getenv("KIMI_API_KEY", "").strip()
@@ -89,6 +99,8 @@ VILAO_API_BASE_URL = (
 KIMI_MODEL = os.getenv("KIMI_MODEL", "").strip() or "kimi-2.7"
 MAX_GARMENT_IMAGE_BYTES = 10 * 1024 * 1024
 ORDER_RESERVATION_MINUTES = 15
+LOGIN_MAX_FAILED_ATTEMPTS = 10
+LOGIN_ATTEMPT_WINDOW = timedelta(minutes=15)
 COMPLAINT_WINDOW_DAYS = 7  # Tính từ orders.created_at; đổi sang mốc giao hàng khi có trạng thái giao hàng.
 MESSAGE_ONLINE_THRESHOLD_SECONDS = 75
 CIRCULAR_BADGE_TEXT = "Sản phẩm chính hãng thuộc hệ tuần hoàn, đã được kiểm định từ vòng trước"
@@ -98,6 +110,31 @@ EMAIL_PATTERN = re.compile(
     r"(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$"
 )
 logger = logging.getLogger(__name__)
+
+
+class WebSocketTicketLogFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        if (
+            record.name not in {"uvicorn.access", "uvicorn.error"}
+            or not isinstance(record.args, tuple)
+        ):
+            return True
+        record.args = tuple(
+            re.sub(
+                r"([?&]ticket=)[^&\s]+",
+                r"\1[REDACTED]",
+                value,
+                flags=re.IGNORECASE,
+            )
+            if isinstance(value, str) and "/api/messages/ws" in value
+            else value
+            for value in record.args
+        )
+        return True
+
+
+logging.getLogger("uvicorn.access").addFilter(WebSocketTicketLogFilter())
+logging.getLogger("uvicorn.error").addFilter(WebSocketTicketLogFilter())
 
 
 def _neon_storage_client():
@@ -343,11 +380,10 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Cho phép Frontend HTML kết nối trực tiếp từ mọi nguồn (CORS)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=list(RELOOP_CORS_ORIGINS),
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -435,6 +471,7 @@ def get_db():
     else:
         raw_connection = sqlite3.connect(DB_PATH, check_same_thread=False)
         raw_connection.row_factory = sqlite3.Row
+        raw_connection.execute("PRAGMA foreign_keys = ON")
         conn = raw_connection
     try:
         yield conn
@@ -480,8 +517,10 @@ class MessageConnectionManager:
     def __init__(self):
         self.connections: Dict[str, set[WebSocket]] = {}
 
-    async def connect(self, user_id: str, websocket: WebSocket):
-        await websocket.accept()
+    async def connect(
+        self, user_id: str, websocket: WebSocket, subprotocol: str
+    ):
+        await websocket.accept(subprotocol=subprotocol)
         self.connections.setdefault(user_id, set()).add(websocket)
 
     def disconnect(self, user_id: str, websocket: WebSocket):
@@ -560,6 +599,12 @@ def verify_password(password: str, stored_hash: str, salt: str) -> bool:
     return hmac.compare_digest(computed_hash, stored_hash)
 
 
+def hash_session_token(token: str) -> str:
+    """Hash opaque bearer tokens before storing or looking them up."""
+    digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    return f"sha256:{digest}"
+
+
 def init_db():
     """Khởi tạo cấu trúc bảng dữ liệu và nạp dữ liệu mẫu ban đầu."""
     with get_migration_db() as conn:
@@ -594,6 +639,13 @@ def init_db():
                 user_id TEXT NOT NULL,
                 expires_at TEXT NOT NULL,
                 FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS login_attempts (
+                identifier_hash TEXT PRIMARY KEY,
+                failed_attempts INTEGER NOT NULL,
+                window_started_at TEXT NOT NULL
             )
         """)
 
@@ -884,6 +936,52 @@ def init_db():
             cursor.execute("DELETE FROM wardrobe_items WHERE id IN ('w-1', 'w-2', 'w-3')")
             cursor.execute("DELETE FROM wardrobe_items WHERE user_id = 'u-demo' AND source_product_id LIKE 'p-seed-%'")
 
+        cursor.execute("SELECT id FROM users WHERE id = 'u-system'")
+        if not cursor.fetchone():
+            cursor.execute(
+                """
+                INSERT INTO users (
+                    id, name, email, password_hash, salt, height, weight,
+                    green_points, co2_saved, water_saved, donated_vnd, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "u-system",
+                    "RE:LOOP",
+                    "system@reloop.invalid",
+                    "",
+                    "",
+                    None,
+                    None,
+                    0,
+                    0.0,
+                    0,
+                    0,
+                    datetime.utcnow().isoformat(),
+                ),
+            )
+
+        cursor.execute("SELECT token FROM sessions")
+        for row in cursor.fetchall():
+            token = row["token"]
+            if not token.startswith("sha256:"):
+                cursor.execute(
+                    "UPDATE sessions SET token = ? WHERE token = ?",
+                    (hash_session_token(token), token),
+                )
+
+        cursor.execute(
+            "SELECT id, password_hash, salt FROM users WHERE id = 'u-demo'"
+        )
+        demo_account = cursor.fetchone()
+        if demo_account and (demo_account["password_hash"] or demo_account["salt"]):
+            cursor.execute(
+                "UPDATE users SET password_hash = '', salt = '' WHERE id = ?",
+                (demo_account["id"],),
+            )
+            cursor.execute("DELETE FROM sessions WHERE user_id = ?", (demo_account["id"],))
+
         ensure_admin_account(cursor)
         _reconcile_points_ledger(cursor)
 
@@ -959,13 +1057,12 @@ def ensure_admin_account(cursor: sqlite3.Cursor):
 def seed_initial_data(cursor: sqlite3.Cursor):
     """Nạp tài khoản mẫu, sản phẩm tuần hoàn và quỹ môi trường."""
     now = datetime.utcnow().isoformat()
-    pwd_hash, salt = hash_password("123456")
 
     # Tài khoản mẫu Minh Anh
     cursor.execute("""
         INSERT INTO users (id, name, email, password_hash, salt, height, weight, green_points, co2_saved, water_saved, donated_vnd, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, ("u-demo", "Nguyễn Minh Anh", "minhanh@reloop.vn", pwd_hash, salt, 165, 55, 450, 18.5, 4200, 50000, now))
+    """, ("u-demo", "Nguyễn Minh Anh", "minhanh@reloop.vn", "", "", 165, 55, 450, 18.5, 4200, 50000, now))
 
     # Danh sách sản phẩm mẫu trên gian hàng
     demo_products = [
@@ -1420,13 +1517,19 @@ def get_current_user(authorization: Optional[str] = Header(None)) -> Dict[str, A
     user_data: Dict[str, Any]
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT user_id, expires_at FROM sessions WHERE token = ?", (token,))
+        cursor.execute(
+            "SELECT user_id, expires_at FROM sessions WHERE token = ?",
+            (hash_session_token(token),),
+        )
         session = cursor.fetchone()
         if not session:
             raise HTTPException(status_code=401, detail="Phiên đăng nhập không hợp lệ hoặc đã hết hạn.")
 
         if datetime.fromisoformat(session["expires_at"]) < datetime.utcnow():
-            cursor.execute("DELETE FROM sessions WHERE token = ?", (token,))
+            cursor.execute(
+                "DELETE FROM sessions WHERE token = ?",
+                (hash_session_token(token),),
+            )
             expired = True
         else:
             cursor.execute("SELECT * FROM users WHERE id = ?", (session["user_id"],))
@@ -1493,7 +1596,10 @@ def register_user(payload: RegisterRequest):
 
         token = secrets.token_urlsafe(32)
         expires_at = (datetime.utcnow() + timedelta(days=7)).isoformat()
-        cursor.execute("INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)", (token, user_id, expires_at))
+        cursor.execute(
+            "INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)",
+            (hash_session_token(token), user_id, expires_at),
+        )
 
     email_sent, email_notice = send_welcome_email(payload.name.strip(), email_clean)
     return {
@@ -1517,34 +1623,124 @@ def register_user(payload: RegisterRequest):
 @app.post("/api/auth/login", summary="Đăng nhập hệ thống")
 def login_user(payload: LoginRequest):
     email_clean = payload.email.strip().lower()
+    email_hash = hashlib.sha256(email_clean.encode("utf-8")).hexdigest()
+    now = datetime.utcnow()
+    now_text = now.isoformat()
+    cutoff_text = (now - LOGIN_ATTEMPT_WINDOW).isoformat()
+    rate_limited = False
+    invalid_credentials = False
+    user_data = None
+    token = None
+    expires_at = None
+
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM users WHERE LOWER(email) = ?", (email_clean,))
-        user = cursor.fetchone()
-        if not user or not verify_password(payload.password, user["password_hash"], user["salt"]):
-            raise HTTPException(status_code=401, detail="Email hoặc mật khẩu chưa chính xác.")
+        cursor.execute(
+            "DELETE FROM login_attempts WHERE window_started_at <= ?",
+            (cutoff_text,),
+        )
+        cursor.execute(
+            "SELECT failed_attempts, window_started_at FROM login_attempts WHERE identifier_hash = ?",
+            (email_hash,),
+        )
+        attempt = cursor.fetchone()
+        if (
+            attempt
+            and attempt["window_started_at"] > cutoff_text
+            and attempt["failed_attempts"] >= LOGIN_MAX_FAILED_ATTEMPTS
+        ):
+            rate_limited = True
+        else:
+            cursor.execute("SELECT * FROM users WHERE LOWER(email) = ?", (email_clean,))
+            user = cursor.fetchone()
+            if (
+                not user
+                or not user["password_hash"]
+                or not user["salt"]
+                or not verify_password(payload.password, user["password_hash"], user["salt"])
+            ):
+                invalid_credentials = True
+                cursor.execute(
+                    """
+                    INSERT INTO login_attempts (identifier_hash, failed_attempts, window_started_at)
+                    VALUES (?, 1, ?)
+                    ON CONFLICT(identifier_hash) DO UPDATE SET
+                        failed_attempts = CASE
+                            WHEN login_attempts.window_started_at <= ? THEN 1
+                            ELSE login_attempts.failed_attempts + 1
+                        END,
+                        window_started_at = CASE
+                            WHEN login_attempts.window_started_at <= ? THEN ?
+                            ELSE login_attempts.window_started_at
+                        END
+                    """,
+                    (email_hash, now_text, cutoff_text, cutoff_text, now_text),
+                )
+                cursor.execute(
+                    "SELECT failed_attempts FROM login_attempts WHERE identifier_hash = ?",
+                    (email_hash,),
+                )
+                rate_limited = (
+                    cursor.fetchone()["failed_attempts"] >= LOGIN_MAX_FAILED_ATTEMPTS
+                )
+            else:
+                cursor.execute(
+                    "DELETE FROM login_attempts WHERE identifier_hash = ?",
+                    (email_hash,),
+                )
+                token = secrets.token_urlsafe(32)
+                expires_at = (now + timedelta(days=7)).isoformat()
+                cursor.execute(
+                    "INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)",
+                    (hash_session_token(token), user["id"], expires_at),
+                )
+                user_data = dict(user)
 
-        token = secrets.token_urlsafe(32)
-        expires_at = (datetime.utcnow() + timedelta(days=7)).isoformat()
-        cursor.execute("INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)", (token, user["id"], expires_at))
+    if rate_limited:
+        raise HTTPException(
+            status_code=429,
+            detail="Quá nhiều lần đăng nhập không thành công. Vui lòng thử lại sau 15 phút.",
+            headers={"Retry-After": str(int(LOGIN_ATTEMPT_WINDOW.total_seconds()))},
+        )
+    if invalid_credentials:
+        raise HTTPException(status_code=401, detail="Email hoặc mật khẩu chưa chính xác.")
 
     return {
-        "message": f"Chào mừng trở lại, {user['name']}!",
+        "message": f"Chào mừng trở lại, {user_data['name']}!",
         "access_token": token,
         "token_type": "bearer",
         "user": {
-            "id": user["id"],
-            "name": user["name"],
-            "email": user["email"],
-            "height": user["height"],
-            "weight": user["weight"],
-            "green_points": user["green_points"],
-            "co2_saved": user["co2_saved"],
-            "water_saved": user["water_saved"],
-            "donated_vnd": user["donated_vnd"],
-            "is_admin": _is_admin_user(dict(user)),
+            "id": user_data["id"],
+            "name": user_data["name"],
+            "email": user_data["email"],
+            "height": user_data["height"],
+            "weight": user_data["weight"],
+            "green_points": user_data["green_points"],
+            "co2_saved": user_data["co2_saved"],
+            "water_saved": user_data["water_saved"],
+            "donated_vnd": user_data["donated_vnd"],
+            "is_admin": _is_admin_user(user_data),
         }
     }
+
+
+@app.post("/api/auth/logout", summary="Thu hồi phiên đăng nhập hiện tại")
+def logout_user(authorization: Optional[str] = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Vui lòng đăng nhập để đăng xuất.")
+    token = authorization.replace("Bearer ", "", 1).strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="Phiên đăng nhập không hợp lệ.")
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "DELETE FROM sessions WHERE token = ?",
+            (hash_session_token(token),),
+        )
+        if cursor.rowcount != 1:
+            raise HTTPException(status_code=401, detail="Phiên đăng nhập không hợp lệ hoặc đã hết hạn.")
+    return {"message": "Đăng xuất thành công."}
 
 
 @app.get("/api/auth/me", summary="Lấy hồ sơ cá nhân, điểm xanh & voucher")
@@ -1809,26 +2005,32 @@ def list_products(
     limit: int = Query(200, ge=1, le=1000),
     offset: int = Query(0, ge=0)
 ):
-    query_sql = """
-        SELECT products.*, users.name AS seller_name
+    from_sql = """
         FROM products
         LEFT JOIN users ON users.id = products.seller_id
-        WHERE products.status = 'available'
     """
+    where_sql = "WHERE products.status = 'available'"
     params: List[Any] = []
 
     if category and category != "all":
-        query_sql += " AND category = ?"
+        where_sql += " AND category = ?"
         params.append(category)
 
     if circular_only:
-        query_sql += " AND cycle >= 2"
+        where_sql += " AND cycle >= 2"
 
     if search:
         kw = f"%{search.strip().lower()}%"
-        query_sql += " AND (LOWER(title) LIKE ? OR LOWER(material) LIKE ? OR LOWER(color) LIKE ?)"
+        where_sql += " AND (LOWER(title) LIKE ? OR LOWER(material) LIKE ? OR LOWER(color) LIKE ?)"
         params.extend([kw, kw, kw])
 
+    query_sql = (
+        "SELECT products.*, users.name AS seller_name "
+        + from_sql
+        + " "
+        + where_sql
+    )
+    count_sql = "SELECT COUNT(*) FROM products " + where_sql
     order_map = {
         "condition-desc": "products.condition_score DESC",
         "price-asc": "products.price ASC",
@@ -1840,11 +2042,10 @@ def list_products(
 
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute(query_sql, params)
-        all_rows = [enrich_product_dict(r) for r in cursor.fetchall()]
-
-    total = len(all_rows)
-    paginated = all_rows[offset: offset + limit]
+        cursor.execute(count_sql, params)
+        total = cursor.fetchone()[0]
+        cursor.execute(query_sql + " LIMIT ? OFFSET ?", (*params, limit, offset))
+        paginated = [enrich_product_dict(r) for r in cursor.fetchall()]
     return {
         "total": total,
         "limit": limit,
@@ -1903,10 +2104,16 @@ def create_message_websocket_ticket(
 
 
 @app.websocket("/api/messages/ws")
-async def messages_websocket(
-    websocket: WebSocket,
-    ticket: str = Query(..., min_length=20, max_length=100),
-):
+async def messages_websocket(websocket: WebSocket):
+    subprotocols = websocket.scope.get("subprotocols", [])
+    if (
+        len(subprotocols) != 2
+        or subprotocols[0] != "reloop-auth"
+        or not 20 <= len(subprotocols[1]) <= 100
+    ):
+        await websocket.close(code=1008, reason="Vé kết nối không hợp lệ.")
+        return
+    ticket = subprotocols[1]
     with MESSAGE_WEBSOCKET_TICKETS_LOCK:
         ticket_data = MESSAGE_WEBSOCKET_TICKETS.pop(ticket, None)
     if not ticket_data or ticket_data[1] <= datetime.utcnow():
@@ -1914,7 +2121,7 @@ async def messages_websocket(
         return
 
     user_id = ticket_data[0]
-    await message_connections.connect(user_id, websocket)
+    await message_connections.connect(user_id, websocket, "reloop-auth")
     try:
         _mark_message_user_active(user_id)
         while True:
@@ -3901,6 +4108,5 @@ if __name__ == "__main__":
     print("==========================================================")
     print("  RE:LOOP Circular Fashion AI Backend dang khoi dong...")
     print("  API Docs (Swagger UI): http://localhost:8000/docs")
-    print("  Tai khoan mau: minhanh@reloop.vn / 123456")
     print("==========================================================")
     uvicorn.run("reloop_backend:app", host="0.0.0.0", port=8000, reload=True)

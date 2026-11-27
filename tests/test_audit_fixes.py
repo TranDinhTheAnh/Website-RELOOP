@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 import json
 import sqlite3
@@ -389,19 +390,156 @@ class AuditFixTests(unittest.TestCase):
             self.assertEqual(balance, ledger)
 
     def test_expired_session_is_committed_before_unauthorized_response(self):
+        stored_token = backend.hash_session_token("expired-test-token")
         with self.connect() as conn:
             conn.execute(
                 "INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)",
-                ("expired-test-token", "u-demo", (datetime.utcnow() - timedelta(days=1)).isoformat()),
+                (stored_token, "u-demo", (datetime.utcnow() - timedelta(days=1)).isoformat()),
             )
         with self.assertRaises(backend.HTTPException) as error:
             backend.get_current_user("Bearer expired-test-token")
         self.assertEqual(error.exception.status_code, 401)
         with self.connect() as conn:
             self.assertEqual(
-                conn.execute("SELECT COUNT(*) FROM sessions WHERE token = 'expired-test-token'").fetchone()[0],
+                conn.execute("SELECT COUNT(*) FROM sessions WHERE token = ?", (stored_token,)).fetchone()[0],
                 0,
             )
+
+    def test_seeded_demo_account_cannot_authenticate(self):
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT password_hash, salt FROM users WHERE id = 'u-demo'"
+            ).fetchone()
+        self.assertEqual(row, ("", ""))
+        with self.assertRaises(backend.HTTPException) as error:
+            backend.login_user(
+                backend.LoginRequest(email="minhanh@reloop.vn", password="any-password")
+            )
+        self.assertEqual(error.exception.status_code, 401)
+
+    def test_product_filters_are_counted_and_paged_in_the_database(self):
+        filtered = backend.list_products(
+            category=None,
+            circular_only=False,
+            search="' OR 1=1 --",
+            sort="default",
+            limit=2,
+            offset=0,
+        )
+        self.assertEqual(filtered["total"], 0)
+        self.assertEqual(filtered["items"], [])
+
+        page = backend.list_products(
+            category=None,
+            circular_only=False,
+            search=None,
+            sort="default",
+            limit=2,
+            offset=1,
+        )
+        self.assertEqual(len(page["items"]), 2)
+        self.assertGreaterEqual(page["total"], 3)
+
+    def test_websocket_tickets_are_redacted_from_access_logs(self):
+        for logger_name in ("uvicorn.access", "uvicorn.error"):
+            record = logging.LogRecord(
+                logger_name,
+                logging.INFO,
+                __file__,
+                1,
+                '%s - "WebSocket %s" [accepted]',
+                ("127.0.0.1:1234", "/api/messages/ws?ticket=QA_LOG_SENTINEL"),
+                None,
+            )
+            backend.WebSocketTicketLogFilter().filter(record)
+            self.assertNotIn("QA_LOG_SENTINEL", record.getMessage())
+            self.assertIn("[REDACTED]", record.getMessage())
+
+    def test_login_attempts_are_rate_limited_per_email(self):
+        payload = backend.LoginRequest(
+            email="locked-account@example.vn", password="wrong-password"
+        )
+        for _ in range(backend.LOGIN_MAX_FAILED_ATTEMPTS - 1):
+            with self.assertRaises(backend.HTTPException) as error:
+                backend.login_user(payload)
+            self.assertEqual(error.exception.status_code, 401)
+
+        with self.assertRaises(backend.HTTPException) as error:
+            backend.login_user(payload)
+        self.assertEqual(error.exception.status_code, 429)
+
+    def test_session_tokens_are_hashed_and_logout_revokes_them(self):
+        response = backend.register_user(
+            backend.RegisterRequest(
+                name="QA Session User",
+                email="qa-session@example.vn",
+                password="test-password-2026",
+            )
+        )
+        token = response["access_token"]
+        hashed_token = backend.hash_session_token(token)
+
+        with self.connect() as conn:
+            stored_token = conn.execute(
+                "SELECT token FROM sessions WHERE user_id = ?", (response["user"]["id"],)
+            ).fetchone()[0]
+        self.assertEqual(stored_token, hashed_token)
+        self.assertNotEqual(stored_token, token)
+        backend.get_current_user(f"Bearer {token}")
+
+        backend.logout_user(f"Bearer {token}")
+        with self.assertRaises(backend.HTTPException) as error:
+            backend.get_current_user(f"Bearer {token}")
+        self.assertEqual(error.exception.status_code, 401)
+
+    def test_existing_plaintext_sessions_are_migrated_without_revocation(self):
+        raw_token = "legacy-session-token"
+        with self.connect() as conn:
+            conn.execute(
+                "INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)",
+                (
+                    raw_token,
+                    "u-demo",
+                    (datetime.utcnow() + timedelta(days=1)).isoformat(),
+                ),
+            )
+
+        backend.init_db()
+
+        hashed_token = backend.hash_session_token(raw_token)
+        with self.connect() as conn:
+            stored_token = conn.execute(
+                "SELECT token FROM sessions WHERE user_id = 'u-demo'"
+            ).fetchone()[0]
+        self.assertEqual(stored_token, hashed_token)
+        self.assertEqual(
+            backend.get_current_user(f"Bearer {raw_token}")["id"], "u-demo"
+        )
+
+    def test_sqlite_connections_enforce_foreign_keys(self):
+        with self.assertRaises(sqlite3.IntegrityError):
+            with backend.get_db() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO wardrobe_items (
+                        id, user_id, title, category, size, color, material,
+                        original_price, paid_price, image_url, purchased_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        "qa-orphan",
+                        "missing-user",
+                        "QA item",
+                        "Áo",
+                        "M",
+                        "Xanh",
+                        "Cotton",
+                        100,
+                        100,
+                        "https://example.test/item.jpg",
+                        datetime.utcnow().isoformat(),
+                    ),
+                )
 
 
 if __name__ == "__main__":

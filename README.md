@@ -12,6 +12,12 @@ uvicorn reloop_backend:app --port 8000
 
 `ADMIN_EMAIL` và `ADMIN_PASSWORD` đều cần được cấu hình để bật tài khoản quản trị. Không có thông tin mặc định trong mã nguồn; nếu cấu hình thiếu hoặc mật khẩu ngắn hơn 12 ký tự, backend không tạo tài khoản admin. Khi email đã tồn tại trong cơ sở dữ liệu, backend chỉ đổi mật khẩu nếu mật khẩu hiện tại không khớp cấu hình và thu hồi các phiên cũ.
 
+Tài khoản Minh Anh chỉ còn là dữ liệu mẫu, không thể đăng nhập. Session token được lưu dưới dạng hash; token cũ được chuyển đổi khi khởi động, và endpoint đăng xuất thu hồi phiên hiện tại. Backend giới hạn 10 lần đăng nhập sai cho mỗi email trong 15 phút. Các kết nối SQLite bật kiểm tra khóa ngoại.
+
+`RELOOP_CORS_ORIGINS` là danh sách origin được phép, phân cách bằng dấu phẩy. Mặc định gồm website Render và `localhost`/`127.0.0.1:8080`; thêm origin frontend tùy chỉnh vào biến môi trường Render nếu cần. CORS không bật cookie credentials.
+
+Vé WebSocket được gửi qua subprotocol thay vì query string để tránh lộ trong access log; endpoint cũng từ chối vé đã dùng hoặc hết hạn.
+
 ## Neon và Render
 
 Ứng dụng dùng custom auth hiện tại; Neon Auth đã được provision nhưng không dùng để đăng nhập. Để dùng Neon Postgres, cấu hình các biến môi trường sau trong Render Web Service:

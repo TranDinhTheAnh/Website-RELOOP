@@ -4324,7 +4324,7 @@
                     id="dropdown-user-email"
                     class="text-xs text-ink-500 truncate"
                   >
-                    minhanh@reloop.vn
+                    Chưa đăng nhập
                   </p>
                   <p
                     id="dropdown-user-body"
@@ -6411,7 +6411,7 @@
               class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-eco-500"
             />
             <p class="mt-1 text-[11px] text-ink-500">
-              Dùng email bạn đã đăng ký; minhanh@reloop.vn chỉ là tài khoản mẫu.
+              Dùng email bạn đã đăng ký trên RE:LOOP.
             </p>
           </div>
 
@@ -6442,16 +6442,7 @@
           </button>
         </form>
 
-        <div
-          class="pt-3 border-t border-slate-100 flex flex-col gap-2 text-center"
-        >
-          <button
-            type="button"
-            onclick="quickDemoLogin('user')"
-            class="text-xs font-semibold text-eco-700 hover:underline"
-          >
-            ⚡ Đăng nhập Khách hàng mẫu (minhanh@reloop.vn)
-          </button>
+        <div class="pt-3 border-t border-slate-100 text-center">
           <p class="text-[11px] text-ink-500">
             Khu vực Quản trị viên yêu cầu xác thực tài khoản Admin hợp lệ.
           </p>
@@ -7729,15 +7720,16 @@
         await syncFromBackend(false);
       }
 
-      function quickDemoLogin() {
-        openAuthModal("login", true);
-        document.getElementById("auth-email").value = "minhanh@reloop.vn";
-        document.getElementById("auth-password").value = "123456";
-        currentAuthMode = "login";
-        document.getElementById("auth-form").requestSubmit();
-      }
-
-      function logoutUser() {
+      async function logoutUser() {
+        let revocationError = null;
+        if (state.token && !isLocalAuthToken(state.token)) {
+          try {
+            await apiFetch("/api/auth/logout", { method: "POST" });
+          } catch (error) {
+            revocationError = error;
+            console.warn("Không thể thu hồi phiên đăng nhập trên Backend:", error.message);
+          }
+        }
         stopNotificationsPolling();
         const messagesSection = document.getElementById("section-messages");
         if (messagesSection && !messagesSection.classList.contains("hidden")) {
@@ -7758,7 +7750,12 @@
         toggleUserDropdown(false);
         toggleNotifications(false);
         refreshAllUI();
-        showToast("Đã đăng xuất tài khoản.", "info");
+        showToast(
+          revocationError
+            ? "Đã đăng xuất trên thiết bị này nhưng chưa thu hồi được phiên trên máy chủ."
+            : "Đã đăng xuất tài khoản.",
+          revocationError ? "warning" : "info",
+        );
       }
 
       function toggleUserDropdown(force) {
@@ -8347,8 +8344,8 @@
             }
             return;
           }
-          const socketUrl = `${API_BASE.replace(/^http/, "ws")}/api/messages/ws?ticket=${encodeURIComponent(result.ticket)}`;
-          const socket = new WebSocket(socketUrl);
+          const socketUrl = `${API_BASE.replace(/^http/, "ws")}/api/messages/ws`;
+          const socket = new WebSocket(socketUrl, ["reloop-auth", result.ticket]);
           let visibilityHandler = null;
           state.messagesSocket = socket;
           socket.onopen = () => {
