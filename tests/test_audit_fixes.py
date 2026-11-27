@@ -449,6 +449,9 @@ class AuditFixTests(unittest.TestCase):
         result = backend.get_my_orders(self.user)
         current = next(item for item in result["items"] if item["order_id"] == order["order_id"])
         self.assertEqual(current["order_status"], "delivered")
+        self.assertEqual(current["recipient_name"], "Nguyễn An")
+        self.assertEqual(current["phone"], "0912345678")
+        self.assertEqual(current["shipping_address"], "12 Nguyễn Huệ, Quận 1")
         self.assertEqual(current["tracking_code"][:3], "RLX")
         self.assertEqual(
             [entry["status"] for entry in current["timeline"]],
