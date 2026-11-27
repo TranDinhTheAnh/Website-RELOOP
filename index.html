@@ -7327,7 +7327,7 @@
           window.updateIntroProductCount?.(rawProducts.length);
           updateBackendIndicator(
             true,
-            `Đã kết nối Backend FastAPI (127.0.0.1:8000) • ${rawProducts.length} sản phẩm từ SQLite`,
+            `Đã kết nối Backend FastAPI • ${rawProducts.length} sản phẩm từ máy chủ`,
           );
 
           const mapped = rawProducts.map((p, idx) => ({
@@ -9824,6 +9824,15 @@
         FASHION_IMAGES[2],
       ];
 
+      function readImageFileAsDataUrl(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => reject(new Error("Không thể đọc tệp ảnh."));
+          reader.readAsDataURL(file);
+        });
+      }
+
       async function handleSellFileUpload(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -9860,6 +9869,8 @@
             type: blob.type,
           });
           state.pendingSellFile = file;
+          state.pendingSellImageUrl = await readImageFileAsDataUrl(file);
+          showSellPreview(state.pendingSellImageUrl);
           await runBackendAIAnalysis(file);
         } catch (err) {
           document

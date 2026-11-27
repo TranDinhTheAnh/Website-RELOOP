@@ -44,18 +44,44 @@ from fastapi import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
+import psycopg
+import boto3
+from botocore.config import Config
+from botocore.exceptions import BotoCoreError, ClientError
+from psycopg.rows import dict_row
+from psycopg_pool import ConnectionPool
 
 # =============================================================================
 # 1. CẤU HÌNH HỆ THỐNG & DATABASE SQLITE
 # =============================================================================
 
 DB_PATH = os.getenv("RELOOP_DB_PATH", "reloop_circular.db")
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
+DATABASE_URL_UNPOOLED = os.getenv("DATABASE_URL_UNPOOLED", "").strip()
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "").strip().lower()
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
 VILAO_API_KEY = (
     os.getenv("VILAO_API_KEY", "").strip()
     or os.getenv("KIMI_API_KEY", "").strip()
 )
+NEON_AI_GATEWAY_TOKEN = os.getenv("NEON_AI_GATEWAY_TOKEN", "").strip()
+NEON_AI_GATEWAY_BASE_URL = os.getenv("NEON_AI_GATEWAY_BASE_URL", "").strip().rstrip("/")
+NEON_AI_MODEL = os.getenv("NEON_AI_MODEL", "").strip() or "gpt-5-4-mini"
+AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", "").strip()
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "").strip()
+AWS_ENDPOINT_URL_S3 = os.getenv("AWS_ENDPOINT_URL_S3", "").strip().rstrip("/")
+AWS_REGION = os.getenv("AWS_REGION", "").strip()
+NEON_STORAGE_BUCKET = "uploads"
+_storage_config_values = (
+    AWS_ACCESS_KEY_ID,
+    AWS_SECRET_ACCESS_KEY,
+    AWS_ENDPOINT_URL_S3,
+    AWS_REGION,
+)
+NEON_STORAGE_CONFIGURED = all(_storage_config_values)
+NEON_STORAGE_PARTIALLY_CONFIGURED = any(_storage_config_values) and not NEON_STORAGE_CONFIGURED
+_neon_s3_client = None
+_neon_s3_client_lock = threading.Lock()
 VILAO_API_BASE_URL = (
     os.getenv("VILAO_API_BASE_URL", "").strip().rstrip("/")
     or "https://api.vilao.ai/v1"
@@ -74,29 +100,140 @@ EMAIL_PATTERN = re.compile(
 logger = logging.getLogger(__name__)
 
 
+def _neon_storage_client():
+    global _neon_s3_client
+    if not NEON_STORAGE_CONFIGURED:
+        raise RuntimeError("Neon Object Storage is not fully configured.")
+    if _neon_s3_client is None:
+        with _neon_s3_client_lock:
+            if _neon_s3_client is None:
+                _neon_s3_client = boto3.client(
+                    "s3",
+                    endpoint_url=AWS_ENDPOINT_URL_S3,
+                    region_name=AWS_REGION,
+                    aws_access_key_id=AWS_ACCESS_KEY_ID,
+                    aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+                    config=Config(
+                        signature_version="s3v4",
+                        s3={"addressing_style": "path"},
+                    ),
+                )
+    return _neon_s3_client
+
+
+def store_product_image(image_url: str, product_id: str) -> str:
+    if not NEON_STORAGE_CONFIGURED or not image_url.lower().startswith("data:image/"):
+        return image_url
+
+    header, separator, encoded = image_url.partition(",")
+    image_types = {
+        "data:image/jpeg;base64": ("image/jpeg", ".jpg", b"\xff\xd8\xff"),
+        "data:image/png;base64": ("image/png", ".png", b"\x89PNG\r\n\x1a\n"),
+        "data:image/webp;base64": ("image/webp", ".webp", None),
+    }
+    image_type = image_types.get(header.lower())
+    if not separator or not image_type:
+        raise HTTPException(
+            status_code=415,
+            detail="Ảnh sản phẩm chỉ hỗ trợ JPEG, PNG hoặc WEBP.",
+        )
+    try:
+        image_bytes = base64.b64decode(encoded, validate=True)
+    except (ValueError, base64.binascii.Error) as error:
+        raise HTTPException(status_code=400, detail="Dữ liệu ảnh không hợp lệ.") from error
+    content_type, extension, signature = image_type
+    if not image_bytes:
+        raise HTTPException(status_code=400, detail="Ảnh sản phẩm không được để trống.")
+    if len(image_bytes) > MAX_GARMENT_IMAGE_BYTES:
+        raise HTTPException(status_code=413, detail="Ảnh tải lên không được vượt quá 10 MB.")
+    if signature and not image_bytes.startswith(signature):
+        raise HTTPException(status_code=415, detail="Nội dung ảnh không khớp định dạng đã chọn.")
+    if content_type == "image/webp" and (
+        len(image_bytes) < 12
+        or image_bytes[:4] != b"RIFF"
+        or image_bytes[8:12] != b"WEBP"
+    ):
+        raise HTTPException(status_code=415, detail="Nội dung ảnh WEBP không hợp lệ.")
+
+    object_key = f"products/{product_id}/{uuid.uuid4().hex}{extension}"
+    try:
+        _neon_storage_client().put_object(
+            Bucket=NEON_STORAGE_BUCKET,
+            Key=object_key,
+            Body=image_bytes,
+            ContentType=content_type,
+        )
+    except (BotoCoreError, ClientError) as error:
+        logger.exception("Could not upload product image to Neon Object Storage.")
+        raise HTTPException(
+            status_code=503,
+            detail="Không thể lưu ảnh lên kho lưu trữ. Vui lòng thử lại.",
+        ) from error
+    return f"neon-s3://{NEON_STORAGE_BUCKET}/{object_key}"
+
+
+def active_ai_model() -> str:
+    if NEON_AI_GATEWAY_TOKEN and NEON_AI_GATEWAY_BASE_URL:
+        return NEON_AI_MODEL
+    return KIMI_MODEL
+
+
+def resolve_product_image(image_url: Optional[str]) -> Optional[str]:
+    if not image_url or not image_url.startswith("neon-s3://"):
+        return image_url
+    bucket_and_key = image_url.removeprefix("neon-s3://")
+    bucket, separator, object_key = bucket_and_key.partition("/")
+    if not separator or bucket != NEON_STORAGE_BUCKET or not object_key:
+        raise RuntimeError("Invalid Neon Object Storage image reference.")
+    if not NEON_STORAGE_CONFIGURED:
+        raise HTTPException(
+            status_code=503,
+            detail="Kho ảnh chưa được cấu hình trên máy chủ.",
+        )
+    try:
+        return _neon_storage_client().generate_presigned_url(
+            "get_object",
+            Params={"Bucket": bucket, "Key": object_key},
+            ExpiresIn=604800,
+        )
+    except (BotoCoreError, ClientError) as error:
+        logger.exception("Could not generate a Neon Object Storage image URL.")
+        raise HTTPException(
+            status_code=503,
+            detail="Không thể tải ảnh sản phẩm. Vui lòng thử lại.",
+        ) from error
+
+
 def call_vilao_chat_completion(
     messages: List[Dict[str, Any]],
     response_format: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
-    if not VILAO_API_KEY:
+    use_neon_gateway = bool(NEON_AI_GATEWAY_TOKEN and NEON_AI_GATEWAY_BASE_URL)
+    if not use_neon_gateway and not VILAO_API_KEY:
         raise HTTPException(
             status_code=503,
-            detail="Backend chưa cấu hình VILAO_API_KEY hoặc KIMI_API_KEY.",
+            detail="Backend chưa cấu hình dịch vụ AI.",
         )
 
     request_payload: Dict[str, Any] = {
-        "model": KIMI_MODEL,
+        "model": NEON_AI_MODEL if use_neon_gateway else KIMI_MODEL,
         "messages": messages,
     }
     if response_format:
         request_payload["response_format"] = response_format
 
+    api_key = NEON_AI_GATEWAY_TOKEN if use_neon_gateway else VILAO_API_KEY
+    api_url = (
+        f"{NEON_AI_GATEWAY_BASE_URL}/v1/chat/completions"
+        if use_neon_gateway
+        else f"{VILAO_API_BASE_URL}/chat/completions"
+    )
     request = urllib.request.Request(
-        f"{VILAO_API_BASE_URL}/chat/completions",
+        api_url,
         data=json.dumps(request_payload).encode("utf-8"),
         headers={
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {VILAO_API_KEY}",
+            "Authorization": f"Bearer {api_key}",
         },
     )
     try:
@@ -121,14 +258,14 @@ def call_vilao_chat_completion(
             provider_status = ""
             provider_message = ""
 
-        provider_message = provider_message.replace(VILAO_API_KEY, "[redacted]")[:300]
+        provider_message = provider_message.replace(api_key, "[redacted]")[:300]
         logger.error(
-            "Vilao AI request failed with HTTP %s (%s): %s",
+            "AI provider request failed with HTTP %s (%s): %s",
             error.code,
             provider_status or "unknown status",
             provider_message or "no provider message",
         )
-        detail = f"Vilao AI trả lỗi HTTP {error.code}"
+        detail = f"Dịch vụ AI trả lỗi HTTP {error.code}"
         if provider_status:
             detail += f" ({provider_status})"
         if provider_message:
@@ -137,13 +274,13 @@ def call_vilao_chat_completion(
             detail += ". Hãy kiểm tra API key, subscription model và quota."
         raise HTTPException(status_code=502, detail=detail) from error
     except (urllib.error.URLError, TimeoutError) as error:
-        logger.error("Could not reach Vilao AI: %s", error)
+        logger.error("Could not reach AI provider: %s", error)
         raise HTTPException(
             status_code=502,
             detail="Không kết nối được dịch vụ AI. Vui lòng thử lại sau.",
         ) from error
     except (json.JSONDecodeError, UnicodeDecodeError) as error:
-        logger.error("Vilao AI returned an invalid JSON response.")
+        logger.error("AI provider returned an invalid JSON response.")
         raise HTTPException(
             status_code=502,
             detail="Dịch vụ AI trả về kết quả không hợp lệ. Vui lòng thử lại.",
@@ -216,19 +353,122 @@ app.add_middleware(
 )
 
 
+class HybridRow(dict):
+    def __init__(self, values: Dict[str, Any]):
+        super().__init__(values)
+        self._values = tuple(values.values())
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            return self._values[key]
+        return super().__getitem__(key)
+
+
+class PostgresCursor:
+    def __init__(self, cursor):
+        self._cursor = cursor
+
+    @staticmethod
+    def _query(sql: str) -> str:
+        return sql.replace("?", "%s")
+
+    def execute(self, sql: str, parameters=()):
+        query = self._query(sql)
+        if parameters:
+            self._cursor.execute(query, parameters)
+        else:
+            self._cursor.execute(query)
+        return self
+
+    def executemany(self, sql: str, parameters):
+        self._cursor.executemany(self._query(sql), parameters)
+        return self
+
+    def fetchone(self):
+        row = self._cursor.fetchone()
+        return HybridRow(row) if row is not None else None
+
+    def fetchall(self):
+        return [HybridRow(row) for row in self._cursor.fetchall()]
+
+    @property
+    def rowcount(self):
+        return self._cursor.rowcount
+
+
+class PostgresConnection:
+    def __init__(self, connection):
+        self._connection = connection
+
+    def cursor(self):
+        return PostgresCursor(self._connection.cursor())
+
+    def execute(self, sql: str, parameters=()):
+        query = sql.replace("?", "%s")
+        cursor = (
+            self._connection.execute(query, parameters)
+            if parameters
+            else self._connection.execute(query)
+        )
+        return PostgresCursor(cursor)
+
+
+_postgres_pool = (
+    ConnectionPool(
+        conninfo=DATABASE_URL,
+        min_size=1,
+        max_size=5,
+        kwargs={"row_factory": dict_row},
+        open=False,
+    )
+    if DATABASE_URL
+    else None
+)
+
+
 @contextmanager
 def get_db():
-    """Quản lý kết nối SQLite an toàn với tự động commit/rollback."""
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
+    """Use Neon Postgres in production and SQLite for local tests."""
+    if _postgres_pool:
+        raw_connection = _postgres_pool.getconn()
+        conn = PostgresConnection(raw_connection)
+    else:
+        raw_connection = sqlite3.connect(DB_PATH, check_same_thread=False)
+        raw_connection.row_factory = sqlite3.Row
+        conn = raw_connection
     try:
         yield conn
-        conn.commit()
+        raw_connection.commit()
     except Exception:
-        conn.rollback()
+        raw_connection.rollback()
         raise
     finally:
-        conn.close()
+        if _postgres_pool:
+            _postgres_pool.putconn(raw_connection)
+        else:
+            raw_connection.close()
+
+
+@contextmanager
+def get_migration_db():
+    if not DATABASE_URL:
+        with get_db() as conn:
+            yield conn
+        return
+    if not DATABASE_URL_UNPOOLED:
+        raise RuntimeError(
+            "DATABASE_URL_UNPOOLED is required to safely initialize the Neon schema."
+        )
+    connection = psycopg.connect(DATABASE_URL_UNPOOLED, row_factory=dict_row)
+    try:
+        connection.execute("SELECT pg_advisory_lock(731904221)")
+        yield PostgresConnection(connection)
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
 
 
 MESSAGE_WEBSOCKET_TICKETS: Dict[str, tuple[str, datetime]] = {}
@@ -322,7 +562,7 @@ def verify_password(password: str, stored_hash: str, salt: str) -> bool:
 
 def init_db():
     """Khởi tạo cấu trúc bảng dữ liệu và nạp dữ liệu mẫu ban đầu."""
-    with get_db() as conn:
+    with get_migration_db() as conn:
         cursor = conn.cursor()
 
         # 1. Bảng Người dùng (Users)
@@ -419,7 +659,7 @@ def init_db():
             )
         """)
 
-        for column_sql in (
+        order_columns = (
             "ALTER TABLE orders ADD COLUMN recipient_name TEXT",
             "ALTER TABLE orders ADD COLUMN phone TEXT",
             "ALTER TABLE orders ADD COLUMN shipping_address TEXT",
@@ -429,11 +669,15 @@ def init_db():
             "ALTER TABLE orders ADD COLUMN voucher_id TEXT",
             "ALTER TABLE orders ADD COLUMN reservation_expires_at TEXT",
             "ALTER TABLE orders ADD COLUMN completed_at TEXT",
-        ):
-            try:
-                cursor.execute(column_sql)
-            except sqlite3.OperationalError:
-                pass
+        )
+        for column_sql in order_columns:
+            if DATABASE_URL:
+                cursor.execute(column_sql.replace(" ADD COLUMN ", " ADD COLUMN IF NOT EXISTS "))
+            else:
+                try:
+                    cursor.execute(column_sql)
+                except sqlite3.OperationalError:
+                    pass
 
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS product_reservations (
@@ -506,14 +750,18 @@ def init_db():
                 FOREIGN KEY (user_id) REFERENCES users(id)
             )
         """)
-        try:
-            cursor.execute("ALTER TABLE notifications ADD COLUMN complaint_id TEXT")
-        except sqlite3.OperationalError:
-            pass
-        try:
-            cursor.execute("ALTER TABLE notifications ADD COLUMN conversation_id TEXT")
-        except sqlite3.OperationalError:
-            pass
+        notification_columns = (
+            "ALTER TABLE notifications ADD COLUMN complaint_id TEXT",
+            "ALTER TABLE notifications ADD COLUMN conversation_id TEXT",
+        )
+        for column_sql in notification_columns:
+            if DATABASE_URL:
+                cursor.execute(column_sql.replace(" ADD COLUMN ", " ADD COLUMN IF NOT EXISTS "))
+            else:
+                try:
+                    cursor.execute(column_sql)
+                except sqlite3.OperationalError:
+                    pass
 
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS complaints (
@@ -831,13 +1079,17 @@ async def _reservation_cleanup_loop():
         try:
             with get_db() as conn:
                 _release_expired_order_reservations(conn.cursor(), datetime.utcnow())
-        except sqlite3.Error:
+        except (sqlite3.Error, psycopg.Error):
             logger.exception("Could not release expired product reservations.")
 
 
 @app.on_event("startup")
 async def on_startup():
     global _reservation_cleanup_task
+    if NEON_STORAGE_PARTIALLY_CONFIGURED:
+        raise RuntimeError("Configure all AWS_* variables before enabling Neon Object Storage.")
+    if _postgres_pool:
+        _postgres_pool.open(wait=True)
     init_db()
     _reservation_cleanup_task = asyncio.create_task(_reservation_cleanup_loop())
 
@@ -852,6 +1104,8 @@ async def on_shutdown():
         except asyncio.CancelledError:
             pass
         _reservation_cleanup_task = None
+    if _postgres_pool:
+        _postgres_pool.close()
 
 
 # =============================================================================
@@ -1199,6 +1453,7 @@ def get_optional_user(authorization: Optional[str] = Header(None)) -> Optional[D
 def enrich_product_dict(row: sqlite3.Row) -> Dict[str, Any]:
     """Đính kèm thông điệp xác thực tuần hoàn nếu sản phẩm từ vòng đời 2 trở lên."""
     item = dict(row)
+    item["image_url"] = resolve_product_image(item.get("image_url"))
     is_circular = item["cycle"] >= 2
     item["is_verified_circular"] = is_circular
     item["circular_verification_message"] = CIRCULAR_BADGE_TEXT if is_circular else None
@@ -1308,6 +1563,8 @@ def get_me(user: Dict[str, Any] = Depends(get_current_user)):
             ORDER BY purchased_at DESC
         """, (user["id"],))
         wardrobe = [dict(r) for r in cursor.fetchall()]
+        for item in wardrobe:
+            item["image_url"] = resolve_product_image(item.get("image_url"))
 
         cursor.execute("""
             SELECT * FROM orders
@@ -1540,7 +1797,7 @@ def ai_recommend_products(payload: RecommendProductsRequest):
             detail="AI không chọn được sản phẩm hợp lệ. Vui lòng thử lại.",
         )
     items.sort(key=lambda item: item["score"], reverse=True)
-    return {"items": items, "ai_engine": KIMI_MODEL}
+    return {"items": items, "ai_engine": active_ai_model()}
 
 
 @app.get("/api/products", summary="Danh sách sản phẩm tuần hoàn trên sàn")
@@ -1741,6 +1998,9 @@ def list_conversations(user: Dict[str, Any] = Depends(get_current_user)):
     conversations = []
     for row in rows:
         conversation = dict(row)
+        conversation["product_image"] = resolve_product_image(
+            conversation.get("product_image")
+        )
         is_buyer = conversation["buyer_id"] == user["id"]
         conversation["other_user_id"] = (
             conversation["seller_id"] if is_buyer else conversation["buyer_id"]
@@ -2027,7 +2287,7 @@ async def ai_analyze_garment(
         raise HTTPException(status_code=502, detail="AI chưa trích xuất đủ thông tin. Vui lòng thử lại.")
 
     return {
-        "ai_engine": KIMI_MODEL,
+        "ai_engine": active_ai_model(),
         "extracted_info": extracted,
         "points_reward_estimate": 120
     }
@@ -2043,6 +2303,7 @@ async def create_marketplace_listing(
     product_id = f"p-{uuid.uuid4().hex[:8]}"
     now = datetime.utcnow().isoformat()
     points_earned = 120
+    stored_image_url = store_product_image(payload.image_url, product_id)
 
     with get_db() as conn:
         cursor = conn.cursor()
@@ -2054,7 +2315,7 @@ async def create_marketplace_listing(
             payload.color, payload.material, payload.condition_score, payload.condition_label,
             payload.ai_note, payload.price, payload.original_price,
             f"Size {payload.size} chuẩn phom Châu Á, chất liệu {payload.material} thoáng nhẹ.",
-            payload.image_url, now
+            stored_image_url, now
         ))
 
         # Cộng Điểm Xanh & cập nhật chỉ số môi trường cho người bán
@@ -2117,6 +2378,8 @@ def get_my_seller_listings(user: Dict[str, Any] = Depends(get_current_user)):
             (user["id"],),
         )
         listings = [dict(row) for row in cursor.fetchall()]
+        for listing in listings:
+            listing["image_url"] = resolve_product_image(listing.get("image_url"))
 
     return {"items": listings}
 
@@ -2266,8 +2529,8 @@ def ai_customer_support_chat(
 
     return {
         "reply": reply.strip(),
-        "source": "vilao-live",
-        "model": KIMI_MODEL,
+        "source": "neon-ai-gateway" if NEON_AI_GATEWAY_TOKEN else "vilao-live",
+        "model": active_ai_model(),
         "product_context": product.get("title") if product else None,
     }
 
@@ -2309,6 +2572,10 @@ def reconsign_wardrobe_item(
 
         new_product_id = f"p-{uuid.uuid4().hex[:8]}"
         now = datetime.utcnow().isoformat()
+        stored_image_url = store_product_image(
+            payload.current_photos[0],
+            new_product_id,
+        )
         ai_note = (
             f"Đã kiểm định tuần hoàn Vòng #{next_cycle} từ {len(payload.current_photos)} ảnh thực tế. "
             f"Đồng bộ nguyên bản thông tin chất liệu {item['material']} và phom dáng từ vòng trước."
@@ -2323,7 +2590,7 @@ def reconsign_wardrobe_item(
             item["color"], item["material"], new_condition, new_cond_label, ai_note,
             new_price, item["original_price"], next_cycle,
             f"Size {item['size']} đã được kiểm chứng độ chuẩn phom qua {next_cycle - 1} vòng sử dụng.",
-            payload.current_photos[0], now
+            stored_image_url, now
         ))
 
         # Đánh dấu món trong tủ đồ đã ký gửi lại
@@ -2371,6 +2638,8 @@ def get_my_wardrobe(
         else:
             cursor.execute("SELECT * FROM wardrobe_items WHERE user_id = ?", (user["id"],))
         items = [dict(r) for r in cursor.fetchall()]
+        for item in items:
+            item["image_url"] = resolve_product_image(item.get("image_url"))
 
     return {
         "total": len(items),
@@ -2568,7 +2837,9 @@ def get_my_orders(user: Dict[str, Any] = Depends(get_current_user)):
                         "product_id": product_id,
                         "wardrobe_item_id": wardrobe_item.get("id"),
                         "title": product.get("title") or wardrobe_item.get("title") or "Sản phẩm đã mua",
-                        "image_url": product.get("image_url") or wardrobe_item.get("image_url") or "",
+                        "image_url": resolve_product_image(
+                            product.get("image_url") or wardrobe_item.get("image_url") or ""
+                        ),
                         "category": product.get("category") or wardrobe_item.get("category") or "",
                         "size": product.get("size") or wardrobe_item.get("size") or "",
                         "color": product.get("color") or wardrobe_item.get("color") or "",
@@ -2610,7 +2881,8 @@ def checkout_order(
     normalized_phone = normalize_vietnamese_phone(payload.phone)
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("BEGIN IMMEDIATE")
+        if not DATABASE_URL:
+            cursor.execute("BEGIN IMMEDIATE")
         _release_expired_order_reservations(cursor, now_dt)
         unique_product_ids = list(dict.fromkeys(payload.product_ids))
         if len(unique_product_ids) != len(payload.product_ids):
@@ -2789,7 +3061,8 @@ def complete_admin_cod_order(
     now = datetime.utcnow()
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("BEGIN IMMEDIATE")
+        if not DATABASE_URL:
+            cursor.execute("BEGIN IMMEDIATE")
         completed = _complete_cod_order(cursor, order_id, now)
     return {
         "message": "Đã xác nhận giao hàng và hoàn tất đơn COD." if completed else "Đơn hàng đã hoàn tất trước đó.",
@@ -2807,7 +3080,8 @@ def cancel_admin_cod_order(
     now = datetime.utcnow().isoformat()
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute("BEGIN IMMEDIATE")
+        if not DATABASE_URL:
+            cursor.execute("BEGIN IMMEDIATE")
         cursor.execute("SELECT * FROM orders WHERE id = ?", (order_id,))
         order_row = cursor.fetchone()
         if not order_row:
@@ -2984,6 +3258,9 @@ def _serialize_complaint(
         )
     except (KeyError, json.JSONDecodeError):
         complaint["product_snapshot"] = {}
+    if isinstance(complaint["product_snapshot"], dict):
+        image_url = complaint["product_snapshot"].get("image_url")
+        complaint["product_snapshot"]["image_url"] = resolve_product_image(image_url)
     evidence_json = complaint.pop("evidence_json", "[]")
     if include_evidence:
         try:
@@ -3231,7 +3508,7 @@ def create_complaint(
                     now,
                 ),
             )
-        except sqlite3.IntegrityError as error:
+        except (sqlite3.IntegrityError, psycopg.errors.UniqueViolation) as error:
             if "complaints.order_id, complaints.product_id" not in str(error):
                 raise
             raise HTTPException(

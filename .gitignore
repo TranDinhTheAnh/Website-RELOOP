@@ -1,0 +1,7 @@
+.neon
+node_modules/
+.env.local
+dist/
+__pycache__/
+tests/__pycache__/
+*.py[cod]

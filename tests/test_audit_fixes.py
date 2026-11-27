@@ -1,10 +1,13 @@
+import asyncio
 import os
+import json
 import sqlite3
 import tempfile
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import datetime, timedelta
+from unittest.mock import patch
 
 os.environ["ADMIN_EMAIL"] = "admin@test.reloop"
 os.environ["ADMIN_PASSWORD"] = "test-admin-password-with-length"
@@ -45,6 +48,172 @@ class AuditFixTests(unittest.TestCase):
             shipping_address="12 Nguyễn Huệ, Quận 1",
             payment_method=method,
         )
+
+    def test_postgres_adapter_preserves_literal_percent_without_parameters(self):
+        class FakeCursor:
+            def execute(self, *args):
+                self.args = args
+
+        cursor = FakeCursor()
+        backend.PostgresCursor(cursor).execute(
+            "DELETE FROM wardrobe_items WHERE source_product_id LIKE 'p-seed-%'"
+        )
+        self.assertEqual(len(cursor.args), 1)
+        self.assertIn("LIKE 'p-seed-%'", cursor.args[0])
+
+    def test_neon_ai_gateway_uses_configured_chat_endpoint(self):
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                return False
+
+            def read(self):
+                return b'{"choices":[{"message":{"content":"ok"}}]}'
+
+        previous = (
+            backend.NEON_AI_GATEWAY_TOKEN,
+            backend.NEON_AI_GATEWAY_BASE_URL,
+            backend.NEON_AI_MODEL,
+        )
+        backend.NEON_AI_GATEWAY_TOKEN = "test-token"
+        backend.NEON_AI_GATEWAY_BASE_URL = "https://gateway.example"
+        backend.NEON_AI_MODEL = "gpt-test"
+        self.addCleanup(
+            lambda: (
+                setattr(backend, "NEON_AI_GATEWAY_TOKEN", previous[0]),
+                setattr(backend, "NEON_AI_GATEWAY_BASE_URL", previous[1]),
+                setattr(backend, "NEON_AI_MODEL", previous[2]),
+            )
+        )
+
+        with patch.object(
+            backend.urllib.request, "urlopen", return_value=FakeResponse()
+        ) as urlopen:
+            result = backend.call_vilao_chat_completion(
+                [{"role": "user", "content": "test"}]
+            )
+
+        request = urlopen.call_args.args[0]
+        payload = json.loads(request.data)
+        self.assertEqual(request.full_url, "https://gateway.example/v1/chat/completions")
+        self.assertEqual(request.get_header("Authorization"), "Bearer test-token")
+        self.assertEqual(payload["model"], "gpt-test")
+        self.assertEqual(result["choices"][0]["message"]["content"], "ok")
+
+    def test_neon_storage_upload_and_private_read_url(self):
+        previous = (
+            backend.AWS_ACCESS_KEY_ID,
+            backend.AWS_SECRET_ACCESS_KEY,
+            backend.AWS_ENDPOINT_URL_S3,
+            backend.AWS_REGION,
+            backend.NEON_STORAGE_CONFIGURED,
+        )
+        backend.AWS_ACCESS_KEY_ID = "test-access"
+        backend.AWS_SECRET_ACCESS_KEY = "test-secret"
+        backend.AWS_ENDPOINT_URL_S3 = "https://storage.example"
+        backend.AWS_REGION = "test-region"
+        backend.NEON_STORAGE_CONFIGURED = True
+        self.addCleanup(
+            lambda: (
+                setattr(backend, "AWS_ACCESS_KEY_ID", previous[0]),
+                setattr(backend, "AWS_SECRET_ACCESS_KEY", previous[1]),
+                setattr(backend, "AWS_ENDPOINT_URL_S3", previous[2]),
+                setattr(backend, "AWS_REGION", previous[3]),
+                setattr(backend, "NEON_STORAGE_CONFIGURED", previous[4]),
+            )
+        )
+
+        class FakeStorage:
+            def put_object(self, **kwargs):
+                self.upload = kwargs
+
+            def generate_presigned_url(self, operation, *, Params, ExpiresIn):
+                self.presigned = (operation, Params, ExpiresIn)
+                return "https://storage.example/private-image"
+
+        storage = FakeStorage()
+        with patch.object(backend, "_neon_storage_client", return_value=storage):
+            stored_url = backend.store_product_image(
+                "data:image/png;base64,iVBORw0KGgo=",
+                "product-test",
+            )
+            image_url = backend.resolve_product_image(stored_url)
+
+        self.assertTrue(stored_url.startswith("neon-s3://uploads/products/product-test/"))
+        self.assertEqual(storage.upload["Bucket"], "uploads")
+        self.assertEqual(storage.upload["ContentType"], "image/png")
+        self.assertEqual(image_url, "https://storage.example/private-image")
+        self.assertEqual(storage.presigned[2], 604800)
+
+    def test_listing_upload_uses_neon_object_key_and_signed_product_response(self):
+        previous = (
+            backend.AWS_ACCESS_KEY_ID,
+            backend.AWS_SECRET_ACCESS_KEY,
+            backend.AWS_ENDPOINT_URL_S3,
+            backend.AWS_REGION,
+            backend.NEON_STORAGE_CONFIGURED,
+        )
+        backend.AWS_ACCESS_KEY_ID = "test-access"
+        backend.AWS_SECRET_ACCESS_KEY = "test-secret"
+        backend.AWS_ENDPOINT_URL_S3 = "https://storage.example"
+        backend.AWS_REGION = "test-region"
+        backend.NEON_STORAGE_CONFIGURED = True
+        self.addCleanup(
+            lambda: (
+                setattr(backend, "AWS_ACCESS_KEY_ID", previous[0]),
+                setattr(backend, "AWS_SECRET_ACCESS_KEY", previous[1]),
+                setattr(backend, "AWS_ENDPOINT_URL_S3", previous[2]),
+                setattr(backend, "AWS_REGION", previous[3]),
+                setattr(backend, "NEON_STORAGE_CONFIGURED", previous[4]),
+            )
+        )
+
+        class FakeStorage:
+            def put_object(self, **kwargs):
+                self.upload = kwargs
+
+            def generate_presigned_url(self, operation, *, Params, ExpiresIn):
+                return "https://storage.example/product-image"
+
+        storage = FakeStorage()
+        payload = backend.CreateListingRequest(
+            title="Áo kiểm thử",
+            category="Áo",
+            color="Xanh",
+            material="Cotton",
+            condition_score=90,
+            price=100000,
+            original_price=200000,
+            image_url="data:image/png;base64,iVBORw0KGgo=",
+        )
+        with patch.object(backend, "_neon_storage_client", return_value=storage):
+            result = asyncio.run(
+                backend.create_marketplace_listing(payload, self.user)
+            )
+            products = backend.list_products(
+                category=None,
+                circular_only=False,
+                search=None,
+                sort="default",
+                limit=200,
+                offset=0,
+            )
+
+        self.assertIn("product_id", result)
+        stored_image_url = storage.upload["Key"]
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT image_url FROM products WHERE id = ?",
+                (result["product_id"],),
+            ).fetchone()
+        self.assertEqual(
+            row[0],
+            f"neon-s3://uploads/{stored_image_url}",
+        )
+        product = next(item for item in products["items"] if item["id"] == result["product_id"])
+        self.assertEqual(product["image_url"], "https://storage.example/product-image")
 
     def test_listing_text_is_bounded_and_control_characters_are_removed(self):
         payload = backend.CreateListingRequest(
