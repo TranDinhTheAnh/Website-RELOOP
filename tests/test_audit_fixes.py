@@ -561,6 +561,35 @@ class AuditFixTests(unittest.TestCase):
             ).fetchone()
             self.assertEqual(balance, ledger)
 
+    def test_welcome_email_uses_published_resend_template_alias(self):
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                return False
+
+        with patch.dict(
+            os.environ,
+            {
+                "RESEND_API_KEY": "test-resend-key",
+                "RESEND_FROM_EMAIL": "RE:LOOP <no-reply@reloop.help>",
+                "RESEND_WELCOME_TEMPLATE_ID": "th-cho-mng",
+            },
+        ), patch.object(
+            backend.urllib.request, "urlopen", return_value=FakeResponse()
+        ) as urlopen:
+            sent, notice = backend.send_welcome_email("Nguyễn An", "qa@example.com")
+
+        self.assertTrue(sent)
+        self.assertIsNone(notice)
+        request = urlopen.call_args.args[0]
+        payload = json.loads(request.data)
+        self.assertEqual(request.full_url, "https://api.resend.com/emails")
+        self.assertEqual(payload["template"], {"id": "th-cho-mng", "variables": {}})
+        self.assertNotIn("html", payload)
+        self.assertNotIn("text", payload)
+
     def test_expired_session_is_committed_before_unauthorized_response(self):
         stored_token = backend.hash_session_token("expired-test-token")
         with self.connect() as conn:

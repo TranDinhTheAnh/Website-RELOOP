@@ -25,6 +25,8 @@ Vé WebSocket được gửi qua subprotocol thay vì query string để tránh 
 - `DATABASE_URL`: pooled connection string của Neon, dùng cho truy vấn runtime.
 - `DATABASE_URL_UNPOOLED`: direct connection string, dùng lúc khởi động để khởi tạo/cập nhật schema.
 - `ADMIN_EMAIL` và `ADMIN_PASSWORD`: thông tin tài khoản quản trị riêng.
+- `RESEND_API_KEY` và `RESEND_FROM_EMAIL`: cấu hình gửi email chào mừng qua Resend.
+- `RESEND_WELCOME_TEMPLATE_ID`: tùy chọn; ID hoặc alias của template Resend đã publish. Nếu bỏ trống, backend dùng nội dung email chào mừng mặc định.
 
 Không commit `.env.local`; dùng giá trị tương ứng từ `neon env pull`/Neon Console làm biến secret trên Render. Có thể đặt `RELOOP_DB_PATH` để chọn tệp SQLite khi chạy local mà không cấu hình `DATABASE_URL`.
 

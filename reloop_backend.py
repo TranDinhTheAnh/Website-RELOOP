@@ -339,26 +339,34 @@ def call_vilao_chat_completion(
 def send_welcome_email(name: str, email: str) -> tuple[bool, Optional[str]]:
     api_key = os.getenv("RESEND_API_KEY", "").strip()
     from_email = os.getenv("RESEND_FROM_EMAIL", "").strip()
+    template_id = os.getenv("RESEND_WELCOME_TEMPLATE_ID", "").strip()
     if not api_key or not from_email:
         logger.warning("Welcome email not sent because Resend is not configured.")
         return False, "Chưa cấu hình Resend để gửi email chào mừng."
 
-    safe_name = html.escape(name)
-    email_payload = {
-        "from": from_email,
-        "to": [email],
-        "subject": "Chào mừng bạn đến với RE:LOOP",
-        "html": (
-            f"<p>Xin chào {safe_name},</p>"
-            "<p>Tài khoản RE:LOOP của bạn đã được tạo thành công.</p>"
-            "<p>Cảm ơn bạn đã tham gia thời trang tuần hoàn cùng chúng tôi!</p>"
-        ),
-        "text": (
-            f"Xin chào {name},\n\n"
-            "Tài khoản RE:LOOP của bạn đã được tạo thành công.\n"
-            "Cảm ơn bạn đã tham gia thời trang tuần hoàn cùng chúng tôi!"
-        ),
-    }
+    if template_id:
+        email_payload = {
+            "from": from_email,
+            "to": [email],
+            "template": {"id": template_id, "variables": {}},
+        }
+    else:
+        safe_name = html.escape(name)
+        email_payload = {
+            "from": from_email,
+            "to": [email],
+            "subject": "Chào mừng bạn đến với RE:LOOP",
+            "html": (
+                f"<p>Xin chào {safe_name},</p>"
+                "<p>Tài khoản RE:LOOP của bạn đã được tạo thành công.</p>"
+                "<p>Cảm ơn bạn đã tham gia thời trang tuần hoàn cùng chúng tôi!</p>"
+            ),
+            "text": (
+                f"Xin chào {name},\n\n"
+                "Tài khoản RE:LOOP của bạn đã được tạo thành công.\n"
+                "Cảm ơn bạn đã tham gia thời trang tuần hoàn cùng chúng tôi!"
+            ),
+        }
     request = urllib.request.Request(
         "https://api.resend.com/emails",
         data=json.dumps(email_payload).encode("utf-8"),
