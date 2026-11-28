@@ -1027,6 +1027,7 @@ class AuditFixTests(unittest.TestCase):
                     )
                 )
             self.assertEqual(unverified_login.exception.status_code, 403)
+            self.assertIn("Gmail/Spam", unverified_login.exception.detail)
 
             page = backend.show_email_verification(token=verification_token)
             self.assertEqual(page.status_code, 200)

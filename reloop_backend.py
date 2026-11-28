@@ -2368,7 +2368,9 @@ def login_user(payload: LoginRequest):
     if email_unverified:
         raise HTTPException(
             status_code=403,
-            detail="Vui lòng xác minh email trước khi đăng nhập.",
+            detail=(
+                "Vui lòng xác minh email (kiểm tra Gmail/Spam) trước khi đăng nhập."
+            ),
         )
 
     return {

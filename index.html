@@ -7837,10 +7837,10 @@
               return;
             }
             const message = err.isNetworkError
-              ? "Không thể kết nối backend. Tài khoản chưa được tạo; vui lòng thử lại khi máy chủ hoạt động."
+              ? "Chưa nhận được phản hồi từ máy chủ nên chưa xác nhận được tài khoản đã tạo hay chưa. Nếu tài khoản đã được tạo, hãy kiểm tra Gmail (kể cả Spam) và xác minh email trước khi đăng nhập. Nếu chưa nhận được thư, hãy đăng nhập để yêu cầu gửi lại email xác minh."
               : `Đăng ký không thành công: ${err.message || "Lỗi không xác định."}`;
             showAuthError(message);
-            showToast(message, "error");
+            showToast(message, err.isNetworkError ? "warning" : "error");
             return;
           }
 
@@ -7854,7 +7854,7 @@
           });
           showToast(
             backendRes.email_sent
-              ? "Đã gửi email xác minh. Hãy kiểm tra Hộp thư đến hoặc Spam."
+              ? "Đã gửi email xác minh. Hãy kiểm tra Gmail, kể cả Spam."
               : "Tài khoản đã tạo nhưng email xác minh chưa được gửi.",
             backendRes.email_sent ? "success" : "warning",
           );
