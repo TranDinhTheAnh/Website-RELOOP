@@ -5839,7 +5839,7 @@
           class="rounded-3xl bg-sand-50 border border-sand-200 p-6 sm:p-8 space-y-6"
         >
           <div
-            class="flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+            class="flex flex-col lg:flex-row lg:items-center justify-between gap-3"
           >
             <div>
               <span
@@ -5851,15 +5851,16 @@
                 Gợi ý phối đồ từ Tủ đồ của bạn + Sàn RE:LOOP
               </h3>
               <p class="text-xs sm:text-sm text-ink-600">
-                Kết hợp món đồ bạn đã có sẵn với các thiết kế đang bán trên sàn
-                để tạo set đồ chuẩn xu hướng, tránh mua trùng lặp.
+                AI kết hợp món đồ bạn đã có với sản phẩm đang bán theo phong
+                cách, dịp mặc và ngân sách bạn chọn.
               </p>
             </div>
-            <div class="flex items-center gap-2">
+            <div class="grid w-full grid-cols-1 gap-2 sm:grid-cols-3 lg:w-auto lg:min-w-[520px]">
               <select
                 id="stylist-vibe"
                 onchange="generateAIOutfits(true)"
-                class="px-3.5 py-2 rounded-xl bg-white border border-sand-200 text-xs font-semibold text-ink-900"
+                aria-label="Phong cách phối đồ"
+                class="min-w-0 px-3.5 py-2 rounded-xl bg-white border border-sand-200 text-xs font-semibold text-ink-900"
               >
                 <option value="Minimalist Thanh Lịch">
                   Phong cách: Minimalist Thanh Lịch
@@ -5871,9 +5872,38 @@
                   Phong cách: Dạo Phố Cuối Tuần
                 </option>
               </select>
+              <select
+                id="stylist-occasion"
+                onchange="generateAIOutfits(true)"
+                aria-label="Dịp mặc"
+                class="min-w-0 px-3.5 py-2 rounded-xl bg-white border border-sand-200 text-xs font-semibold text-ink-900"
+              >
+                <option value="Tự do">Dịp: Tự do</option>
+                <option value="Đi làm">Dịp: Đi làm</option>
+                <option value="Dạo phố">Dịp: Dạo phố</option>
+                <option value="Hẹn hò">Dịp: Hẹn hò</option>
+                <option value="Dự tiệc">Dịp: Dự tiệc</option>
+              </select>
+              <input
+                id="stylist-budget"
+                type="number"
+                min="30000"
+                max="100000000"
+                step="10000"
+                inputmode="numeric"
+                aria-label="Ngân sách tối đa cho món cần mua"
+                placeholder="Ngân sách món cần mua (₫)"
+                onchange="generateAIOutfits(true)"
+                class="min-w-0 px-3.5 py-2 rounded-xl bg-white border border-sand-200 text-xs font-semibold text-ink-900"
+              />
             </div>
           </div>
 
+          <p
+            id="ai-stylist-status"
+            class="text-xs text-ink-500"
+            aria-live="polite"
+          ></p>
           <div
             id="ai-outfits-grid"
             class="grid grid-cols-1 lg:grid-cols-2 gap-6"
@@ -7133,6 +7163,8 @@
         activeContextProductId: null,
         chatHistory: [],
         activeStylistWardrobeId: null,
+        aiStylistCache: new Map(),
+        aiStylistRequestId: 0,
         reconsignTargetItem: null,
         pendingSellImageUrl:
           "https://images.unsplash.com/photo-1596755094514-f87e34085b2c?auto=format&fit=crop&w=600&q=80",
@@ -12269,13 +12301,103 @@
         }
       }
 
-      function generateAIOutfits(notify = false, focusWardrobeId = null) {
-        const vibe = document.getElementById("stylist-vibe").value;
+      function renderAIOutfits(outfits, source) {
         const grid = document.getElementById("ai-outfits-grid");
-        if (state.wardrobe.length === 0 || state.products.length === 0) {
-          if (state.wardrobe.length === 0) {
-            state.activeStylistWardrobeId = null;
-          }
+        const sourceLabel =
+          source === "ai"
+            ? "Phối riêng bởi AI"
+            : source === "rules_fallback"
+              ? "Gợi ý cơ bản"
+              : "Đề xuất theo phong cách";
+        grid.innerHTML = outfits
+          .map(
+            (set) => `
+        <div class="bg-white rounded-3xl border border-sand-200 p-5 space-y-4 shadow-2xs">
+          <div class="flex items-center justify-between gap-2">
+            <h4 class="font-bold text-base text-ink-900">${escapeHtml(set.title)}</h4>
+            <span class="shrink-0 text-[11px] font-semibold text-eco-700 bg-eco-50 px-2.5 py-1 rounded-full">${sourceLabel}</span>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="rounded-2xl bg-sand-50 p-3 border border-sand-200 space-y-2">
+              <span class="inline-block px-2 py-0.5 rounded-md bg-ink-900 text-white text-[10px] font-bold">✓ Có sẵn trong Tủ đồ</span>
+              <img src="${escapeHtml(normalizeProductImage(set.owned.image_url))}" alt="${escapeHtml(set.owned.name)}" loading="lazy" decoding="async" class="w-full h-32 object-cover rounded-xl" />
+              <p class="text-xs font-bold text-ink-900 line-clamp-1">${escapeHtml(set.owned.name)}</p>
+            </div>
+            <div class="rounded-2xl bg-eco-50/40 p-3 border border-eco-200 space-y-2">
+              <span class="inline-block px-2 py-0.5 rounded-md bg-eco-600 text-white text-[10px] font-bold">+ Đang bán trên sàn</span>
+              <img src="${escapeHtml(normalizeProductImage(set.storeItem.image_url))}" alt="${escapeHtml(set.storeItem.name)}" loading="lazy" decoding="async" class="w-full h-32 object-cover rounded-xl" />
+              <p class="text-xs font-bold text-ink-900 line-clamp-1">${escapeHtml(set.storeItem.name)}</p>
+              <p class="text-xs font-bold text-eco-700">${formatVND(set.storeItem.price)}</p>
+            </div>
+          </div>
+          <p class="text-xs text-ink-600 leading-relaxed">💡 <strong>Gợi ý phối:</strong> ${escapeHtml(set.tip)}</p>
+          <button data-product-id="${escapeHtml(set.storeItem.id)}" onclick="addToCart(this.dataset.productId)" class="w-full py-2.5 rounded-xl bg-ink-900 hover:bg-eco-600 text-white text-xs font-semibold transition">
+            + Thêm món còn thiếu vào giỏ (${formatVND(set.storeItem.price)})
+          </button>
+        </div>
+      `,
+          )
+          .join("");
+      }
+
+      let stylistRequestSequence = 0;
+
+      async function generateAIOutfits(notify = false, focusWardrobeId = null) {
+        const requestId = ++stylistRequestSequence;
+        const vibe = document.getElementById("stylist-vibe").value;
+        const occasion = document.getElementById("stylist-occasion").value;
+        const budgetInput = document.getElementById("stylist-budget");
+        const budgetValue = budgetInput.value.trim();
+        const maxPrice = budgetValue ? Number(budgetValue) : null;
+        const grid = document.getElementById("ai-outfits-grid");
+        const status = document.getElementById("ai-stylist-status");
+
+        if (
+          budgetValue &&
+          (!Number.isInteger(maxPrice) || maxPrice < 30000 || maxPrice > 100000000)
+        ) {
+          status.textContent = "Ngân sách cần từ 30.000₫ đến 100.000.000₫.";
+          showToast(status.textContent, "warning");
+          return;
+        }
+        if (state.wardrobe.length === 0) {
+          state.activeStylistWardrobeId = null;
+          grid.replaceChildren();
+          status.textContent = "Thêm món đầu tiên vào tủ đồ để bắt đầu phối.";
+          return;
+        }
+
+        if (focusWardrobeId) {
+          state.activeStylistWardrobeId = focusWardrobeId;
+        }
+        const anchorItem =
+          state.wardrobe.find(
+            (item) => item.id === state.activeStylistWardrobeId,
+          ) || state.wardrobe[0];
+        state.activeStylistWardrobeId = anchorItem.id;
+        const ownedSourceIds = new Set(
+          state.wardrobe.map((item) => item.source_product_id).filter(Boolean),
+        );
+        const eligibleProducts = state.products.filter(
+          (product) =>
+            product.seller_id !== state.user?.id &&
+            !ownedSourceIds.has(product.id) &&
+            (maxPrice === null || product.price <= maxPrice),
+        );
+        const cacheKey = [
+          anchorItem.id,
+          vibe,
+          occasion,
+          maxPrice === null ? "any-budget" : maxPrice,
+        ].join("|");
+        const cached = state.aiStylistCache.get(cacheKey);
+        if (
+          !notify &&
+          cached &&
+          Date.now() - cached.createdAt < 120000
+        ) {
+          renderAIOutfits(cached.outfits, cached.source);
+          status.textContent = cached.message;
           return;
         }
 
@@ -12330,95 +12452,141 @@
           const categoryRank = style.categories.indexOf(product.category);
           const categoryScore =
             categoryRank === -1 ? 0 : style.categories.length - categoryRank;
-          if (matchesTrend) {
-            return 20 + categoryScore;
-          }
-          if (matchesKeywords) {
-            return 10 + categoryScore;
-          }
+          if (matchesTrend) return 20 + categoryScore;
+          if (matchesKeywords) return 10 + categoryScore;
           return categoryScore;
         };
-
-        if (focusWardrobeId) {
-          state.activeStylistWardrobeId = focusWardrobeId;
-        }
-        const anchorItem =
-          state.wardrobe.find(
-            (item) => item.id === state.activeStylistWardrobeId,
-          ) || state.wardrobe[0];
-        state.activeStylistWardrobeId = anchorItem.id;
-        const base1 = anchorItem;
-        const base2 = anchorItem;
         const usedProductIds = new Set();
-        const chooseProduct = (ownedItem) => {
-          const complementary = state.products.filter(
-            (product) =>
-              product.category !== ownedItem.category &&
-              !usedProductIds.has(product.id),
+        const chooseProduct = () => {
+          const available = eligibleProducts.filter(
+            (product) => !usedProductIds.has(product.id),
           );
-          const candidates =
-            complementary.length > 0
-              ? complementary
-              : state.products.filter(
-                  (product) => !usedProductIds.has(product.id),
-                );
+          const complementary = available.filter(
+            (product) => product.category !== anchorItem.category,
+          );
+          const candidates = complementary.length ? complementary : available;
           const selected =
             [...candidates].sort(
               (a, b) => getStyleScore(b) - getStyleScore(a),
-            )[0] || state.products[0];
-          usedProductIds.add(selected.id);
+            )[0] || null;
+          if (selected) usedProductIds.add(selected.id);
           return selected;
         };
-        const match1 = chooseProduct(base1);
-        const match2 = chooseProduct(base2);
+        const fallbackOutfits = [chooseProduct(), chooseProduct()]
+          .filter(Boolean)
+          .map((storeItem, index) => ({
+            title: `${vibe} • Set #${index + 1}`,
+            owned: anchorItem,
+            storeItem,
+            tip: `${anchorItem.name} (${anchorItem.color}) phối cùng ${storeItem.name} (${storeItem.color}) tạo ${style.note}${occasion !== "Tự do" ? `, phù hợp dịp ${occasion.toLowerCase()}` : ""}.`,
+          }));
 
-        const outfits = [
-          {
-            title: `${vibe} • Set #1`,
-            owned: base1,
-            storeItem: match1,
-            tip: `${base1.name} (${base1.color}) phối cùng ${match1.name} (${match1.color}) tạo ${style.note}.`,
-          },
-          {
-            title: `${vibe} • Set #2`,
-            owned: base2,
-            storeItem: match2,
-            tip: `${base2.name} (${base2.color}) phối cùng ${match2.name} (${match2.color}) tạo ${style.note}.`,
-          },
-        ];
+        const canRequestAI = state.token && !isLocalAuthToken(state.token);
+        if (!eligibleProducts.length && !canRequestAI) {
+          renderAIOutfits([], "rules_fallback");
+          status.textContent = maxPrice
+            ? `Chưa có món đang bán phù hợp trong ngân sách ${formatVND(maxPrice)}.`
+            : "Hiện chưa có sản phẩm phù hợp để phối với món đồ này.";
+          return;
+        }
 
-        grid.innerHTML = outfits
-          .map(
-            (set) => `
-        <div class="bg-white rounded-3xl border border-sand-200 p-5 space-y-4 shadow-2xs">
-          <div class="flex items-center justify-between">
-            <h4 class="font-bold text-base text-ink-900">${escapeHtml(set.title)}</h4>
-            <span class="text-[11px] font-semibold text-eco-700 bg-eco-50 px-2.5 py-1 rounded-full">Đề xuất theo phong cách</span>
-          </div>
-          <div class="grid grid-cols-2 gap-3">
-            <div class="rounded-2xl bg-sand-50 p-3 border border-sand-200 space-y-2">
-              <span class="inline-block px-2 py-0.5 rounded-md bg-ink-900 text-white text-[10px] font-bold">✓ Có sẵn trong Tủ đồ</span>
-              <img src="${escapeHtml(normalizeProductImage(set.owned.image_url))}" alt="${escapeHtml(set.owned.name)}" loading="lazy" decoding="async" class="w-full h-32 object-cover rounded-xl" />
-              <p class="text-xs font-bold text-ink-900 line-clamp-1">${escapeHtml(set.owned.name)}</p>
-            </div>
-            <div class="rounded-2xl bg-eco-50/40 p-3 border border-eco-200 space-y-2">
-              <span class="inline-block px-2 py-0.5 rounded-md bg-eco-600 text-white text-[10px] font-bold">+ Đang bán trên sàn</span>
-              <img src="${escapeHtml(normalizeProductImage(set.storeItem.image_url))}" alt="${escapeHtml(set.storeItem.name)}" loading="lazy" decoding="async" class="w-full h-32 object-cover rounded-xl" />
-              <p class="text-xs font-bold text-ink-900 line-clamp-1">${escapeHtml(set.storeItem.name)}</p>
-              <p class="text-xs font-bold text-eco-700">${formatVND(set.storeItem.price)}</p>
-            </div>
-          </div>
-          <p class="text-xs text-ink-600 leading-relaxed">💡 <strong>Gợi ý AI:</strong> ${escapeHtml(set.tip)}</p>
-          <button data-product-id="${escapeHtml(set.storeItem.id)}" onclick="addToCart(this.dataset.productId)" class="w-full py-2.5 rounded-xl bg-ink-900 hover:bg-eco-600 text-white text-xs font-semibold transition">
-            + Thêm món còn thiếu vào giỏ (${formatVND(set.storeItem.price)})
-          </button>
-        </div>
-      `,
-          )
-          .join("");
+        renderAIOutfits(fallbackOutfits, "rules_fallback");
+        status.textContent = eligibleProducts.length
+          ? "Đang nhờ AI phối đồ theo tủ đồ và lựa chọn của bạn…"
+          : "Đang kiểm tra sản phẩm phù hợp trong catalog…";
 
-        if (notify)
-          showToast("AI Stylist đã cập nhật gợi ý phối đồ mới!", "info");
+        if (!canRequestAI) {
+          status.textContent = eligibleProducts.length
+            ? "Đang hiển thị gợi ý cơ bản. Đăng nhập để dùng AI Stylist."
+            : "Hiện chưa có sản phẩm phù hợp để phối với món đồ này.";
+          return;
+        }
+
+        try {
+          const query = new URLSearchParams({
+            anchor_item_id: anchorItem.id,
+            trend: vibe,
+            occasion,
+          });
+          if (maxPrice !== null) query.set("max_price", String(maxPrice));
+          const response = await apiFetch(`/api/ai/stylist?${query}`, {
+            method: "GET",
+          });
+          if (requestId !== stylistRequestSequence) return;
+
+          if (response.source === "none" && !response.outfits?.length) {
+            renderAIOutfits([], "rules_fallback");
+            status.textContent =
+              response.message || "Hiện chưa có sản phẩm phù hợp.";
+            return;
+          }
+          if (!Array.isArray(response.outfits)) {
+            throw new Error("AI Stylist trả về định dạng gợi ý không hợp lệ.");
+          }
+
+          const aiOutfits = response.outfits.map((recommendation, index) => {
+            const marketItem = recommendation.recommended_market_item;
+            if (!marketItem || !marketItem.id || !recommendation.stylist_tip) {
+              return null;
+            }
+            let storeItem = state.products.find(
+              (product) => product.id === marketItem.id,
+            );
+            if (!storeItem) {
+              storeItem = {
+                ...marketItem,
+                name: marketItem.name || marketItem.title,
+                condition_percent:
+                  marketItem.condition_percent || marketItem.condition_score,
+              };
+              state.products.push(storeItem);
+            }
+            return {
+              title: `${vibe} • Set #${index + 1}`,
+              owned: anchorItem,
+              storeItem,
+              tip: recommendation.stylist_tip,
+            };
+          }).filter(Boolean);
+
+          if (!aiOutfits.length) {
+            throw new Error("AI Stylist chưa chọn được sản phẩm hợp lệ.");
+          }
+          const source =
+            response.source === "ai" ? "ai" : "rules_fallback";
+          const message =
+            response.message ||
+            (source === "ai"
+              ? "Gợi ý được cá nhân hóa từ tủ đồ và sản phẩm đang bán."
+              : "AI tạm thời không khả dụng; đang hiển thị gợi ý cơ bản.");
+          renderAIOutfits(aiOutfits, source);
+          status.textContent = message;
+          state.aiStylistCache.set(cacheKey, {
+            createdAt: Date.now(),
+            outfits: aiOutfits,
+            source,
+            message,
+          });
+          if (notify) {
+            showToast(
+              source === "ai"
+                ? "AI Stylist đã phối set đồ phù hợp với bạn."
+                : "AI đang bận; đây là gợi ý cơ bản thay thế.",
+              source === "ai" ? "success" : "warning",
+            );
+          }
+        } catch (error) {
+          if (requestId !== stylistRequestSequence) return;
+          console.warn(
+            "AI Stylist request failed; showing rule-based fallback.",
+            error.message,
+          );
+          status.textContent =
+            "AI chưa kết nối được; đang dùng gợi ý cơ bản theo phong cách và ngân sách.";
+          if (notify) {
+            showToast(status.textContent, "warning");
+          }
+        }
       }
 
       // =========================================================

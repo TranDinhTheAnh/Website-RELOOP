@@ -350,6 +350,214 @@ class AuditFixTests(unittest.TestCase):
         self.assertEqual(payload["model"], "gpt-test")
         self.assertEqual(result["choices"][0]["message"]["content"], "ok")
 
+    def test_ai_stylist_uses_llm_and_limits_candidates_to_budget_and_owner(self):
+        with self.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO wardrobe_items (
+                    id, user_id, source_product_id, title, category, size, color,
+                    material, original_price, paid_price, image_url, purchased_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "wardrobe-ai-anchor",
+                    "u-demo",
+                    "previously-owned-product",
+                    "Quần linen beige",
+                    "Quần",
+                    "M",
+                    "Be",
+                    "Linen",
+                    500000,
+                    250000,
+                    "https://example.test/wardrobe.jpg",
+                    datetime.utcnow().isoformat(),
+                ),
+            )
+
+            conn.execute(
+                """
+                INSERT INTO products (
+                    id, seller_id, title, category, size, color, material,
+                    condition_score, condition_label, ai_note, price, original_price,
+                    cycle, points_reward, trend, fit_advice, image_url, status, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "p-ai-own-listing",
+                    "u-demo",
+                    "Áo tự đăng bán",
+                    "Áo",
+                    "M",
+                    "Đen",
+                    "Cotton",
+                    95,
+                    "Như mới",
+                    "Sản phẩm kiểm thử",
+                    100000,
+                    300000,
+                    1,
+                    50,
+                    "Minimalist Thanh Lịch",
+                    "M",
+                    "https://example.test/own-listing.jpg",
+                    "available",
+                    datetime.utcnow().isoformat(),
+                ),
+            )
+
+        model_response = {
+            "choices": [
+                {
+                    "message": {
+                        "content": json.dumps(
+                            {
+                                "recommendations": [
+                                    {
+                                        "product_id": "p-1",
+                                        "stylist_tip": (
+                                            "Áo linen sáng màu tạo tổng thể cân bằng "
+                                            "với quần beige."
+                                        ),
+                                    }
+                                ]
+                            },
+                            ensure_ascii=False,
+                        )
+                    }
+                }
+            ]
+        }
+        with patch.object(
+            backend,
+            "call_vilao_chat_completion",
+            return_value=model_response,
+        ) as call_ai:
+            result = backend.ai_stylist_recommendations(
+                anchor_item_id="wardrobe-ai-anchor",
+                trend="Công Sở Hiện Đại",
+                occasion="Đi làm",
+                max_price=300000,
+                user=self.user,
+            )
+
+        self.assertEqual(result["source"], "ai")
+        self.assertEqual(len(result["outfits"]), 1)
+        self.assertEqual(
+            result["outfits"][0]["recommended_market_item"]["id"],
+            "p-1",
+        )
+        self.assertIn("quần beige", result["outfits"][0]["stylist_tip"])
+        self.assertEqual(result["outfits"][0]["missing_item_price"], 290000)
+        self.assertEqual(
+            call_ai.call_args.kwargs["response_format"],
+            {"type": "json_object"},
+        )
+        prompt_context = json.loads(call_ai.call_args.kwargs["messages"][1]["content"])
+        self.assertEqual(prompt_context["preferences"]["occasion"], "Đi làm")
+        self.assertEqual(prompt_context["preferences"]["max_price_vnd"], 300000)
+        self.assertTrue(
+            all(item["price_vnd"] <= 300000 for item in prompt_context["catalog"])
+        )
+        self.assertNotIn(
+            "p-ai-own-listing",
+            {item["id"] for item in prompt_context["catalog"]},
+        )
+        self.assertNotIn(self.user["email"], json.dumps(prompt_context))
+
+    def test_ai_stylist_rejects_unowned_anchor_and_falls_back_on_invalid_model_output(self):
+        with self.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO wardrobe_items (
+                    id, user_id, source_product_id, title, category, size, color,
+                    material, original_price, paid_price, image_url, purchased_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "wardrobe-fallback-anchor",
+                    "u-demo",
+                    None,
+                    "Quần linen beige",
+                    "Quần",
+                    "M",
+                    "Be",
+                    "Linen",
+                    500000,
+                    250000,
+                    "https://example.test/wardrobe.jpg",
+                    datetime.utcnow().isoformat(),
+                ),
+            )
+
+        with self.assertRaises(backend.HTTPException) as invalid_anchor:
+            backend.ai_stylist_recommendations(
+                anchor_item_id="another-users-wardrobe-item",
+                trend="Minimalist Thanh Lịch",
+                occasion=None,
+                max_price=None,
+                user=self.user,
+            )
+        self.assertEqual(invalid_anchor.exception.status_code, 404)
+
+        with patch.object(
+            backend,
+            "call_vilao_chat_completion",
+            return_value={
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "recommendations": [
+                                        {
+                                            "product_id": "not-in-the-live-catalog",
+                                            "stylist_tip": "Sản phẩm tưởng tượng.",
+                                        }
+                                    ]
+                                }
+                            )
+                        }
+                    }
+                ]
+            },
+        ):
+            result = backend.ai_stylist_recommendations(
+                anchor_item_id="wardrobe-fallback-anchor",
+                trend="Minimalist Thanh Lịch",
+                occasion=None,
+                max_price=None,
+                user=self.user,
+            )
+
+        self.assertEqual(result["source"], "rules_fallback")
+        self.assertTrue(result["outfits"])
+        self.assertTrue(
+            all(
+                outfit["recommended_market_item"]["id"].startswith("p-")
+                for outfit in result["outfits"]
+            )
+        )
+
+        with patch.object(
+            backend,
+            "call_vilao_chat_completion",
+            side_effect=backend.HTTPException(
+                status_code=502,
+                detail="AI provider unavailable",
+            ),
+        ):
+            unavailable_result = backend.ai_stylist_recommendations(
+                anchor_item_id="wardrobe-fallback-anchor",
+                trend="Minimalist Thanh Lịch",
+                occasion=None,
+                max_price=None,
+                user=self.user,
+            )
+
+        self.assertEqual(unavailable_result["source"], "rules_fallback")
+        self.assertTrue(unavailable_result["outfits"])
+
     def test_neon_storage_upload_and_private_read_url(self):
         previous = (
             backend.AWS_ACCESS_KEY_ID,

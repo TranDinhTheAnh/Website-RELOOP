@@ -41,6 +41,8 @@ Không commit `.env.local`; dùng giá trị tương ứng từ `neon env pull`/
 
 Neon AI Gateway được ưu tiên khi có cả `NEON_AI_GATEWAY_TOKEN` và `NEON_AI_GATEWAY_BASE_URL`; model mặc định là `gpt-5-4-mini`, có thể đổi bằng `NEON_AI_MODEL`. Nếu không có cấu hình Neon, backend tiếp tục dùng `VILAO_API_KEY` hoặc `KIMI_API_KEY`. AI Gateway cần credits và quyền truy cập model.
 
+AI Stylist gửi món đồ neo, lựa chọn phong cách/dịp mặc/ngân sách và các sản phẩm còn bán phù hợp từ backend tới model để chọn tối đa hai cách phối cùng lời giải thích. Backend loại sản phẩm không còn hàng, của chính người dùng, khác danh mục khi có lựa chọn và vượt ngân sách; kết quả từ model chỉ được chấp nhận nếu ID nằm trong danh sách ứng viên. Nếu AI lỗi hoặc trả kết quả không hợp lệ, ứng dụng hiển thị rõ và dùng bộ quy tắc gợi ý cơ bản hiện có.
+
 Bucket private `uploads` nhận ảnh dạng base64 khi đăng sản phẩm/ký gửi lại; backend lưu object key trong Postgres và trả presigned read URL có hạn 7 ngày. Ảnh cũ và URL ảnh ngoài tiếp tục hoạt động, không tự động migrate. Cần cấu hình đủ `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_ENDPOINT_URL_S3` và `AWS_REGION` từ Neon trên Render.
 
 Neon Realtime đã được provision nhưng tin nhắn vẫn dùng WebSocket FastAPI hiện có; Neon Realtime live queries chưa được tích hợp vào UI. Neon Auth cũng chưa được nối vào đăng nhập theo lựa chọn giữ custom auth.
