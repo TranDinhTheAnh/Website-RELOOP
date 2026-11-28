@@ -33,6 +33,8 @@ Trong trang quản trị tài khoản, admin có thể xóa vĩnh viễn ngườ
 
 Tài khoản đăng ký mới chỉ đăng nhập được sau khi mở email xác minh và bấm nút xác nhận. Liên kết có hiệu lực 24 giờ; người dùng có thể yêu cầu gửi lại email xác minh từ màn hình đăng nhập, tối đa một email mỗi phút (gửi lại ngay được nếu lần gửi trước lỗi).
 
+Khi checkout được ghi nhận, RE:LOOP gửi email xác nhận cho người mua và email thông báo riêng cho từng người bán có sản phẩm trong đơn. Email người bán chỉ liệt kê sản phẩm của họ; đơn online đang chờ thanh toán được ghi rõ để người bán chưa gửi hàng sớm.
+
 Không commit `.env.local`; dùng giá trị tương ứng từ `neon env pull`/Neon Console làm biến secret trên Render. Có thể đặt `RELOOP_DB_PATH` để chọn tệp SQLite khi chạy local mà không cấu hình `DATABASE_URL`.
 
 Neon AI Gateway được ưu tiên khi có cả `NEON_AI_GATEWAY_TOKEN` và `NEON_AI_GATEWAY_BASE_URL`; model mặc định là `gpt-5-4-mini`, có thể đổi bằng `NEON_AI_MODEL`. Nếu không có cấu hình Neon, backend tiếp tục dùng `VILAO_API_KEY` hoặc `KIMI_API_KEY`. AI Gateway cần credits và quyền truy cập model.

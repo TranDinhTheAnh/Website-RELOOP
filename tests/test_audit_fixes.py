@@ -23,6 +23,13 @@ class AuditFixTests(unittest.TestCase):
         self.db_path = os.path.join(self.temp_dir.name, "test.db")
         backend.DB_PATH = self.db_path
         backend.init_db()
+        self.order_email_patch = patch.object(
+            backend,
+            "send_order_notification_emails",
+            return_value=None,
+        )
+        self.order_email_patch.start()
+        self.addCleanup(self.order_email_patch.stop)
         self.user = {"id": "u-demo", "email": "minhanh@reloop.vn", "name": "Minh Anh"}
         self.admin = {"id": "admin-test", "email": "admin@test.reloop"}
 
@@ -504,6 +511,42 @@ class AuditFixTests(unittest.TestCase):
                 1,
             )
 
+    def test_checkout_prepares_buyer_and_per_seller_email_details(self):
+        seller_a = self.insert_user("seller-email-a", "seller-a@example.vn")
+        seller_b = self.insert_user("seller-email-b", "seller-b@example.vn")
+        with self.connect() as conn:
+            conn.execute(
+                "UPDATE products SET seller_id = ? WHERE id = 'p-1'",
+                (seller_a["id"],),
+            )
+            conn.execute(
+                "UPDATE products SET seller_id = ? WHERE id = 'p-4'",
+                (seller_b["id"],),
+            )
+
+        payload = backend.CheckoutRequest(
+            product_ids=["p-1", "p-4"],
+            recipient_name="Người nhận thử",
+            phone="0912345678",
+            shipping_address="12 Nguyễn Huệ, Quận 1, TP HCM",
+            payment_method="BANK_TRANSFER",
+        )
+        with patch.object(backend, "send_order_notification_emails") as send_emails:
+            order = backend.checkout_order(payload, self.user)
+
+        send_emails.assert_called_once()
+        email_order = send_emails.call_args.args[0]
+        self.assertEqual(email_order["order_id"], order["order_id"])
+        self.assertEqual(email_order["buyer_email"], self.user["email"])
+        self.assertEqual(email_order["recipient_name"], "Người nhận thử")
+        self.assertEqual(email_order["phone"], "0912345678")
+        self.assertEqual(email_order["payment_status"], "pending")
+        self.assertEqual(len(email_order["items"]), 2)
+        sellers = {seller["email"]: seller for seller in email_order["sellers"]}
+        self.assertEqual(set(sellers), {"seller-a@example.vn", "seller-b@example.vn"})
+        self.assertEqual(len(sellers["seller-a@example.vn"]["items"]), 1)
+        self.assertEqual(len(sellers["seller-b@example.vn"]["items"]), 1)
+
     def test_voucher_redemption_rejects_invalid_values_and_debits_atomically(self):
         with self.assertRaises(Exception):
             backend.RedeemVoucherRequest(points_cost=-1, discount_amount=20000)
@@ -855,6 +898,67 @@ class AuditFixTests(unittest.TestCase):
         payload = json.loads(urlopen.call_args.args[0].data)
         self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;", payload["html"])
         self.assertNotIn("<script>", payload["html"])
+
+    def test_order_emails_include_seller_buyer_and_recipient_details(self):
+        order = {
+            "order_id": "ord-email-test",
+            "buyer_name": "Người mua",
+            "buyer_email": "buyer@example.vn",
+            "recipient_name": "Người nhận",
+            "phone": "0912345678",
+            "shipping_address": "12 Nguyễn Huệ, Quận 1",
+            "items": [
+                {
+                    "title": "Áo linen",
+                    "size": "M",
+                    "color": "Trắng",
+                    "price": 290000,
+                    "seller_name": "Người bán A",
+                    "seller_email": "seller-a@example.vn",
+                }
+            ],
+            "sellers": [
+                {
+                    "name": "Người bán A",
+                    "email": "seller-a@example.vn",
+                    "items": [
+                        {
+                            "title": "Áo linen",
+                            "size": "M",
+                            "color": "Trắng",
+                            "price": 290000,
+                        }
+                    ],
+                }
+            ],
+            "subtotal_vnd": 290000,
+            "discount_vnd": 10000,
+            "total_vnd": 280000,
+            "payment_label": "Chuyển khoản",
+            "payment_status": "pending",
+            "status_label": "Chờ thanh toán",
+        }
+        with patch.object(
+            backend,
+            "_send_resend_email",
+            return_value=(True, None),
+        ) as send_resend:
+            backend.send_buyer_order_confirmation(order)
+            buyer_email = send_resend.call_args.args[0]
+            self.assertEqual(buyer_email["to"], ["buyer@example.vn"])
+            self.assertIn("seller-a@example.vn", buyer_email["html"])
+            self.assertIn("Người nhận", buyer_email["html"])
+            self.assertIn("12 Nguyễn Huệ", buyer_email["html"])
+            self.assertIn("280.000 ₫", buyer_email["html"])
+            self.assertIn("seller-a@example.vn", buyer_email["text"])
+
+            backend.send_seller_order_notification(order, order["sellers"][0])
+            seller_email = send_resend.call_args.args[0]
+            self.assertEqual(seller_email["to"], ["seller-a@example.vn"])
+            self.assertIn("buyer@example.vn", seller_email["html"])
+            self.assertIn("Người nhận", seller_email["html"])
+            self.assertIn("12 Nguyễn Huệ", seller_email["html"])
+            self.assertIn("chờ thanh toán", seller_email["text"].lower())
 
     def test_welcome_email_logs_resend_error_details_without_secrets(self):
         response_body = json.dumps({

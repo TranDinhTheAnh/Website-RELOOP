@@ -454,10 +454,12 @@ def _send_resend_email(
             error_name,
             error_message,
         )
-        purpose_label = {"welcome": "chào mừng", "verification": "xác minh"}.get(
-            purpose,
-            purpose,
-        )
+        purpose_label = {
+            "welcome": "chào mừng",
+            "verification": "xác minh",
+            "order_confirmation": "xác nhận đơn hàng",
+            "seller_order": "thông báo đơn hàng",
+        }.get(purpose, purpose)
         return False, (
             f"Không gửi được email {purpose_label}. Kiểm tra cấu hình Resend "
             "và địa chỉ gửi đã xác minh."
@@ -584,6 +586,208 @@ def _allow_immediate_verification_resend(user_id: str, token: str) -> None:
             """,
             (retry_time, user_id, token_hash),
         )
+
+
+def _format_vnd(amount: int) -> str:
+    return f"{amount:,}".replace(",", ".") + " ₫"
+
+
+def _reloop_order_email_html(preheader: str, body_html: str) -> str:
+    safe_preheader = html.escape(preheader)
+    return f"""<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width">
+    <title>Thông tin đơn hàng RE:LOOP</title>
+  </head>
+  <body style="margin:0;padding:0;background-color:#f3f6f1;font-family:Arial,Helvetica,sans-serif;color:#18352c;">
+    <span style="display:none!important;visibility:hidden;opacity:0;height:0;width:0;overflow:hidden;">{safe_preheader}</span>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#f3f6f1;">
+      <tr><td align="center" style="padding:36px 16px;">
+        <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:600px;background-color:#ffffff;border:1px solid #e3e9e2;border-radius:20px;overflow:hidden;">
+          <tr><td align="center" style="padding:28px;background-color:#123d31;">
+            <p style="margin:0;color:#d5ead9;font-size:11px;font-weight:700;letter-spacing:2px;">THỜI TRANG TUẦN HOÀN</p>
+            <p style="margin:9px 0 0;color:#ffffff;font-size:25px;font-weight:800;letter-spacing:1px;">RE:LOOP</p>
+          </td></tr>
+          <tr><td style="padding:30px 32px 18px;">{body_html}</td></tr>
+          <tr><td style="padding:16px 32px;background-color:#f7f9f6;border-top:1px solid #e8eee8;">
+            <p style="margin:0;color:#718078;font-size:11px;line-height:1.6;">Email tự động từ RE:LOOP. Vui lòng không trả lời trực tiếp thư này.</p>
+            <p style="margin:5px 0 0;color:#718078;font-size:11px;">RE:LOOP · Mặc đẹp. Sống xanh.</p>
+          </td></tr>
+        </table>
+      </td></tr>
+    </table>
+  </body>
+</html>"""
+
+
+def _order_email_items_html(items: List[Dict[str, Any]], include_seller: bool) -> str:
+    rows = []
+    for item in items:
+        title = html.escape(str(item["title"]))
+        details = " · ".join(
+            html.escape(str(value))
+            for value in (item.get("size"), item.get("color"))
+            if value
+        )
+        seller_line = ""
+        if include_seller:
+            seller_name = html.escape(str(item.get("seller_name") or "RE:LOOP"))
+            seller_email = item.get("seller_email")
+            seller_contact = (
+                f" · {html.escape(str(seller_email))}" if seller_email else ""
+            )
+            seller_line = (
+                f'<br><span style="color:#687970;font-size:12px;">Người bán: '
+                f"{seller_name}{seller_contact}</span>"
+            )
+        rows.append(
+            "<tr>"
+            '<td style="padding:13px 10px;border-bottom:1px solid #edf1ec;">'
+            f'<strong style="color:#18352c;font-size:14px;">{title}</strong>'
+            f'<br><span style="color:#687970;font-size:12px;">{details}</span>'
+            f"{seller_line}</td>"
+            '<td align="right" style="padding:13px 10px;border-bottom:1px solid #edf1ec;'
+            'color:#18352c;font-size:13px;white-space:nowrap;">'
+            f"{_format_vnd(item['price'])}</td>"
+            "</tr>"
+        )
+    return (
+        '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" '
+        'border="0" style="border-collapse:collapse;">'
+        '<tr><th align="left" style="padding:9px 10px;background-color:#f7f9f6;'
+        'color:#52645d;font-size:11px;text-transform:uppercase;letter-spacing:.5px;">'
+        "Sản phẩm</th><th align=\"right\" style=\"padding:9px 10px;background-color:#f7f9f6;"
+        'color:#52645d;font-size:11px;text-transform:uppercase;letter-spacing:.5px;">'
+        "Thành tiền</th></tr>"
+        + "".join(rows)
+        + "</table>"
+    )
+
+
+def send_buyer_order_confirmation(order: Dict[str, Any]) -> tuple[bool, Optional[str]]:
+    buyer_name = html.escape(str(order.get("buyer_name") or "bạn"))
+    recipient_name = html.escape(str(order["recipient_name"]))
+    phone = html.escape(str(order["phone"]))
+    address = html.escape(str(order["shipping_address"]))
+    order_id = html.escape(str(order["order_id"]))
+    items_html = _order_email_items_html(order["items"], include_seller=True)
+    body = f"""<p style="margin:0 0 10px;color:#527265;font-size:14px;">Xin chào {buyer_name},</p>
+<h1 style="margin:0 0 12px;color:#18352c;font-size:24px;line-height:1.35;">Đơn hàng của bạn đã được ghi nhận</h1>
+<p style="margin:0 0 20px;color:#52645d;font-size:14px;line-height:1.7;">Cảm ơn bạn đã mua sắm tại RE:LOOP. Dưới đây là thông tin để bạn tiện theo dõi.</p>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 20px;background:#f2f7f2;border-radius:12px;">
+<tr><td style="padding:14px 16px;color:#52645d;font-size:12px;">MÃ ĐƠN HÀNG</td><td align="right" style="padding:14px 16px;color:#18352c;font-size:14px;font-weight:700;">#{order_id}</td></tr>
+</table>
+{items_html}
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:12px;">
+<tr><td style="padding:5px 10px;color:#52645d;font-size:13px;">Tạm tính</td><td align="right" style="padding:5px 10px;color:#52645d;font-size:13px;">{_format_vnd(order["subtotal_vnd"])}</td></tr>
+<tr><td style="padding:5px 10px;color:#52645d;font-size:13px;">Ưu đãi</td><td align="right" style="padding:5px 10px;color:#087f5b;font-size:13px;">−{_format_vnd(order["discount_vnd"])}</td></tr>
+<tr><td style="padding:9px 10px;border-top:1px solid #e3e9e2;color:#18352c;font-size:15px;font-weight:700;">Tổng thanh toán</td><td align="right" style="padding:9px 10px;border-top:1px solid #e3e9e2;color:#087f5b;font-size:16px;font-weight:700;">{_format_vnd(order["total_vnd"])}</td></tr>
+</table>
+<h2 style="margin:24px 0 10px;color:#18352c;font-size:15px;">Thông tin giao nhận</h2>
+<p style="margin:0;color:#52645d;font-size:13px;line-height:1.8;"><strong>Người nhận:</strong> {recipient_name}<br><strong>Điện thoại:</strong> {phone}<br><strong>Địa chỉ:</strong> {address}</p>
+<p style="margin:18px 0 0;padding:13px 15px;background:#f7f9f6;border-radius:10px;color:#52645d;font-size:13px;line-height:1.7;"><strong>Thanh toán:</strong> {html.escape(order["payment_label"])} · <strong>Trạng thái:</strong> {html.escape(order["status_label"])}</p>"""
+    email_payload = {
+        "to": [order["buyer_email"]],
+        "subject": f"RE:LOOP đã nhận đơn hàng #{order['order_id']}",
+        "html": _reloop_order_email_html(
+            f"Thông tin đơn hàng #{order['order_id']} đã được ghi nhận.",
+            body,
+        ),
+        "text": (
+            f"Xin chào {order.get('buyer_name') or 'bạn'},\n\n"
+            f"Đơn hàng #{order['order_id']} đã được ghi nhận.\n"
+            f"Sản phẩm: {', '.join(item['title'] for item in order['items'])}\n"
+            f"Tổng thanh toán: {_format_vnd(order['total_vnd'])}\n"
+            f"Người nhận: {order['recipient_name']} · {order['phone']}\n"
+            f"Địa chỉ: {order['shipping_address']}\n"
+            f"Thanh toán: {order['payment_label']} · {order['status_label']}\n\n"
+            "Người bán:\n"
+            + "\n".join(
+                f"- {seller['name']}"
+                + (f" · {seller['email']}" if seller.get("email") else "")
+                for seller in order["sellers"]
+            )
+            + "\n\nĐăng nhập RE:LOOP để theo dõi trạng thái đơn."
+        ),
+    }
+    return _send_resend_email(
+        email_payload,
+        "order_confirmation",
+        "Chưa cấu hình Resend để gửi email xác nhận đơn hàng.",
+    )
+
+
+def send_seller_order_notification(
+    order: Dict[str, Any],
+    seller: Dict[str, Any],
+) -> tuple[bool, Optional[str]]:
+    safe_seller_name = html.escape(str(seller["name"]))
+    buyer_name = html.escape(str(order.get("buyer_name") or "Khách hàng"))
+    buyer_email = html.escape(str(order["buyer_email"]))
+    recipient_name = html.escape(str(order["recipient_name"]))
+    phone = html.escape(str(order["phone"]))
+    address = html.escape(str(order["shipping_address"]))
+    order_id = html.escape(str(order["order_id"]))
+    seller_total = sum(item["price"] for item in seller["items"])
+    items_html = _order_email_items_html(seller["items"], include_seller=False)
+    payment_reminder = (
+        '<p style="margin:16px 0 0;padding:13px 15px;background:#fff8e6;border-radius:10px;'
+        'color:#775b18;font-size:13px;line-height:1.7;"><strong>Lưu ý:</strong> '
+        "Đơn hàng chưa được thanh toán. Vui lòng chờ trạng thái thanh toán thành công "
+        "trên hệ thống trước khi gửi hàng.</p>"
+        if order["payment_status"] == "pending"
+        else ""
+    )
+    body = f"""<p style="margin:0 0 10px;color:#527265;font-size:14px;">Xin chào {safe_seller_name},</p>
+<h1 style="margin:0 0 12px;color:#18352c;font-size:24px;line-height:1.35;">Bạn có đơn hàng mới</h1>
+<p style="margin:0 0 20px;color:#52645d;font-size:14px;line-height:1.7;">Có khách hàng vừa đặt sản phẩm của bạn trên RE:LOOP. Hãy xem thông tin đơn hàng và chuẩn bị giao đúng người nhận.</p>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 20px;background:#f2f7f2;border-radius:12px;">
+<tr><td style="padding:14px 16px;color:#52645d;font-size:12px;">MÃ ĐƠN HÀNG</td><td align="right" style="padding:14px 16px;color:#18352c;font-size:14px;font-weight:700;">#{order_id}</td></tr>
+</table>
+{items_html}
+<p style="margin:12px 10px 0;color:#18352c;font-size:14px;font-weight:700;">Tổng giá trị sản phẩm của bạn: {_format_vnd(seller_total)}</p>
+<h2 style="margin:24px 0 10px;color:#18352c;font-size:15px;">Thông tin khách mua</h2>
+<p style="margin:0;color:#52645d;font-size:13px;line-height:1.8;"><strong>Tài khoản:</strong> {buyer_name}<br><strong>Email:</strong> {buyer_email}</p>
+<h2 style="margin:18px 0 10px;color:#18352c;font-size:15px;">Thông tin người nhận</h2>
+<p style="margin:0;color:#52645d;font-size:13px;line-height:1.8;"><strong>Người nhận:</strong> {recipient_name}<br><strong>Điện thoại:</strong> {phone}<br><strong>Địa chỉ:</strong> {address}</p>
+<p style="margin:18px 0 0;padding:13px 15px;background:#f7f9f6;border-radius:10px;color:#52645d;font-size:13px;line-height:1.7;"><strong>Thanh toán:</strong> {html.escape(order["payment_label"])} · <strong>Trạng thái:</strong> {html.escape(order["status_label"])}</p>
+{payment_reminder}"""
+    return _send_resend_email(
+        {
+            "to": [seller["email"]],
+            "subject": f"Bạn có đơn hàng mới #{order['order_id']} trên RE:LOOP",
+            "html": _reloop_order_email_html(
+                f"Bạn vừa nhận được đơn hàng #{order['order_id']}.",
+                body,
+            ),
+            "text": (
+                f"Xin chào {seller['name']},\n\n"
+                f"Bạn có đơn hàng mới #{order['order_id']}.\n"
+                f"Sản phẩm: {', '.join(item['title'] for item in seller['items'])}\n"
+                f"Tổng giá trị sản phẩm của bạn: {_format_vnd(seller_total)}\n"
+                f"Khách mua: {order.get('buyer_name') or 'Khách hàng'} "
+                f"({order['buyer_email']})\n"
+                f"Người nhận: {order['recipient_name']} · {order['phone']}\n"
+                f"Địa chỉ: {order['shipping_address']}\n"
+                f"Thanh toán: {order['payment_label']} · {order['status_label']}\n"
+                + (
+                    "Chưa gửi hàng: hãy chờ thanh toán thành công trên hệ thống.\n"
+                    if order["payment_status"] == "pending"
+                    else ""
+                )
+            ),
+        },
+        "seller_order",
+        "Chưa cấu hình Resend để gửi email thông báo người bán.",
+    )
+
+
+def send_order_notification_emails(order: Dict[str, Any]) -> None:
+    send_buyer_order_confirmation(order)
+    for seller in order["sellers"]:
+        send_seller_order_notification(order, seller)
 
 
 app = FastAPI(
@@ -4102,6 +4306,7 @@ def checkout_order(
     now_dt = datetime.utcnow()
     now = now_dt.isoformat()
     normalized_phone = normalize_vietnamese_phone(payload.phone)
+    order_email_data: Dict[str, Any] = {}
     with get_db() as conn:
         cursor = conn.cursor()
         if not DATABASE_URL:
@@ -4233,6 +4438,88 @@ def checkout_order(
                 payload.shipping_address.strip(),
                 now
             ))
+
+        seller_ids = sorted({
+            product["seller_id"]
+            for product in products
+            if product.get("seller_id")
+            and product["seller_id"] not in ("u-system", user["id"])
+        })
+        sellers_by_id = {}
+        if seller_ids:
+            cursor.execute(
+                "SELECT id, name, email FROM users WHERE id IN ({})".format(
+                    ",".join("?" for _ in seller_ids)
+                ),
+                seller_ids,
+            )
+            sellers_by_id = {
+                row["id"]: dict(row)
+                for row in cursor.fetchall()
+            }
+
+        email_items = []
+        seller_groups = {}
+        for product in products:
+            seller = sellers_by_id.get(product.get("seller_id"))
+            item = {
+                "title": product["title"],
+                "category": product["category"],
+                "size": product["size"],
+                "color": product["color"],
+                "price": product["price"],
+                "seller_name": seller["name"] if seller else "RE:LOOP",
+                "seller_email": seller["email"] if seller else None,
+            }
+            email_items.append(item)
+            if not seller or not seller["email"]:
+                continue
+            seller_group = seller_groups.setdefault(
+                seller["id"],
+                {
+                    "name": seller["name"],
+                    "email": seller["email"],
+                    "items": [],
+                },
+            )
+            seller_group["items"].append(item)
+
+        payment_labels = {
+            "COD": "Thanh toán khi nhận hàng",
+            "BANK_TRANSFER": "Chuyển khoản",
+            "E_WALLET": "Ví điện tử",
+        }
+        order_status_labels = {
+            "pending_confirmation": "Chờ người bán xác nhận",
+            "pending_payment": "Chờ thanh toán",
+        }
+        payment_status_labels = {
+            "unpaid": "Thanh toán khi nhận hàng",
+            "pending": "Chờ thanh toán",
+        }
+        order_email_data = {
+            "order_id": order_id,
+            "buyer_name": user.get("name") or "Khách hàng",
+            "buyer_email": user["email"],
+            "recipient_name": payload.recipient_name.strip(),
+            "phone": normalized_phone,
+            "shipping_address": payload.shipping_address.strip(),
+            "items": email_items,
+            "sellers": list(seller_groups.values()),
+            "subtotal_vnd": subtotal,
+            "discount_vnd": discount,
+            "total_vnd": total_paid,
+            "payment_method": payload.payment_method,
+            "payment_label": payment_labels[payload.payment_method],
+            "payment_status": payment_status,
+            "status_label": (
+                order_status_labels[order_status]
+                + " · "
+                + payment_status_labels.get(payment_status, payment_status)
+            ),
+        }
+
+    send_order_notification_emails(order_email_data)
 
     message = (
         "Đơn COD đã được tạo và sản phẩm được giữ chỗ."
