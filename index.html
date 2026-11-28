@@ -3467,6 +3467,22 @@
           line-height: 1;
         }
 
+        #simulated-payment-modal {
+          align-items: end;
+          padding: 0;
+          padding-bottom: env(safe-area-inset-bottom);
+        }
+
+        #simulated-payment-modal > section {
+          width: 100%;
+          max-height: 92vh;
+          max-height: 92dvh;
+          border-radius: 1.5rem 1.5rem 0 0;
+          padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
+          overflow-y: auto;
+          overscroll-behavior: contain;
+        }
+
         html[data-theme="dark"] .mobile-bottom-nav button[data-active="true"] {
           background: #173c2e;
           color: #a7f3d0;
@@ -5100,7 +5116,7 @@
               </article>
               <article class="intro-faq-item">
                 <h3><button type="button" class="intro-faq-toggle" aria-expanded="false" aria-controls="intro-faq-panel-4" id="intro-faq-button-4">Đăng bán có mất phí không?<span aria-hidden="true"></span></button></h3>
-                <div class="intro-faq-panel" id="intro-faq-panel-4" role="region" aria-labelledby="intro-faq-button-4" aria-hidden="true"><div><p class="intro-placeholder">[ĐIỀN: chính sách phí đăng bán hoặc xác nhận miễn phí.]</p></div></div>
+                <div class="intro-faq-panel" id="intro-faq-panel-4" role="region" aria-labelledby="intro-faq-button-4" aria-hidden="true"><div><p>Đăng tin và ký gửi lại hiện không thu phí trong bản mô phỏng RE:LOOP. Khi bạn đăng bán, hệ thống cộng Điểm Xanh theo luồng đã tích hợp; chi phí thực tế, nếu có khi triển khai thương mại, sẽ được công bố riêng trước khi xác nhận.</p></div></div>
               </article>
               <article class="intro-faq-item">
                 <h3><button type="button" class="intro-faq-toggle" aria-expanded="false" aria-controls="intro-faq-panel-5" id="intro-faq-button-5">Tủ đồ số và “Ký gửi lại 1 chạm” hoạt động thế nào?<span aria-hidden="true"></span></button></h3>
@@ -5108,11 +5124,11 @@
               </article>
               <article class="intro-faq-item">
                 <h3><button type="button" class="intro-faq-toggle" aria-expanded="false" aria-controls="intro-faq-panel-6" id="intro-faq-button-6">Thanh toán và giao hàng như thế nào?<span aria-hidden="true"></span></button></h3>
-                <div class="intro-faq-panel" id="intro-faq-panel-6" role="region" aria-labelledby="intro-faq-button-6" aria-hidden="true"><div><p class="intro-placeholder">[ĐIỀN: phương thức thanh toán, đơn vị giao hàng, thời gian và phí vận chuyển.]</p></div></div>
+                <div class="intro-faq-panel" id="intro-faq-panel-6" role="region" aria-labelledby="intro-faq-button-6" aria-hidden="true"><div><p>Bạn có thể chọn COD, chuyển khoản hoặc ví điện tử trong cổng mô phỏng. Chỉ có bản mô phỏng giả lập — không thu tiền thật. Đơn COD bắt đầu chuẩn bị ngay; đơn trực tuyến bắt đầu sau khi thanh toán mô phỏng thành công. Trạng thái giả lập tiến dần đến “Đã giao”, sau đó bạn xác nhận đã nhận hàng.</p></div></div>
               </article>
               <article class="intro-faq-item">
                 <h3><button type="button" class="intro-faq-toggle" aria-expanded="false" aria-controls="intro-faq-panel-7" id="intro-faq-button-7">Nếu sản phẩm không đúng mô tả thì sao?<span aria-hidden="true"></span></button></h3>
-                <div class="intro-faq-panel" id="intro-faq-panel-7" role="region" aria-labelledby="intro-faq-button-7" aria-hidden="true"><div><p class="intro-placeholder">[ĐIỀN: điều kiện, thời hạn và quy trình đổi trả / khiếu nại.]</p></div></div>
+                <div class="intro-faq-panel" id="intro-faq-panel-7" role="region" aria-labelledby="intro-faq-button-7" aria-hidden="true"><div><p>Sau khi đơn đã hoàn tất, bạn có thể gửi khiếu nại trong vòng 7 ngày tính từ thời điểm xác nhận nhận hàng. Hãy chọn lý do, mô tả ít nhất 20 ký tự, đính kèm 1–4 ảnh bằng chứng. Người bán phản hồi trước, sau đó bạn có thể nhờ RE:LOOP phân xử.</p></div></div>
               </article>
               <article class="intro-faq-item">
                 <h3><button type="button" class="intro-faq-toggle" aria-expanded="false" aria-controls="intro-faq-panel-8" id="intro-faq-button-8">Điểm Xanh quyên góp đi đâu?<span aria-hidden="true"></span></button></h3>
@@ -5133,7 +5149,7 @@
 
           <footer class="intro-footer">
             <div class="intro-footer-brand">
-              <a href="#" class="intro-footer-logo" onclick="switchTab('intro'); return false">RE:LOOP</a>
+              <button type="button" class="intro-footer-logo" onclick="switchTab('intro')">RE:LOOP</button>
               <p>Thời trang tuần hoàn, bắt đầu từ một lựa chọn nhỏ.</p>
             </div>
             <div class="intro-footer-column">
@@ -5146,18 +5162,18 @@
             <div class="intro-footer-column">
               <span class="intro-mono">HỖ TRỢ</span>
               <a href="#intro-faq" onclick="window.scrollToIntroFAQ?.(); return false">Câu hỏi thường gặp</a>
-              <a href="#" class="intro-placeholder-link">Liên hệ [ĐIỀN]</a>
+              <button type="button" class="intro-placeholder-link" onclick="switchTab('complaints')">Gửi yêu cầu hỗ trợ</button>
             </div>
             <div class="intro-footer-column">
               <span class="intro-mono">PHÁP LÝ</span>
-              <a href="#" class="intro-placeholder-link">Điều khoản [ĐIỀN]</a>
-              <a href="#" class="intro-placeholder-link">Bảo mật [ĐIỀN]</a>
-              <a href="#" class="intro-placeholder-link">Đổi trả [ĐIỀN]</a>
+              <button type="button" class="intro-placeholder-link" onclick="showToast('Bản demo không thu tiền thật và các quyền hạn được mô phỏng trong hệ thống.','info')">Điều khoản demo</button>
+              <button type="button" class="intro-placeholder-link" onclick="showToast('Thông tin tài khoản được bảo vệ bằng phiên đăng nhập và dữ liệu không công khai. Không nhập thông tin thẻ thật.','info')">Bảo mật</button>
+              <button type="button" class="intro-placeholder-link" onclick="switchTab('complaints')">Đổi trả & khiếu nại</button>
             </div>
             <div class="intro-footer-column">
               <span class="intro-mono">KẾT NỐI</span>
-              <span class="intro-placeholder-link">Email [ĐIỀN]</span>
-              <span class="intro-placeholder-link">Mạng xã hội [ĐIỀN]</span>
+              <button type="button" class="intro-placeholder-link" onclick="showToast('Vui lòng dùng Trợ lý AI hoặc mục Khiếu nại để liên hệ trong bản demo.','info')">Liên hệ trong ứng dụng</button>
+              <button type="button" class="intro-placeholder-link" onclick="switchTab('messages')">Tin nhắn người bán</button>
             </div>
             <p class="intro-footer-bottom">© RE:LOOP · Mặc đẹp, rồi để chiếc áo sống tiếp.</p>
           </footer>
@@ -7012,7 +7028,11 @@
     <!-- JAVASCRIPT: FULL BACKEND API INTEGRATION + INTERACTIVITY  -->
     <!-- ========================================================= -->
     <script>
-      const API_BASE = "https://website-reloop-1.onrender.com";
+      const API_BASE =
+        window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1"
+          ? "http://127.0.0.1:8000"
+          : "https://website-reloop-1.onrender.com";
       localStorage.removeItem("reloop_local_listings");
 
       // Application State
@@ -11113,6 +11133,8 @@
 
         let simulatedPaymentTimer = null;
         let simulatedPaymentOrderId = null;
+        let simulatedPaymentPreviouslyFocused = null;
+        let simulatedPaymentKeydownHandler = null;
 
         function simulatedQrMarkup(orderId) {
           let seed = 0;
@@ -11145,8 +11167,42 @@
           const modal = document.createElement("div");
           modal.id = "simulated-payment-modal";
           modal.className = "fixed inset-0 z-[80] grid place-items-center bg-ink-900/60 p-3";
+          modal.setAttribute("role", "presentation");
+          simulatedPaymentPreviouslyFocused =
+            document.activeElement instanceof HTMLElement
+              ? document.activeElement
+              : null;
           modal.innerHTML = `<section class="max-h-[94vh] w-full max-w-lg overflow-y-auto rounded-3xl bg-white p-5 shadow-2xl sm:p-7" role="dialog" aria-modal="true" aria-labelledby="simulated-payment-title"><div class="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-center text-sm font-bold text-amber-900">Môi trường mô phỏng — không thu tiền thật</div><div class="flex items-start justify-between gap-3"><div><h2 id="simulated-payment-title" class="text-xl font-bold text-ink-900">Cổng thanh toán mô phỏng</h2><p class="mt-1 text-xs text-ink-600">Đơn #${escapeHtml(order.order_id)}</p></div><button type="button" class="min-h-11 min-w-11 rounded-xl bg-slate-100 text-xl" onclick="closeSimulatedPayment()" aria-label="Đóng">×</button></div><div class="mt-4 rounded-2xl bg-eco-50 p-4 text-center"><p class="text-xs text-ink-600">Số tiền mô phỏng</p><p class="text-2xl font-bold text-eco-800">${formatVND(order.total_vnd || 0)}</p><p id="simulated-payment-countdown" class="mt-1 text-xs font-semibold text-rose-700"></p></div>${transfer ? `<div class="mt-5 grid justify-items-center gap-3">${simulatedQrMarkup(orderId)}<p class="text-xs text-ink-600">QR minh họa · không quét bằng ứng dụng ngân hàng</p><div class="w-full rounded-xl bg-slate-50 p-4 text-sm"><p>Ngân hàng: <b>Ngân hàng Mô phỏng</b></p><p>Số tài khoản: <b>0000 1234 5678</b></p><p>Chủ tài khoản: <b>RELOOP DEMO</b></p><p>Nội dung: <b>RELOOP ${escapeHtml(order.order_id)}</b></p></div></div>` : `<div class="mt-5 space-y-3"><label class="block text-sm font-semibold">Chọn ví mô phỏng<select id="simulated-wallet-select" class="mt-1 min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3"><option>MoMo (mô phỏng)</option><option>ZaloPay (mô phỏng)</option><option>ShopeePay (mô phỏng)</option></select></label><label class="block text-sm font-semibold">Mã OTP demo<input id="simulated-otp" inputmode="numeric" autocomplete="one-time-code" maxlength="6" class="mt-1 min-h-11 w-full rounded-xl border border-slate-300 px-3" placeholder="Nhập 123456"/></label><p class="text-xs text-ink-500">OTP minh họa: 123456. Không nhập OTP thật.</p></div>`}<p id="simulated-payment-error" class="mt-3 min-h-5 text-sm text-rose-700" role="alert"></p><div class="mt-3 grid gap-2 sm:grid-cols-2"><button type="button" id="simulated-payment-submit" class="min-h-11 rounded-xl bg-eco-700 px-4 py-3 text-sm font-bold text-white" onclick="submitSimulatedPayment()">Tôi đã chuyển khoản</button><button type="button" id="simulated-payment-fail" class="min-h-11 rounded-xl border border-rose-300 px-4 py-3 text-sm font-semibold text-rose-700" onclick="simulatePaymentFailure()">Mô phỏng thất bại</button></div><button type="button" class="mt-3 min-h-11 w-full rounded-xl text-sm text-ink-600 underline" onclick="closeSimulatedPayment()">Đóng, thanh toán sau</button></section>`;
           document.body.appendChild(modal);
+          document.body.classList.add("modal-open");
+          modal.addEventListener("click", (event) => {
+            if (event.target === modal) closeSimulatedPayment();
+          });
+          simulatedPaymentKeydownHandler = (event) => {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              closeSimulatedPayment();
+              return;
+            }
+            if (event.key !== "Tab") return;
+            const focusable = [...modal.querySelectorAll(
+              'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [href], [tabindex]:not([tabindex="-1"])',
+            )];
+            if (!focusable.length) return;
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            if (event.shiftKey && document.activeElement === first) {
+              event.preventDefault();
+              last.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+              event.preventDefault();
+              first.focus();
+            }
+          };
+          document.addEventListener("keydown", simulatedPaymentKeydownHandler);
+          window.requestAnimationFrame(() => {
+            modal.querySelector("#simulated-payment-submit")?.focus();
+          });
           const submit = modal.querySelector("#simulated-payment-submit");
           if (!transfer) submit.textContent = "Xác nhận OTP mô phỏng";
           updateSimulatedPaymentCountdown(order.reservation_expires_at);
@@ -11169,7 +11225,16 @@
           if (simulatedPaymentTimer) window.clearInterval(simulatedPaymentTimer);
           simulatedPaymentTimer = null;
           simulatedPaymentOrderId = null;
+          if (simulatedPaymentKeydownHandler) {
+            document.removeEventListener("keydown", simulatedPaymentKeydownHandler);
+            simulatedPaymentKeydownHandler = null;
+          }
           document.getElementById("simulated-payment-modal")?.remove();
+          document.body.classList.remove("modal-open");
+          if (simulatedPaymentPreviouslyFocused instanceof HTMLElement) {
+            simulatedPaymentPreviouslyFocused.focus();
+          }
+          simulatedPaymentPreviouslyFocused = null;
         }
 
         async function sendSimulatedPayment(outcome) {

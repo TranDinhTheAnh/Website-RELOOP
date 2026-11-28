@@ -3818,7 +3818,7 @@ def cancel_admin_cod_order(
 ):
     if not _is_admin_user(user):
         raise HTTPException(status_code=403, detail="Chỉ quản trị viên mới được xử lý đơn COD.")
-    now = datetime.utcnow().isoformat()
+    now = datetime.utcnow()
     with get_db() as conn:
         cursor = conn.cursor()
         if not DATABASE_URL:
