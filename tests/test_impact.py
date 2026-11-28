@@ -114,14 +114,14 @@ def get_summary(client, token):
     return response.json()
 
 
-def test_empty_summary_and_category_formula_ranges(impact_client):
+def test_empty_summary_and_single_reference_category_formula(impact_client):
     client, users = impact_client
     empty = get_summary(client, users["impact-a"])
     assert empty["items_reused"] == 0
     assert empty["is_estimate"] is True
     assert empty["methodology_version"] == backend.IMPACT_METHODOLOGY["methodology_version"]
-    for metric in ("co2e_avoided_kg", "water_avoided_l"):
-        assert empty[metric] == {"low": 0.0, "mid": 0.0, "high": 0.0}
+    assert empty["co2e_avoided_kg"] == 0.0
+    assert empty["water_avoided_l"] == 0.0
 
     categories = list(backend.IMPACT_METHODOLOGY["category_mass_kg"])
     product_ids = []
@@ -137,28 +137,33 @@ def test_empty_summary_and_category_formula_ranges(impact_client):
     for item in summary["by_category"]:
         category = item["category"]
         mass = backend.IMPACT_METHODOLOGY["category_mass_kg"][category]
-        for scenario_name, scenario in backend.IMPACT_METHODOLOGY["scenarios"].items():
-            expected_co2 = max(
-                0,
-                mass
-                * backend.IMPACT_METHODOLOGY["production_impact_per_kg"]["co2e_kg"]
-                * scenario["replacement_rate"]
-                - scenario["additional_co2e_kg"],
-            )
-            expected_water = max(
-                0,
-                mass
-                * backend.IMPACT_METHODOLOGY["production_impact_per_kg"]["water_l"]
-                * scenario["replacement_rate"]
-                - scenario["additional_water_l"],
-            )
-            assert item["co2e_avoided_kg"][scenario_name] == pytest.approx(expected_co2)
-            assert item["water_avoided_l"][scenario_name] == pytest.approx(expected_water)
+        reference = backend.IMPACT_METHODOLOGY["reference_assumptions"]
+        expected_co2 = max(
+            0,
+            mass
+            * backend.IMPACT_METHODOLOGY["production_impact_per_kg"]["co2e_kg"]
+            * reference["replacement_rate"]
+            - reference["additional_co2e_kg"],
+        )
+        expected_water = max(
+            0,
+            mass
+            * backend.IMPACT_METHODOLOGY["production_impact_per_kg"]["water_l"]
+            * reference["replacement_rate"]
+            - reference["additional_water_l"],
+        )
+        assert item["co2e_avoided_kg"] == pytest.approx(expected_co2)
+        assert item["water_avoided_l"] == pytest.approx(expected_water)
+        assert isinstance(item["co2e_avoided_kg"], float)
+        assert isinstance(item["water_avoided_l"], float)
 
     for metric in ("co2e_avoided_kg", "water_avoided_l"):
         values = summary[metric]
-        assert values["low"] <= values["mid"] <= values["high"]
-        assert all(value >= 0 and value == value for value in values.values())
+        assert isinstance(values, float)
+        assert values >= 0 and values == values
+        assert summary[metric] == pytest.approx(
+            sum(item[metric] for item in summary["by_category"])
+        )
 
 
 def test_cancelled_pending_and_accepted_complaint_refunds_are_excluded(impact_client):
@@ -257,6 +262,8 @@ def test_impact_api_auth_privacy_and_public_methodology(impact_client):
     assert platform_response.headers["cache-control"].startswith("public, max-age=")
     assert methodology["methodology_version"]
     assert methodology["is_estimate"] is True
+    assert methodology["reference_assumptions"]["replacement_rate"] == 0.5
+    assert "scenarios" not in methodology
     assert methodology["sources"]
     assert "impact-a@example.test" not in json.dumps(platform)
     assert "impact-b@example.test" not in json.dumps(platform)
@@ -267,8 +274,8 @@ def test_impact_api_auth_privacy_and_public_methodology(impact_client):
     )
     assert me_response.status_code == 200
     assert me_response.json()["user"]["co2_saved"] == pytest.approx(
-        summary_a["co2e_avoided_kg"]["mid"]
+        summary_a["co2e_avoided_kg"]
     )
     assert me_response.json()["user"]["water_saved"] == pytest.approx(
-        summary_a["water_avoided_l"]["mid"]
+        summary_a["water_avoided_l"]
     )

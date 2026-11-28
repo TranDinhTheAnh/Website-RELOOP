@@ -12979,23 +12979,14 @@
           return false;
         }
         return ["co2e_avoided_kg", "water_avoided_l"].every((metric) => {
-          const values = impact[metric];
-          return (
-            values &&
-            ["low", "mid", "high"].every(
-              (scenario) =>
-                Number.isFinite(Number(values[scenario])) &&
-                Number(values[scenario]) >= 0,
-            ) &&
-            Number(values.low) <= Number(values.mid) &&
-            Number(values.mid) <= Number(values.high)
-          );
+          const value = impact[metric];
+          return typeof value === "number" && Number.isFinite(value) && value >= 0;
         });
       }
 
-      function formatImpactRange(values, unit) {
-        if (!values) return "—";
-        return `${formatImpactNumber(values.low, unit)}–${formatImpactNumber(values.high, unit)}`;
+      function formatImpactValue(value, unit) {
+        if (!Number.isFinite(Number(value))) return "—";
+        return formatImpactNumber(value, unit);
       }
 
       function renderPlatformImpactSummary() {
@@ -13018,16 +13009,16 @@
         }
         const impact = state.platformImpact;
         if (introCo2) {
-          introCo2.textContent = `${formatImpactRange(impact.co2e_avoided_kg, "co2")} kg`;
+          introCo2.textContent = `${formatImpactValue(impact.co2e_avoided_kg, "co2")} kg`;
         }
         if (introWater) {
-          introWater.textContent = `${formatImpactRange(impact.water_avoided_l, "water")} L`;
+          introWater.textContent = `${formatImpactValue(impact.water_avoided_l, "water")} L`;
         }
         element.innerHTML = `
           <span class="impact-estimate-label">Ước tính CO₂e</span>
-          <strong>${formatImpactRange(impact.co2e_avoided_kg, "co2")}</strong> kg
+          <strong>${formatImpactValue(impact.co2e_avoided_kg, "co2")}</strong> kg
           <span class="impact-estimate-label ml-1">Ước tính dấu chân nước</span>
-          <strong>${formatImpactRange(impact.water_avoided_l, "water")}</strong> L
+          <strong>${formatImpactValue(impact.water_avoided_l, "water")}</strong> L
           <span class="block mt-1">${formatImpactNumber(impact.items_reused, "count")} món trong đơn hoàn tất được tính là đã tái sử dụng.</span>
         `;
       }
@@ -13144,8 +13135,8 @@
                 return `
                   <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1fr)] gap-2 sm:items-center border-t border-sand-200 py-3 text-sm">
                     <span class="font-semibold text-ink-900">${escapeHtml(item.category)} · ${formatImpactNumber(item.items_reused, "count")} món</span>
-                    <span class="text-ink-700"><span class="impact-estimate-label">Ước tính CO₂e</span> ${formatImpactRange(item.co2e_avoided_kg, "co2")} kg</span>
-                    <span class="text-ink-700"><span class="impact-estimate-label">Ước tính nước</span> ${formatImpactRange(item.water_avoided_l, "water")} L</span>
+                    <span class="text-ink-700"><span class="impact-estimate-label">Ước tính CO₂e</span> ${formatImpactValue(item.co2e_avoided_kg, "co2")} kg</span>
+                    <span class="text-ink-700"><span class="impact-estimate-label">Ước tính nước</span> ${formatImpactValue(item.water_avoided_l, "water")} L</span>
                   </div>
                 `;
               })
@@ -13184,23 +13175,23 @@
                 <p class="text-xs font-semibold text-ink-500">CO₂ tương ứng tránh được</p>
                 <p class="mt-2 flex flex-wrap items-center gap-2 text-xl sm:text-2xl font-bold text-ink-900">
                   <span class="impact-estimate-label">Ước tính</span>
-                  <span>${formatImpactRange(impact.co2e_avoided_kg, "co2")} kg CO₂e</span>
+                  <span>${formatImpactValue(impact.co2e_avoided_kg, "co2")} kg CO₂e</span>
                 </p>
-                <p class="mt-1 text-xs text-ink-600">Kịch bản trung bình: khoảng ${formatImpactNumber(impact.co2e_avoided_kg.mid, "co2")} kg</p>
+                <p class="mt-1 text-xs text-ink-600">Một ước tính tham chiếu theo mô hình; không phải số đo riêng cho từng món.</p>
               </article>
               <article class="impact-card p-4 sm:p-5">
                 <p class="text-xs font-semibold text-ink-500">Dấu chân nước tương ứng tránh được</p>
                 <p class="mt-2 flex flex-wrap items-center gap-2 text-xl sm:text-2xl font-bold text-ink-900">
                   <span class="impact-estimate-label">Ước tính</span>
-                  <span>${formatImpactRange(impact.water_avoided_l, "water")} L</span>
+                  <span>${formatImpactValue(impact.water_avoided_l, "water")} L</span>
                 </p>
-                <p class="mt-1 text-xs text-ink-600">Kịch bản trung bình: khoảng ${formatImpactNumber(impact.water_avoided_l.mid, "water")} L</p>
+                <p class="mt-1 text-xs text-ink-600">Một ước tính tham chiếu theo mô hình; không phải số đo riêng cho từng món.</p>
               </article>
             </div>
             ${emptyNotice}
             <div class="rounded-2xl border border-sand-200 p-4 sm:p-5">
               <h4 class="font-bold text-ink-900">Ước tính theo danh mục</h4>
-              <p class="mb-2 mt-1 text-xs text-ink-500">Khoảng hiển thị là kịch bản thấp–cao; từng món không được đo riêng.</p>
+              <p class="mb-2 mt-1 text-xs text-ink-500">Số liệu là một ước tính tham chiếu; khối lượng từng món không được cân riêng.</p>
               <div class="mt-3">${categoryRows}</div>
             </div>
             <p class="text-sm leading-relaxed text-ink-600">
@@ -13268,7 +13259,7 @@
       function renderImpactMethodology(methodology) {
         const content = document.getElementById("impact-methodology-content");
         const categoryMass = methodology.category_mass_kg || {};
-        const scenarios = methodology.scenarios || {};
+        const reference = methodology.reference_assumptions || {};
         const production = methodology.production_impact_per_kg || {};
         const categories = Object.entries(categoryMass)
           .map(
@@ -13279,25 +13270,6 @@
               </tr>
             `,
           )
-          .join("");
-        const scenarioLabels = {
-          low: "Thấp",
-          mid: "Trung bình",
-          high: "Cao",
-        };
-        const scenarioRows = ["low", "mid", "high"]
-          .map((key) => {
-            const scenario = scenarios[key];
-            if (!scenario) return "";
-            return `
-              <tr class="border-t border-sand-200">
-                <th scope="row" class="py-2 pr-3 text-left font-semibold text-ink-800">${scenarioLabels[key]}</th>
-                <td class="py-2 px-2 text-right text-ink-700">${formatImpactNumber(Number(scenario.replacement_rate) * 100, "count")}%</td>
-                <td class="py-2 px-2 text-right text-ink-700">${formatImpactNumber(scenario.additional_co2e_kg, "co2")} kg CO₂e</td>
-                <td class="py-2 pl-2 text-right text-ink-700">${formatImpactNumber(scenario.additional_water_l, "water")} L</td>
-              </tr>
-            `;
-          })
           .join("");
         const sources = Array.isArray(methodology.sources)
           ? methodology.sources
@@ -13341,12 +13313,15 @@
               </div>
             </div>
             <div>
-              <h3 class="font-bold text-ink-900">Ba kịch bản</h3>
-              <p class="mb-2 text-xs text-ink-500">Tỷ lệ thay thế và phần tác động phát sinh là giả định của dự án; kịch bản thấp dùng tỷ lệ thay thế thấp hơn và phần phát sinh cao hơn.</p>
+              <h3 class="font-bold text-ink-900">Giả định tham chiếu duy nhất</h3>
+              <p class="mb-2 text-xs text-ink-500">Để tránh khoảng thấp–trung bình–cao, hệ thống dùng một điểm tham chiếu. Đây là giả định của dự án, không phải tỷ lệ đo được trên RE:LOOP hoặc kết quả chính xác cho từng đơn.</p>
               <div class="overflow-x-auto">
-                <table class="w-full min-w-[560px] text-xs sm:text-sm">
-                  <thead><tr class="text-ink-500"><th class="py-2 pr-3 text-left">Kịch bản</th><th class="px-2 text-right">Thay thế</th><th class="px-2 text-right">Phát sinh CO₂e</th><th class="pl-2 text-right">Phát sinh nước</th></tr></thead>
-                  <tbody>${scenarioRows}</tbody>
+                <table class="w-full min-w-[300px] text-xs sm:text-sm">
+                  <tbody>
+                    <tr class="border-t border-sand-200"><th scope="row" class="py-2 pr-3 text-left font-semibold text-ink-800">Tỷ lệ thay thế đồ mới</th><td class="py-2 text-right text-ink-700"><span class="impact-estimate-label">Giả định dự án</span> ${formatImpactNumber(Number(reference.replacement_rate) * 100, "count")}%</td></tr>
+                    <tr class="border-t border-sand-200"><th scope="row" class="py-2 pr-3 text-left font-semibold text-ink-800">Tác động phát sinh CO₂e</th><td class="py-2 text-right text-ink-700"><span class="impact-estimate-label">Giả định dự án</span> ${formatImpactNumber(reference.additional_co2e_kg, "co2")} kg/món</td></tr>
+                    <tr class="border-t border-sand-200"><th scope="row" class="py-2 pr-3 text-left font-semibold text-ink-800">Tác động phát sinh nước</th><td class="py-2 text-right text-ink-700"><span class="impact-estimate-label">Giả định dự án</span> ${formatImpactNumber(reference.additional_water_l, "water")} L/món</td></tr>
+                  </tbody>
                 </table>
               </div>
             </div>
@@ -13373,7 +13348,7 @@
           if (
             !response ||
             typeof response.methodology_version !== "string" ||
-            !response.scenarios ||
+            !response.reference_assumptions ||
             !Array.isArray(response.sources)
           ) {
             throw new Error("Máy chủ trả về phương pháp không hợp lệ.");
@@ -13565,8 +13540,8 @@
           water.textContent = "chưa tải được số liệu";
           return;
         }
-        co2.textContent = `khoảng ${formatImpactNumber(impact.co2e_avoided_kg.mid, "co2")} kg CO₂e`;
-        water.textContent = `khoảng ${formatImpactNumber(impact.water_avoided_l.mid, "water")} L dấu chân nước`;
+        co2.textContent = `khoảng ${formatImpactNumber(impact.co2e_avoided_kg, "co2")} kg CO₂e`;
+        water.textContent = `khoảng ${formatImpactNumber(impact.water_avoided_l, "water")} L dấu chân nước`;
         printButton.disabled = false;
       }
 

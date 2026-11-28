@@ -128,7 +128,7 @@ EMAIL_PATTERN = re.compile(
 logger = logging.getLogger(__name__)
 
 IMPACT_METHODOLOGY = {
-    "methodology_version": "reloop-impact-2026.1",
+    "methodology_version": "reloop-impact-2026.2",
     "is_estimate": True,
     "functional_unit": "Một sản phẩm trong đơn có trạng thái completed",
     "production_impact_per_kg": {
@@ -143,22 +143,10 @@ IMPACT_METHODOLOGY = {
         "Set & Phụ kiện": 0.35,
         "Khác": 0.35,
     },
-    "scenarios": {
-        "low": {
-            "replacement_rate": 0.25,
-            "additional_co2e_kg": 0.8,
-            "additional_water_l": 250,
-        },
-        "mid": {
-            "replacement_rate": 0.50,
-            "additional_co2e_kg": 0.5,
-            "additional_water_l": 150,
-        },
-        "high": {
-            "replacement_rate": 0.75,
-            "additional_co2e_kg": 0.2,
-            "additional_water_l": 50,
-        },
+    "reference_assumptions": {
+        "replacement_rate": 0.50,
+        "additional_co2e_kg": 0.5,
+        "additional_water_l": 150,
     },
     "sources": [
         {
@@ -191,6 +179,19 @@ IMPACT_METHODOLOGY = {
                 "thay thế cố định cho RE:LOOP."
             ),
         },
+        {
+            "name": (
+                "Farrant, Olsen & Wangel, Environmental benefits from reusing clothes, "
+                "The International Journal of Life Cycle Assessment"
+            ),
+            "year": 2010,
+            "url": "https://doi.org/10.1007/s11367-010-0197-y",
+            "used_for": (
+                "Nghiên cứu LCA trực tiếp về tái sử dụng quần áo; dùng làm tài liệu "
+                "tham khảo về phạm vi đánh giá, không lấy kết quả của bối cảnh nghiên "
+                "cứu làm hệ số trực tiếp cho RE:LOOP."
+            ),
+        },
     ],
     "assumptions": [
         (
@@ -204,9 +205,11 @@ IMPACT_METHODOLOGY = {
             "được xấp xỉ thành 50%; đây không đồng nghĩa với nước sạch có thể sử dụng."
         ),
         (
-            "Khối lượng đại diện theo danh mục, tỷ lệ thay thế 25%/50%/75% và tác "
-            "động phát sinh thêm cho vận chuyển/làm sạch/kiểm định đều là giả định "
-            "của dự án, không phải số đo hay hệ số LCA riêng cho RE:LOOP."
+            "Khối lượng đại diện theo danh mục, tỷ lệ thay thế tham chiếu 50% và tác "
+            "động phát sinh thêm 0,5 kg CO₂e cùng 150 L cho vận chuyển/làm sạch/kiểm "
+            "định là giả định của dự án, không phải số đo hay hệ số LCA riêng cho "
+            "RE:LOOP. Mức 50% không phải tỷ lệ thay thế đã được xác minh cho người "
+            "mua trên RE:LOOP."
         ),
         (
             "Mỗi món chỉ được tính sau đơn completed. Đây là đại diện cho một lượt "
@@ -224,7 +227,7 @@ IMPACT_METHODOLOGY = {
         ),
     ],
     "limits": [
-        "Kết quả là khoảng ước tính theo mô hình, không phải số liệu đo trực tiếp.",
+        "Kết quả là một ước tính điểm tham chiếu theo mô hình, không phải số đo trực tiếp hay khoảng tin cậy.",
         "Không chứng minh một giao dịch cụ thể đã thay thế việc mua đồ mới.",
         "Dấu chân nước gộp nước xanh lam và nước xanh lục; không thể diễn giải là lượng nước sạch được giữ lại tại một lưu vực.",
         "Các giá trị theo danh mục dùng khối lượng đại diện do dự án giả định; phụ kiện và sản phẩm thực tế có thể khác đáng kể.",
@@ -2610,9 +2613,9 @@ def _empty_impact_summary() -> Dict[str, Any]:
 
 
 def _build_impact_summary(category_totals: Dict[str, int]) -> Dict[str, Any]:
-    scenarios = IMPACT_METHODOLOGY["scenarios"]
-    co2_totals = {name: 0.0 for name in scenarios}
-    water_totals = {name: 0.0 for name in scenarios}
+    reference = IMPACT_METHODOLOGY["reference_assumptions"]
+    co2_total = 0.0
+    water_total = 0.0
     by_category = []
     production_per_kg = IMPACT_METHODOLOGY["production_impact_per_kg"]
 
@@ -2631,21 +2634,18 @@ def _build_impact_summary(category_totals: Dict[str, int]) -> Dict[str, Any]:
         mass = IMPACT_METHODOLOGY["category_mass_kg"][category]
         production_co2e = mass * production_per_kg["co2e_kg"]
         production_water = mass * production_per_kg["water_l"]
-        category_co2 = {}
-        category_water = {}
-        for scenario_name, scenario in scenarios.items():
-            category_co2[scenario_name] = count * max(
-                0.0,
-                production_co2e * scenario["replacement_rate"]
-                - scenario["additional_co2e_kg"],
-            )
-            category_water[scenario_name] = count * max(
-                0.0,
-                production_water * scenario["replacement_rate"]
-                - scenario["additional_water_l"],
-            )
-            co2_totals[scenario_name] += category_co2[scenario_name]
-            water_totals[scenario_name] += category_water[scenario_name]
+        category_co2 = count * max(
+            0.0,
+            production_co2e * reference["replacement_rate"]
+            - reference["additional_co2e_kg"],
+        )
+        category_water = count * max(
+            0.0,
+            production_water * reference["replacement_rate"]
+            - reference["additional_water_l"],
+        )
+        co2_total += category_co2
+        water_total += category_water
         by_category.append(
             {
                 "category": category,
@@ -2657,8 +2657,8 @@ def _build_impact_summary(category_totals: Dict[str, int]) -> Dict[str, Any]:
 
     return {
         "items_reused": sum(category_totals.values()),
-        "co2e_avoided_kg": co2_totals,
-        "water_avoided_l": water_totals,
+        "co2e_avoided_kg": co2_total,
+        "water_avoided_l": water_total,
         "by_category": by_category,
         "methodology_version": IMPACT_METHODOLOGY["methodology_version"],
         "is_estimate": True,
@@ -3289,8 +3289,8 @@ def login_user(payload: LoginRequest):
             "height": user_data["height"],
             "weight": user_data["weight"],
             "green_points": user_data["green_points"],
-            "co2_saved": impact["co2e_avoided_kg"]["mid"],
-            "water_saved": impact["water_avoided_l"]["mid"],
+            "co2_saved": impact["co2e_avoided_kg"],
+            "water_saved": impact["water_avoided_l"],
             "donated_vnd": user_data["donated_vnd"],
             "is_admin": _is_admin_user(user_data),
         }
@@ -3353,8 +3353,8 @@ def get_me(user: Dict[str, Any] = Depends(get_current_user)):
         impact = _calculate_impact_summary(cursor, user["id"])
 
     user_safe = {k: v for k, v in user.items() if k not in ("password_hash", "salt")}
-    user_safe["co2_saved"] = impact["co2e_avoided_kg"]["mid"]
-    user_safe["water_saved"] = impact["water_avoided_l"]["mid"]
+    user_safe["co2_saved"] = impact["co2e_avoided_kg"]
+    user_safe["water_saved"] = impact["water_avoided_l"]
     return {
         "user": user_safe,
         "is_admin": _is_admin_user(user),
@@ -6453,8 +6453,8 @@ def donate_points_to_charity(
         "green_certificate": {
             "holder_name": user["name"],
             "total_donated_vnd": updated_stats["donated_vnd"],
-            "co2_saved_kg": impact["co2e_avoided_kg"]["mid"],
-            "water_saved_liters": impact["water_avoided_l"]["mid"],
+            "co2_saved_kg": impact["co2e_avoided_kg"],
+            "water_saved_liters": impact["water_avoided_l"],
             "methodology_version": impact["methodology_version"],
             "is_estimate": True,
         }
