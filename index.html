@@ -536,6 +536,187 @@
         box-shadow: var(--shadow-card);
       }
 
+      .impact-card.fx-card {
+        position: relative;
+        overflow: hidden;
+        isolation: isolate;
+      }
+
+      .impact-card.fx-card > .fx {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        overflow: hidden;
+        border-radius: inherit;
+        pointer-events: none;
+      }
+
+      .impact-card.fx-card .impact-fx-content {
+        position: relative;
+        z-index: 2;
+        min-width: 0;
+      }
+
+      .impact-card.fx-card .fx-smoke {
+        opacity: 0.42;
+      }
+
+      .impact-card.fx-card .fx-smoke .puff {
+        position: absolute;
+        display: block;
+        width: 62%;
+        aspect-ratio: 1;
+        background: url("assets/fx/fx-smoke.webp") center / contain no-repeat;
+        filter: blur(3px);
+        opacity: 0.78;
+        -webkit-mask-image: radial-gradient(ellipse at center, #000 28%, transparent 74%);
+        mask-image: radial-gradient(ellipse at center, #000 28%, transparent 74%);
+        will-change: transform, opacity;
+      }
+
+      html:not([data-theme="dark"]) .impact-card.fx-card .fx-smoke .puff {
+        filter: blur(3px) invert(1) brightness(0.55);
+      }
+
+      .impact-card.fx-card .fx-smoke .p1 {
+        top: 8%;
+        left: -9%;
+        animation: rise1 14s ease-in-out infinite alternate;
+      }
+
+      .impact-card.fx-card .fx-smoke .p2 {
+        right: -9%;
+        bottom: -15%;
+        animation: rise2 17s ease-in-out infinite alternate;
+      }
+
+      .impact-card.fx-card .fx-smoke .p3 {
+        bottom: -29%;
+        left: 28%;
+        width: 56%;
+        animation: rise3 11s ease-in-out infinite alternate;
+      }
+
+      .impact-card.fx-card .fx-water .wave {
+        position: absolute;
+        bottom: -52%;
+        left: -18%;
+        display: block;
+        width: 136%;
+        height: 132%;
+        transform: scaleX(1);
+        translate: -7% 0;
+        opacity: 0.5;
+        will-change: transform, opacity, translate;
+        animation: sway 8s ease-in-out infinite alternate;
+      }
+
+      .impact-card.fx-card .fx-water .wave::before {
+        position: absolute;
+        inset: 0;
+        background: url("assets/fx/fx-water.webp") center top / cover no-repeat;
+        content: "";
+        filter: blur(2.5px);
+        transform: translateY(4%);
+        will-change: transform, opacity;
+        animation: tide 6s ease-in-out infinite alternate;
+      }
+
+      .impact-card.fx-card .fx-water .w2 {
+        transform: scaleX(-1);
+        translate: 7% 0;
+        opacity: 0.33;
+        animation-name: sway2;
+      }
+
+      .impact-card.fx-card .fx-water .w2::before {
+        transform: translateY(-4%);
+        animation-name: tide2;
+      }
+
+      .impact-card.fx-card .fx-water .shade {
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        background: linear-gradient(
+          to bottom,
+          rgba(8, 18, 20, 0.24),
+          rgba(8, 18, 20, 0.08) 48%,
+          transparent 82%
+        );
+      }
+
+      html:not([data-theme="dark"]) .impact-card.fx-card .fx-water .shade {
+        background: linear-gradient(
+          to bottom,
+          rgba(255, 255, 255, 0.78),
+          rgba(255, 255, 255, 0.42) 48%,
+          rgba(255, 255, 255, 0.12) 82%
+        );
+      }
+
+      @keyframes rise1 {
+        from {
+          transform: translate3d(-3%, 10%, 0) rotate(-4deg) scale(0.92);
+          opacity: 0.48;
+        }
+        to {
+          transform: translate3d(5%, -13%, 0) rotate(5deg) scale(1.12);
+          opacity: 0.92;
+        }
+      }
+
+      @keyframes rise2 {
+        from {
+          transform: translate3d(4%, 9%, 0) rotate(5deg) scale(0.94);
+          opacity: 0.5;
+        }
+        to {
+          transform: translate3d(-5%, -12%, 0) rotate(-4deg) scale(1.14);
+          opacity: 0.9;
+        }
+      }
+
+      @keyframes rise3 {
+        from {
+          transform: translate3d(-4%, 8%, 0) rotate(-3deg) scale(0.9);
+          opacity: 0.45;
+        }
+        to {
+          transform: translate3d(4%, -15%, 0) rotate(4deg) scale(1.1);
+          opacity: 0.88;
+        }
+      }
+
+      @keyframes sway {
+        from { translate: -7% 0; }
+        to { translate: 7% 0; }
+      }
+
+      @keyframes sway2 {
+        from { translate: 7% 0; }
+        to { translate: -7% 0; }
+      }
+
+      @keyframes tide {
+        from { transform: translateY(4%); }
+        to { transform: translateY(-5%); }
+      }
+
+      @keyframes tide2 {
+        from { transform: translateY(-4%); }
+        to { transform: translateY(5%); }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .impact-card.fx-card .puff,
+        .impact-card.fx-card .wave,
+        .impact-card.fx-card .wave::before {
+          animation: none !important;
+          will-change: auto;
+        }
+      }
+
       .impact-estimate-label {
         display: inline-flex;
         align-items: center;
@@ -13171,21 +13352,35 @@
                 <p class="mt-2 text-2xl sm:text-3xl font-bold text-ink-900">${count}</p>
                 <p class="mt-1 text-xs text-ink-600">Được tính là đã tái sử dụng</p>
               </article>
-              <article class="impact-card p-4 sm:p-5">
-                <p class="text-xs font-semibold text-ink-500">CO₂ tương ứng tránh được</p>
-                <p class="mt-2 flex flex-wrap items-center gap-2 text-xl sm:text-2xl font-bold text-ink-900">
-                  <span class="impact-estimate-label">Ước tính</span>
-                  <span>${formatImpactValue(impact.co2e_avoided_kg, "co2")} kg CO₂e</span>
-                </p>
-                <p class="mt-1 text-xs text-ink-600">Một ước tính tham chiếu theo mô hình; không phải số đo riêng cho từng món.</p>
+              <article class="impact-card fx-card p-4 sm:p-5">
+                <div class="fx fx-smoke" aria-hidden="true">
+                  <i class="puff p1"></i>
+                  <i class="puff p2"></i>
+                  <i class="puff p3"></i>
+                </div>
+                <div class="impact-fx-content">
+                  <p class="text-xs font-semibold text-ink-500">CO₂ tương ứng tránh được</p>
+                  <p class="mt-2 flex flex-wrap items-center gap-2 text-xl sm:text-2xl font-bold text-ink-900">
+                    <span class="impact-estimate-label">Ước tính</span>
+                    <span>${formatImpactValue(impact.co2e_avoided_kg, "co2")} kg CO₂e</span>
+                  </p>
+                  <p class="mt-1 text-xs text-ink-600">Một ước tính tham chiếu theo mô hình; không phải số đo riêng cho từng món.</p>
+                </div>
               </article>
-              <article class="impact-card p-4 sm:p-5">
-                <p class="text-xs font-semibold text-ink-500">Dấu chân nước tương ứng tránh được</p>
-                <p class="mt-2 flex flex-wrap items-center gap-2 text-xl sm:text-2xl font-bold text-ink-900">
-                  <span class="impact-estimate-label">Ước tính</span>
-                  <span>${formatImpactValue(impact.water_avoided_l, "water")} L</span>
-                </p>
-                <p class="mt-1 text-xs text-ink-600">Một ước tính tham chiếu theo mô hình; không phải số đo riêng cho từng món.</p>
+              <article class="impact-card fx-card p-4 sm:p-5">
+                <div class="fx fx-water" aria-hidden="true">
+                  <i class="wave w1"></i>
+                  <i class="wave w2"></i>
+                  <div class="shade"></div>
+                </div>
+                <div class="impact-fx-content">
+                  <p class="text-xs font-semibold text-ink-500">Dấu chân nước tương ứng tránh được</p>
+                  <p class="mt-2 flex flex-wrap items-center gap-2 text-xl sm:text-2xl font-bold text-ink-900">
+                    <span class="impact-estimate-label">Ước tính</span>
+                    <span>${formatImpactValue(impact.water_avoided_l, "water")} L</span>
+                  </p>
+                  <p class="mt-1 text-xs text-ink-600">Một ước tính tham chiếu theo mô hình; không phải số đo riêng cho từng món.</p>
+                </div>
               </article>
             </div>
             ${emptyNotice}

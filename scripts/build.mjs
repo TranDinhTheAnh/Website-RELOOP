@@ -1,4 +1,4 @@
-import { copyFile, mkdir, readFile } from "node:fs/promises";
+import { copyFile, cp, mkdir, readFile } from "node:fs/promises";
 import { Script } from "node:vm";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -21,4 +21,7 @@ for (const [index, match] of [...scriptTags].entries()) {
 await mkdir(dirname(outputPath), { recursive: true });
 await copyFile(sourcePath, outputPath);
 await copyFile(redirectsPath, resolve(root, "dist", "_redirects"));
+await cp(resolve(root, "assets"), resolve(root, "dist", "assets"), {
+  recursive: true,
+});
 console.log(`Built static app to dist/index.html (${checkedScripts} scripts checked).`);
