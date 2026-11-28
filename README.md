@@ -47,10 +47,25 @@ Bucket private `uploads` nhận ảnh dạng base64 khi đăng sản phẩm/ký 
 
 Neon Realtime đã được provision nhưng tin nhắn vẫn dùng WebSocket FastAPI hiện có; Neon Realtime live queries chưa được tích hợp vào UI. Neon Auth cũng chưa được nối vào đăng nhập theo lựa chọn giữ custom auth.
 
+## Bảng tác động môi trường
+
+Các endpoint `GET /api/impact/me` (cần đăng nhập), `GET /api/impact/platform` (công khai, cache 60 giây) và `GET /api/impact/methodology` (công khai) trả dữ liệu ước tính theo phương pháp `reloop-impact-2026.1`. Chỉ món trong đơn `completed` được tính; tin đăng/ký gửi chưa bán không tạo tác động. Sản phẩm có khiếu nại đã giải quyết theo hướng hoàn tiền, hoàn một phần hoặc đổi hàng bị loại. Việc ký gửi lại không tự cộng thêm, còn lần bán tiếp theo chỉ được tính khi đơn đó hoàn tất.
+
+Hệ số nền tham khảo báo cáo EEA năm 2022; nguyên tắc phụ thuộc tỷ lệ thay thế dựa trên tổng quan Sandin & Peters năm 2018. Khối lượng theo danh mục, tỷ lệ thay thế thấp/trung bình/cao 25%/50%/75% và phần phát sinh vận chuyển/làm sạch/kiểm định là giả định dự án, không phải số đo riêng cho RE:LOOP. Nước là dấu chân nước xanh lam + xanh lục, không thể hiểu là lượng nước sạch được tiết kiệm tại một địa điểm. Chi tiết nguồn, công thức và giới hạn được API phương pháp trả về để frontend hiển thị.
+
+Các cột cũ `users.co2_saved` và `users.water_saved` vẫn được giữ cho tương thích, nhưng không còn được cộng khi đăng bán, hoàn tất đơn hay ký gửi lại. API đăng nhập, hồ sơ và chứng nhận quyên góp tính lại giá trị tương thích từ đơn hoàn tất; số hiển thị của thành viên hiện tại vì vậy có thể giảm so với số tích lũy cũ. Không có migration ghi đè hoặc xóa dữ liệu lịch sử.
+
 ## Build và kiểm thử
 
 ```powershell
 npm run build
 python -m py_compile reloop_backend.py
 python -m unittest discover -s tests -v
+```
+
+Để chạy test API tác động bằng SQLite tạm và FastAPI TestClient:
+
+```powershell
+python -m pip install -r requirements-dev.txt
+python -m pytest -q tests/test_impact.py
 ```

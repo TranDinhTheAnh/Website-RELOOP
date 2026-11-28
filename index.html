@@ -528,6 +528,57 @@
         animation: tab-enter 280ms var(--ease-smooth) both;
       }
 
+      .impact-card {
+        min-width: 0;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-card);
+        background: var(--surface);
+        box-shadow: var(--shadow-card);
+      }
+
+      .impact-estimate-label {
+        display: inline-flex;
+        align-items: center;
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        border-radius: 999px;
+        padding: 0.2rem 0.55rem;
+        background: var(--eco-50);
+        color: var(--eco-900);
+        font-size: 0.68rem;
+        font-weight: 700;
+        line-height: 1.3;
+        white-space: nowrap;
+      }
+
+      .impact-skeleton {
+        min-height: 8rem;
+        border-radius: var(--radius-card);
+        background: linear-gradient(100deg, var(--surface-muted) 25%, var(--surface) 42%, var(--surface-muted) 62%);
+        background-size: 220% 100%;
+        animation: impact-shimmer 1.5s ease-in-out infinite;
+      }
+
+      @keyframes impact-shimmer {
+        to { background-position-x: -220%; }
+      }
+
+      html[data-theme="dark"] .impact-estimate-label {
+        border-color: rgba(110, 231, 183, 0.32);
+        background: #173c2e;
+        color: #b7f7d8;
+      }
+
+      html[data-theme="dark"] .impact-skeleton {
+        background: linear-gradient(100deg, #17241e 25%, #26382f 42%, #17241e 62%);
+        background-size: 220% 100%;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .impact-skeleton {
+          animation: none;
+        }
+      }
+
       @keyframes order-dots {
         0%, 80%, 100% { opacity: .25; transform: translateY(0); }
         40% { opacity: 1; transform: translateY(-4px); }
@@ -5073,14 +5124,14 @@
                 <p>Số liệu tải trực tiếp từ API, có thể thay đổi theo gian hàng.</p>
               </article>
               <article class="intro-stat" data-intro-reveal>
-                <strong data-intro-count data-count-value="6.2" data-count-decimals="1">0</strong>
-                <span class="intro-mono">KG CO₂ / ĐĂNG BÁN</span>
-                <p>Chỉ số hệ thống ghi nhận cho mỗi lượt đăng bán mới.</p>
+                <strong id="intro-impact-co2" aria-live="polite">Đang tải…</strong>
+                <span class="intro-mono">ƯỚC TÍNH CO₂e TOÀN SÀN</span>
+                <p>Khoảng thấp–cao theo mô hình; không phải số đo trực tiếp.</p>
               </article>
               <article class="intro-stat" data-intro-reveal>
-                <strong data-intro-count data-count-value="1400">0</strong>
-                <span class="intro-mono">L NƯỚC / ĐĂNG BÁN</span>
-                <p>Chỉ số tiết kiệm được ghi nhận trong backend.</p>
+                <strong id="intro-impact-water" aria-live="polite">Đang tải…</strong>
+                <span class="intro-mono">ƯỚC TÍNH DẤU CHÂN NƯỚC TOÀN SÀN</span>
+                <p>Khoảng thấp–cao; gồm dấu chân nước xanh lam và xanh lục.</p>
               </article>
               <article class="intro-stat" data-intro-reveal>
                 <strong data-intro-count data-count-value="250">0</strong>
@@ -5262,15 +5313,22 @@
               class="hero-stat-card bg-white/90 backdrop-blur p-4 rounded-2xl border border-sand-200 shadow-sm col-span-2"
             >
               <p class="text-sm font-semibold text-ink-900">
-                🌿 Tiết kiệm
-                <span class="hero-count" data-count-value="4.2">4.2</span> kg
-                CO₂ &amp;
-                <span class="hero-count" data-count-value="2700">2,700</span>L
-                nước
+                🌿 Ước tính tác động toàn sàn
               </p>
-              <p class="text-xs text-ink-500 mt-0.5">
-                Cho mỗi sản phẩm được tái tuần hoàn thành công
+              <p
+                id="hero-impact-summary"
+                class="text-xs text-ink-600 mt-1 leading-relaxed"
+                aria-live="polite"
+              >
+                Đang tải số liệu ước tính…
               </p>
+              <button
+                type="button"
+                onclick="switchTab('green')"
+                class="mt-2 text-xs font-semibold text-eco-700 underline underline-offset-2"
+              >
+                Xem bảng tác động &amp; cách tính
+              </button>
             </div>
           </div>
         </div>
@@ -6105,7 +6163,7 @@
         <div
           class="rounded-3xl bg-gradient-to-r from-eco-900 to-eco-700 text-white p-6 sm:p-10 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center"
         >
-          <div class="lg:col-span-7 space-y-3">
+          <div class="lg:col-span-12 space-y-3">
             <span
               class="inline-block px-3 py-1 rounded-full bg-white/15 text-eco-100 text-xs font-semibold"
               >RE:LOOP Green Rewards</span
@@ -6128,31 +6186,50 @@
               </button>
             </div>
           </div>
-          <div class="lg:col-span-5 grid grid-cols-2 gap-4">
-            <div
-              class="rounded-2xl bg-white/10 backdrop-blur p-4 border border-white/15"
-            >
-              <p class="text-xs text-eco-100">CO₂ đã cắt giảm</p>
-              <p class="text-2xl sm:text-3xl font-bold mt-1">
-                <span id="stat-co2">12.6</span> kg
-              </p>
-              <p class="text-[11px] text-eco-200 mt-1">
-                Tương đương 2 cây xanh trưởng thành
+        </div>
+
+        <section
+          id="impact-dashboard"
+          class="impact-card p-5 sm:p-7 space-y-5"
+          aria-labelledby="impact-dashboard-title"
+        >
+          <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+            <div class="max-w-3xl">
+              <span class="inline-flex items-center gap-2 rounded-full bg-eco-50 px-3 py-1 text-xs font-bold text-eco-800">
+                TÁC ĐỘNG VÒNG ĐỜI THỨ HAI
+              </span>
+              <h3 id="impact-dashboard-title" class="mt-3 font-display text-2xl sm:text-3xl font-semibold text-ink-900">
+                Tác động môi trường của bạn
+              </h3>
+              <p class="mt-2 text-sm leading-relaxed text-ink-600">
+                Mỗi món trong đơn hoàn tất được tính là một lượt tái sử dụng theo mô hình của RE:LOOP.
+                Các giá trị CO₂e và dấu chân nước là <strong>ước tính</strong>, không phải số đo trực tiếp.
+                <button type="button" onclick="openImpactMethodologyModal()" class="font-bold text-eco-700 underline underline-offset-2">
+                  Cách tính
+                </button>
               </p>
             </div>
-            <div
-              class="rounded-2xl bg-white/10 backdrop-blur p-4 border border-white/15"
+            <button
+              type="button"
+              onclick="loadImpactData(true)"
+              id="impact-retry-button"
+              class="hidden min-h-11 shrink-0 rounded-xl border border-sand-200 bg-white px-4 py-2 text-sm font-bold text-ink-800 hover:bg-sand-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-eco-700"
             >
-              <p class="text-xs text-eco-100">Nước sạch tiết kiệm</p>
-              <p class="text-2xl sm:text-3xl font-bold mt-1">
-                <span id="stat-water">8,100</span> L
-              </p>
-              <p class="text-[11px] text-eco-200 mt-1">
-                Giảm tải dệt nhuộm mới
-              </p>
+              Thử tải lại
+            </button>
+          </div>
+          <div id="impact-dashboard-content" aria-live="polite" aria-busy="true">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3" aria-hidden="true">
+              <div class="impact-skeleton"></div>
+              <div class="impact-skeleton"></div>
+              <div class="impact-skeleton"></div>
             </div>
           </div>
-        </div>
+          <p class="text-xs leading-relaxed text-ink-500">
+            Ước tính dựa trên đơn hoàn tất, hệ số trung bình ngành và giả định về khả năng thay thế đồ mới;
+            kết quả có thể khác với tác động thực tế.
+          </p>
+        </section>
 
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
           <!-- Option 1: Redeem Shopping Vouchers -->
@@ -6789,21 +6866,55 @@
           id="cert-user-name"
           class="text-2xl font-extrabold text-eco-800 border-b border-eco-200 pb-2 inline-block px-6"
         >
-          Minh Anh
+          Thành viên RE:LOOP
         </p>
-        <p class="text-xs text-ink-700 leading-relaxed">
-          Đã tích cực tham gia tái tuần hoàn trang phục, tiết kiệm
-          <strong id="cert-co2">12.6 kg CO₂</strong> &
-          <strong id="cert-water">8,100 lít nước</strong> sạch, đồng thời đóng
-          góp Điểm Xanh cho các dự án phục hồi thiên nhiên Việt Nam.
+        <p id="cert-impact-copy" class="text-xs text-ink-700 leading-relaxed">
+          Theo các đơn hàng hoàn tất trên RE:LOOP, đóng góp của bạn tương ứng
+          với <span class="impact-estimate-label">Ước tính</span>
+          <strong id="cert-co2">chưa có số liệu</strong> và
+          <span class="impact-estimate-label">Ước tính</span>
+          <strong id="cert-water">chưa có số liệu</strong> dấu chân nước.
+          Đây là kết quả theo mô hình, không phải số đo trực tiếp.
         </p>
         <div class="pt-3 flex justify-center gap-3">
           <button
+            id="cert-print-button"
             onclick="window.print()"
             class="px-5 py-2 rounded-xl bg-eco-600 text-white text-xs font-semibold hover:bg-eco-700"
           >
             In / Lưu Chứng nhận
           </button>
+        </div>
+      </div>
+    </div>
+
+    <div
+      id="impact-methodology-modal"
+      class="modal-backdrop hidden fixed inset-0 z-[60] bg-ink-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="impact-methodology-title"
+      tabindex="-1"
+    >
+      <div class="w-full max-w-3xl max-h-[90dvh] overflow-y-auto rounded-3xl border border-sand-200 bg-white p-5 sm:p-8 shadow-2xl">
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <p class="text-xs font-bold uppercase tracking-[0.16em] text-eco-700">Minh bạch phương pháp</p>
+            <h2 id="impact-methodology-title" class="mt-2 font-display text-2xl sm:text-3xl font-semibold text-ink-900">
+              Cách tính tác động ước tính
+            </h2>
+          </div>
+          <button
+            type="button"
+            onclick="closeImpactMethodologyModal()"
+            class="shrink-0 rounded-xl p-2 text-ink-700 hover:bg-sand-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-eco-700"
+            aria-label="Đóng cách tính tác động"
+          >
+            ✕
+          </button>
+        </div>
+        <div id="impact-methodology-content" class="mt-5 space-y-4" aria-live="polite">
+          <p class="text-sm text-ink-600">Đang tải phương pháp và nguồn tham khảo…</p>
         </div>
       </div>
     </div>
@@ -7160,6 +7271,16 @@
         lastTypingSentAt: 0,
         charityProjects: [],
         charityProjectsError: "Đang tải các dự án quỹ...",
+        impactData: null,
+        impactSource: null,
+        impactError: null,
+        impactLoadedAt: 0,
+        impactLoading: false,
+        impactRequestId: 0,
+        platformImpact: null,
+        platformImpactError: null,
+        platformImpactLoadedAt: 0,
+        platformImpactPromise: null,
         activeContextProductId: null,
         chatHistory: [],
         activeStylistWardrobeId: null,
@@ -7611,16 +7732,24 @@
             try {
               const me = await apiFetch("/api/auth/me");
               const u = me.user || me;
+              const previousUserId = state.user?.id || null;
               const mergedUser = {
                 id: u.id,
                 name: u.full_name || u.name || "Thành viên RE:LOOP",
                 email: u.email,
                 points: u.green_points ?? u.points ?? 450,
+                co2_saved: u.co2_saved ?? 0,
+                water_saved: u.water_saved ?? 0,
                 height: u.height_cm || u.height || 165,
                 weight: u.weight_kg || u.weight || 55,
+                emailVerified:
+                  u.email_verified === undefined
+                    ? true
+                    : u.email_verified === true || u.email_verified === 1,
                 isAdmin: Boolean(me.is_admin ?? u.is_admin),
               };
               state.user = mergedUser;
+              if (previousUserId !== mergedUser.id) invalidateImpactState();
               state.notifications = Array.isArray(me.notifications)
                 ? me.notifications
                 : [];
@@ -8024,10 +8153,17 @@
           name: u.full_name || u.name || rawEmail.split("@")[0],
           email: u.email || rawEmail,
           points: u.green_points ?? u.points ?? 0,
+          co2_saved: u.co2_saved ?? 0,
+          water_saved: u.water_saved ?? 0,
           height: u.height_cm || u.height || 165,
           weight: u.weight_kg || u.weight || 55,
+          emailVerified:
+            u.email_verified === undefined
+              ? true
+              : u.email_verified === true || u.email_verified === 1,
           isAdmin: Boolean(u.is_admin),
         };
+        invalidateImpactState();
         localStorage.setItem("reloop_token", state.token);
         closeAuthModal();
         refreshAllUI();
@@ -8053,6 +8189,7 @@
         closeMessagesSocket();
         state.token = null;
         state.user = null;
+        invalidateImpactState();
         state.notifications = [];
         state.conversations = [];
         state.unreadMessageCount = 0;
@@ -8065,6 +8202,9 @@
         toggleUserDropdown(false);
         toggleNotifications(false);
         refreshAllUI();
+        if (!document.getElementById("section-green").classList.contains("hidden")) {
+          loadImpactData(true);
+        }
         showToast(
           revocationError
             ? "Đã đăng xuất trên thiết bị này nhưng chưa thu hồi được phiên trên máy chủ."
@@ -11267,6 +11407,10 @@
           showToast(result.message || "Đã xác nhận nhận hàng.", "success");
           await loadMyOrders();
           await syncFromBackend(false);
+          invalidateImpactState();
+          if (!document.getElementById("section-green").classList.contains("hidden")) {
+            loadImpactData(true);
+          }
         } catch (error) {
           showToast(`Không thể xác nhận nhận hàng: ${error.message}`, "error");
           button.disabled = false;
@@ -12801,6 +12945,451 @@
         document.getElementById("green-page-points").textContent = pts;
       }
 
+      function formatImpactNumber(value, unit) {
+        const numeric = Number(value);
+        if (!Number.isFinite(numeric) || numeric < 0) return "—";
+        const rounded =
+          unit === "co2"
+            ? Math.round(numeric * 10) / 10
+            : unit === "mass"
+              ? Math.round(numeric * 100) / 100
+            : Math.round(numeric / 10) * 10;
+        return new Intl.NumberFormat("vi-VN", {
+          minimumFractionDigits: unit === "co2" ? 1 : unit === "mass" ? 2 : 0,
+          maximumFractionDigits: unit === "co2" ? 1 : unit === "mass" ? 2 : 0,
+        }).format(rounded);
+      }
+
+      function isValidImpactSummary(impact) {
+        if (
+          !impact ||
+          !Number.isSafeInteger(impact.items_reused) ||
+          impact.items_reused < 0 ||
+          impact.is_estimate !== true ||
+          typeof impact.methodology_version !== "string" ||
+          typeof impact.calculated_at !== "string" ||
+          !Number.isFinite(Date.parse(impact.calculated_at)) ||
+          !Array.isArray(impact.by_category)
+        ) {
+          return false;
+        }
+        return ["co2e_avoided_kg", "water_avoided_l"].every((metric) => {
+          const values = impact[metric];
+          return (
+            values &&
+            ["low", "mid", "high"].every(
+              (scenario) =>
+                Number.isFinite(Number(values[scenario])) &&
+                Number(values[scenario]) >= 0,
+            ) &&
+            Number(values.low) <= Number(values.mid) &&
+            Number(values.mid) <= Number(values.high)
+          );
+        });
+      }
+
+      function formatImpactRange(values, unit) {
+        if (!values) return "—";
+        return `${formatImpactNumber(values.low, unit)}–${formatImpactNumber(values.high, unit)}`;
+      }
+
+      function renderPlatformImpactSummary() {
+        const element = document.getElementById("hero-impact-summary");
+        const introCo2 = document.getElementById("intro-impact-co2");
+        const introWater = document.getElementById("intro-impact-water");
+        if (!element) return;
+        if (state.platformImpactError) {
+          element.textContent =
+            "Chưa tải được số liệu toàn sàn. Hãy xem lại sau.";
+          if (introCo2) introCo2.textContent = "Chưa tải được";
+          if (introWater) introWater.textContent = "Chưa tải được";
+          return;
+        }
+        if (!state.platformImpact) {
+          element.textContent = "Đang tải số liệu ước tính…";
+          if (introCo2) introCo2.textContent = "Đang tải…";
+          if (introWater) introWater.textContent = "Đang tải…";
+          return;
+        }
+        const impact = state.platformImpact;
+        if (introCo2) {
+          introCo2.textContent = `${formatImpactRange(impact.co2e_avoided_kg, "co2")} kg`;
+        }
+        if (introWater) {
+          introWater.textContent = `${formatImpactRange(impact.water_avoided_l, "water")} L`;
+        }
+        element.innerHTML = `
+          <span class="impact-estimate-label">Ước tính CO₂e</span>
+          <strong>${formatImpactRange(impact.co2e_avoided_kg, "co2")}</strong> kg
+          <span class="impact-estimate-label ml-1">Ước tính dấu chân nước</span>
+          <strong>${formatImpactRange(impact.water_avoided_l, "water")}</strong> L
+          <span class="block mt-1">${formatImpactNumber(impact.items_reused, "count")} món trong đơn hoàn tất được tính là đã tái sử dụng.</span>
+        `;
+      }
+
+      async function loadPlatformImpact(force = false) {
+        if (state.platformImpactPromise) return state.platformImpactPromise;
+        if (
+          !force &&
+          state.platformImpact &&
+          Date.now() - state.platformImpactLoadedAt < 60000
+        ) {
+          renderPlatformImpactSummary();
+          return state.platformImpact;
+        }
+        state.platformImpact = null;
+        state.platformImpactError = null;
+        renderPlatformImpactSummary();
+        state.platformImpactPromise = (async () => {
+          try {
+            const result = await apiFetch("/api/impact/platform");
+            if (!isValidImpactSummary(result)) {
+              throw new Error("Dữ liệu tác động toàn sàn không hợp lệ.");
+            }
+            state.platformImpact = result;
+            state.platformImpactLoadedAt = Date.now();
+            state.platformImpactError = null;
+            return result;
+          } catch (error) {
+            state.platformImpact = null;
+            state.platformImpactError =
+              error.message || "Không tải được số liệu tác động toàn sàn.";
+            throw error;
+          } finally {
+            state.platformImpactPromise = null;
+            renderPlatformImpactSummary();
+          }
+        })();
+        return state.platformImpactPromise;
+      }
+
+      function invalidateImpactState() {
+        state.impactRequestId += 1;
+        state.impactData = null;
+        state.impactSource = null;
+        state.impactError = null;
+        state.impactLoadedAt = 0;
+        state.impactLoading = false;
+        renderImpactDashboard();
+      }
+
+      function renderImpactDashboard() {
+        const content = document.getElementById("impact-dashboard-content");
+        if (!content) return;
+        const title = document.getElementById("impact-dashboard-title");
+        const retryButton = document.getElementById("impact-retry-button");
+        const isOnlineUser =
+          Boolean(state.user && state.token) &&
+          !isLocalAuthToken(state.token);
+        const isPersonal = isOnlineUser && state.impactSource === "personal";
+        title.textContent = isPersonal
+          ? "Tác động môi trường của bạn"
+          : "Ước tính tác động toàn sàn";
+        if (state.impactLoading) {
+          retryButton.classList.add("hidden");
+          content.setAttribute("aria-busy", "true");
+          content.innerHTML = `
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3" aria-label="Đang tải số liệu tác động">
+              <div class="impact-skeleton"></div>
+              <div class="impact-skeleton"></div>
+              <div class="impact-skeleton"></div>
+            </div>
+          `;
+          return;
+        }
+        if (state.impactError) {
+          retryButton.classList.remove("hidden");
+          content.setAttribute("aria-busy", "false");
+          content.innerHTML = `
+            <div class="rounded-2xl border border-sand-200 bg-sand-50 p-5 text-sm text-ink-700" role="alert">
+              ${escapeHtml(state.impactError)}
+            </div>
+          `;
+          return;
+        }
+        const impact = state.impactData;
+        if (!impact || !isValidImpactSummary(impact)) {
+          retryButton.classList.add("hidden");
+          content.setAttribute("aria-busy", "false");
+          content.innerHTML =
+            '<p class="text-sm text-ink-600">Chưa có số liệu để hiển thị.</p>';
+          return;
+        }
+        retryButton.classList.add("hidden");
+        content.setAttribute("aria-busy", "false");
+        const count = formatImpactNumber(impact.items_reused, "count");
+        const categoryRows = impact.by_category.length
+          ? impact.by_category
+              .map((item) => {
+                if (
+                  !item ||
+                  typeof item.category !== "string" ||
+                  !Number.isSafeInteger(item.items_reused) ||
+                  item.items_reused < 0 ||
+                  !isValidImpactSummary({
+                    ...impact,
+                    items_reused: item.items_reused,
+                    by_category: [],
+                    co2e_avoided_kg: item.co2e_avoided_kg,
+                    water_avoided_l: item.water_avoided_l,
+                  })
+                ) {
+                  return "";
+                }
+                return `
+                  <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1fr)] gap-2 sm:items-center border-t border-sand-200 py-3 text-sm">
+                    <span class="font-semibold text-ink-900">${escapeHtml(item.category)} · ${formatImpactNumber(item.items_reused, "count")} món</span>
+                    <span class="text-ink-700"><span class="impact-estimate-label">Ước tính CO₂e</span> ${formatImpactRange(item.co2e_avoided_kg, "co2")} kg</span>
+                    <span class="text-ink-700"><span class="impact-estimate-label">Ước tính nước</span> ${formatImpactRange(item.water_avoided_l, "water")} L</span>
+                  </div>
+                `;
+              })
+              .filter(Boolean)
+              .join("")
+          : '<p class="border-t border-sand-200 pt-3 text-sm text-ink-500">Chưa có món nào trong đơn hoàn tất.</p>';
+        const accountNotice = isPersonal && state.user.emailVerified === false
+          ? '<p class="rounded-xl bg-sand-50 p-3 text-sm text-ink-700">Email tài khoản chưa được xác minh. Số liệu vẫn được tính từ các đơn hoàn tất đã lưu.</p>'
+          : "";
+        const guestNotice = !isPersonal
+          ? `
+            <div class="rounded-2xl border border-eco-200 bg-eco-50 p-4 text-sm text-ink-700">
+              Đây là số liệu ước tính toàn sàn. <button type="button" onclick="openAuthModal('login')" class="font-bold text-eco-700 underline underline-offset-2">Đăng nhập để xem bảng cá nhân.</button>
+            </div>
+          `
+          : "";
+        const emptyNotice =
+          isPersonal && impact.items_reused === 0
+            ? `
+              <div class="rounded-2xl border border-sand-200 bg-sand-50 p-4 text-sm leading-relaxed text-ink-700">
+                Chưa có đơn hàng hoàn tất được tính cho tài khoản này. Khi đơn được giao và chuyển sang trạng thái hoàn tất, món hàng sẽ xuất hiện tại đây.
+              </div>
+            `
+            : "";
+        content.innerHTML = `
+          <div class="space-y-4">
+            ${accountNotice}
+            ${guestNotice}
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <article class="impact-card p-4 sm:p-5">
+                <p class="text-xs font-semibold text-ink-500">Món trong đơn hoàn tất</p>
+                <p class="mt-2 text-2xl sm:text-3xl font-bold text-ink-900">${count}</p>
+                <p class="mt-1 text-xs text-ink-600">Được tính là đã tái sử dụng</p>
+              </article>
+              <article class="impact-card p-4 sm:p-5">
+                <p class="text-xs font-semibold text-ink-500">CO₂ tương ứng tránh được</p>
+                <p class="mt-2 flex flex-wrap items-center gap-2 text-xl sm:text-2xl font-bold text-ink-900">
+                  <span class="impact-estimate-label">Ước tính</span>
+                  <span>${formatImpactRange(impact.co2e_avoided_kg, "co2")} kg CO₂e</span>
+                </p>
+                <p class="mt-1 text-xs text-ink-600">Kịch bản trung bình: khoảng ${formatImpactNumber(impact.co2e_avoided_kg.mid, "co2")} kg</p>
+              </article>
+              <article class="impact-card p-4 sm:p-5">
+                <p class="text-xs font-semibold text-ink-500">Dấu chân nước tương ứng tránh được</p>
+                <p class="mt-2 flex flex-wrap items-center gap-2 text-xl sm:text-2xl font-bold text-ink-900">
+                  <span class="impact-estimate-label">Ước tính</span>
+                  <span>${formatImpactRange(impact.water_avoided_l, "water")} L</span>
+                </p>
+                <p class="mt-1 text-xs text-ink-600">Kịch bản trung bình: khoảng ${formatImpactNumber(impact.water_avoided_l.mid, "water")} L</p>
+              </article>
+            </div>
+            ${emptyNotice}
+            <div class="rounded-2xl border border-sand-200 p-4 sm:p-5">
+              <h4 class="font-bold text-ink-900">Ước tính theo danh mục</h4>
+              <p class="mb-2 mt-1 text-xs text-ink-500">Khoảng hiển thị là kịch bản thấp–cao; từng món không được đo riêng.</p>
+              <div class="mt-3">${categoryRows}</div>
+            </div>
+            <p class="text-sm leading-relaxed text-ink-600">
+              Mỗi món được dùng thêm một vòng đời có thể giảm nhu cầu sản xuất đồ mới, nhưng giao dịch hoàn tất không chứng minh chắc chắn việc mua mới đã được thay thế.
+              <button type="button" onclick="openImpactMethodologyModal()" class="font-bold text-eco-700 underline underline-offset-2">Xem giả định và giới hạn của cách tính.</button>
+            </p>
+            <p class="text-[11px] text-ink-500">Phương pháp ${escapeHtml(impact.methodology_version)} · cập nhật ${escapeHtml(new Date(impact.calculated_at).toLocaleString("vi-VN"))}</p>
+          </div>
+        `;
+      }
+
+      async function loadImpactData(force = false) {
+        const now = Date.now();
+        if (
+          !force &&
+          state.impactData &&
+          Date.now() - state.impactLoadedAt < 60000
+        ) {
+          renderImpactDashboard();
+          return state.impactData;
+        }
+        const requestId = ++state.impactRequestId;
+        state.impactData = null;
+        state.impactSource = null;
+        state.impactError = null;
+        state.impactLoading = true;
+        renderImpactDashboard();
+        const isOnlineUser =
+          Boolean(state.user && state.token) &&
+          !isLocalAuthToken(state.token);
+        try {
+          let result;
+          let source;
+          if (isOnlineUser) {
+            result = await apiFetch("/api/impact/me");
+            source = "personal";
+          } else {
+            result = await loadPlatformImpact(force);
+            source = "platform";
+          }
+          if (requestId !== state.impactRequestId) return null;
+          if (!isValidImpactSummary(result)) {
+            throw new Error("Máy chủ trả về số liệu tác động không hợp lệ.");
+          }
+          state.impactData = result;
+          state.impactSource = source;
+          state.impactLoadedAt = Date.now();
+          state.impactError = null;
+          return result;
+        } catch (error) {
+          if (requestId !== state.impactRequestId) return null;
+          state.impactData = null;
+          state.impactSource = null;
+          state.impactError =
+            error.message || "Không tải được số liệu tác động.";
+          return null;
+        } finally {
+          if (requestId === state.impactRequestId) {
+            state.impactLoading = false;
+            renderImpactDashboard();
+          }
+        }
+      }
+
+      function renderImpactMethodology(methodology) {
+        const content = document.getElementById("impact-methodology-content");
+        const categoryMass = methodology.category_mass_kg || {};
+        const scenarios = methodology.scenarios || {};
+        const production = methodology.production_impact_per_kg || {};
+        const categories = Object.entries(categoryMass)
+          .map(
+            ([category, mass]) => `
+              <tr class="border-t border-sand-200">
+                <th scope="row" class="py-2 pr-3 text-left font-semibold text-ink-800">${escapeHtml(category)}</th>
+                <td class="py-2 text-right text-ink-700"><span class="impact-estimate-label">Giả định</span> ${formatImpactNumber(mass, "mass")} kg/món</td>
+              </tr>
+            `,
+          )
+          .join("");
+        const scenarioLabels = {
+          low: "Thấp",
+          mid: "Trung bình",
+          high: "Cao",
+        };
+        const scenarioRows = ["low", "mid", "high"]
+          .map((key) => {
+            const scenario = scenarios[key];
+            if (!scenario) return "";
+            return `
+              <tr class="border-t border-sand-200">
+                <th scope="row" class="py-2 pr-3 text-left font-semibold text-ink-800">${scenarioLabels[key]}</th>
+                <td class="py-2 px-2 text-right text-ink-700">${formatImpactNumber(Number(scenario.replacement_rate) * 100, "water")}%</td>
+                <td class="py-2 px-2 text-right text-ink-700">${formatImpactNumber(scenario.additional_co2e_kg, "co2")} kg CO₂e</td>
+                <td class="py-2 pl-2 text-right text-ink-700">${formatImpactNumber(scenario.additional_water_l, "water")} L</td>
+              </tr>
+            `;
+          })
+          .join("");
+        const sources = Array.isArray(methodology.sources)
+          ? methodology.sources
+              .map((source) => {
+                const title = escapeHtml(source.name || "Nguồn tham khảo");
+                const url =
+                  typeof source.url === "string" &&
+                  source.url.startsWith("https://")
+                    ? `<a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer" class="font-semibold text-eco-700 underline underline-offset-2">${title}</a>`
+                    : title;
+                return `<li class="leading-relaxed">${url} (${escapeHtml(source.year)}): ${escapeHtml(source.used_for || "")}</li>`;
+              })
+              .join("")
+          : "";
+        const assumptions = Array.isArray(methodology.assumptions)
+          ? methodology.assumptions
+              .map((item) => `<li>${escapeHtml(item)}</li>`)
+              .join("")
+          : "";
+        const limits = Array.isArray(methodology.limits)
+          ? methodology.limits
+              .map((item) => `<li>${escapeHtml(item)}</li>`)
+              .join("")
+          : "";
+        content.innerHTML = `
+          <div class="space-y-5 text-sm leading-relaxed text-ink-700">
+            <p class="rounded-2xl bg-sand-50 p-4">
+              <strong>Phương pháp ${escapeHtml(methodology.methodology_version || "không xác định")}.</strong>
+              Đây là mô hình ước tính; kết quả không phải số đo trực tiếp.
+            </p>
+            <div>
+              <h3 class="font-bold text-ink-900">Công thức</h3>
+              <p class="mt-1">Tác động ước tính tránh được = tác động sản xuất mới × tỷ lệ thay thế − tác động phát sinh thêm cho vận chuyển, làm sạch và kiểm định. Giá trị âm được hiển thị là 0, không báo cáo như lợi ích tránh được.</p>
+              <p class="mt-2"><span class="impact-estimate-label">Ước tính theo nguồn nền</span> Mỗi kg quần áo: ${formatImpactNumber(production.co2e_kg, "co2")} kg CO₂e và ${formatImpactNumber(production.water_l, "water")} L dấu chân nước.</p>
+            </div>
+            <div>
+              <h3 class="font-bold text-ink-900">Khối lượng đại diện theo danh mục</h3>
+              <p class="mb-2 text-xs text-ink-500">Các khối lượng này là giả định của dự án, không phải số liệu nguồn hay cân từng sản phẩm.</p>
+              <div class="overflow-x-auto">
+                <table class="w-full min-w-[300px]"><tbody>${categories}</tbody></table>
+              </div>
+            </div>
+            <div>
+              <h3 class="font-bold text-ink-900">Ba kịch bản</h3>
+              <p class="mb-2 text-xs text-ink-500">Tỷ lệ thay thế và phần tác động phát sinh là giả định của dự án; kịch bản thấp dùng tỷ lệ thay thế thấp hơn và phần phát sinh cao hơn.</p>
+              <div class="overflow-x-auto">
+                <table class="w-full min-w-[560px] text-xs sm:text-sm">
+                  <thead><tr class="text-ink-500"><th class="py-2 pr-3 text-left">Kịch bản</th><th class="px-2 text-right">Thay thế</th><th class="px-2 text-right">Phát sinh CO₂e</th><th class="pl-2 text-right">Phát sinh nước</th></tr></thead>
+                  <tbody>${scenarioRows}</tbody>
+                </table>
+              </div>
+            </div>
+            <div>
+              <h3 class="font-bold text-ink-900">Nguồn tham khảo</h3>
+              <ul class="mt-2 list-disc space-y-2 pl-5">${sources}</ul>
+            </div>
+            <div>
+              <h3 class="font-bold text-ink-900">Giả định và giới hạn</h3>
+              <ul class="mt-2 list-disc space-y-2 pl-5">${assumptions}${limits}</ul>
+            </div>
+          </div>
+        `;
+      }
+
+      async function openImpactMethodologyModal() {
+        const modal = document.getElementById("impact-methodology-modal");
+        const content = document.getElementById("impact-methodology-content");
+        modal.classList.remove("hidden");
+        content.innerHTML =
+          '<p class="text-sm text-ink-600">Đang tải phương pháp và nguồn tham khảo…</p>';
+        try {
+          const response = await apiFetch("/api/impact/methodology");
+          if (
+            !response ||
+            typeof response.methodology_version !== "string" ||
+            !response.scenarios ||
+            !Array.isArray(response.sources)
+          ) {
+            throw new Error("Máy chủ trả về phương pháp không hợp lệ.");
+          }
+          renderImpactMethodology(response);
+        } catch (error) {
+          content.innerHTML = `
+            <div class="rounded-xl bg-sand-50 p-4 text-sm text-ink-700" role="alert">
+              Không tải được cách tính: ${escapeHtml(error.message)}
+              <button type="button" onclick="openImpactMethodologyModal()" class="ml-1 font-bold text-eco-700 underline">Thử lại</button>
+            </div>
+          `;
+        }
+      }
+
+      function closeImpactMethodologyModal() {
+        document
+          .getElementById("impact-methodology-modal")
+          .classList.add("hidden");
+      }
+
       async function redeemVoucher(costPoints, amountVND) {
         if (!state.token || isLocalAuthToken(state.token)) {
           showToast("Vui lòng đăng nhập tài khoản trực tuyến để đổi voucher.", "warning");
@@ -12882,6 +13471,7 @@
       }
 
       function renderGreenSection() {
+        renderImpactDashboard();
         refreshPointsDisplay();
         updateVoucherDropdown();
         document.getElementById("my-vouchers-count").textContent =
@@ -12935,11 +13525,44 @@
           .join("");
       }
 
-      function openCertificateModal() {
+      async function openCertificateModal() {
         document.getElementById("cert-user-name").textContent = state.user
           ? state.user.name
-          : "Khách hàng Sống Xanh";
-        document.getElementById("certificate-modal").classList.remove("hidden");
+          : "Thành viên RE:LOOP";
+        const modal = document.getElementById("certificate-modal");
+        const co2 = document.getElementById("cert-co2");
+        const water = document.getElementById("cert-water");
+        const copy = document.getElementById("cert-impact-copy");
+        const printButton = document.getElementById("cert-print-button");
+        modal.classList.remove("hidden");
+        co2.textContent = "đang tải số liệu";
+        water.textContent = "đang tải số liệu";
+        const isOnlineUser =
+          Boolean(state.user && state.token) &&
+          !isLocalAuthToken(state.token);
+        printButton.disabled = !isOnlineUser;
+        if (!isOnlineUser) {
+          copy.firstChild.textContent =
+            "Chứng nhận cá nhân chỉ có thể hiển thị sau khi bạn đăng nhập. ";
+          co2.textContent = "—";
+          water.textContent = "—";
+          return;
+        }
+        copy.firstChild.textContent =
+          "Theo các đơn hàng hoàn tất trên RE:LOOP, đóng góp của bạn tương ứng với ";
+        const impact = await loadImpactData(true);
+        if (
+          !impact ||
+          state.impactSource !== "personal" ||
+          !isValidImpactSummary(impact)
+        ) {
+          co2.textContent = "chưa tải được số liệu";
+          water.textContent = "chưa tải được số liệu";
+          return;
+        }
+        co2.textContent = `khoảng ${formatImpactNumber(impact.co2e_avoided_kg.mid, "co2")} kg CO₂e`;
+        water.textContent = `khoảng ${formatImpactNumber(impact.water_avoided_l.mid, "water")} L dấu chân nước`;
+        printButton.disabled = false;
       }
 
       // =========================================================
@@ -13188,6 +13811,7 @@
         if (tabName === "wardrobe") generateAIOutfits(false);
         if (tabName === "orders") loadMyOrders();
         updateOrdersPolling();
+        if (tabName === "green") loadImpactData();
         if (tabName === "seller") loadSellerListings();
         if (tabName === "seller") loadSellerComplaints();
         if (tabName === "complaints") loadComplaints();
@@ -13344,6 +13968,7 @@
           });
         });
         syncFromBackend(false);
+        loadPlatformImpact();
         document.addEventListener("visibilitychange", () => {
           document.body.classList.toggle(
             "orders-page-hidden",
@@ -14080,6 +14705,7 @@
           "complaint-modal",
           "auth-modal",
           "certificate-modal",
+          "impact-methodology-modal",
           "cart-drawer",
         ];
         const modalRoots = modalIds

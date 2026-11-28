@@ -37,6 +37,7 @@ from fastapi import (
     HTTPException,
     Depends,
     Header,
+    Response,
     UploadFile,
     File,
     Form,
@@ -125,6 +126,111 @@ EMAIL_PATTERN = re.compile(
     r"(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$"
 )
 logger = logging.getLogger(__name__)
+
+IMPACT_METHODOLOGY = {
+    "methodology_version": "reloop-impact-2026.1",
+    "is_estimate": True,
+    "functional_unit": "Một sản phẩm trong đơn có trạng thái completed",
+    "production_impact_per_kg": {
+        "co2e_kg": 18,
+        "water_l": 4267,
+    },
+    "category_mass_kg": {
+        "Áo": 0.20,
+        "Quần": 0.40,
+        "Váy": 0.35,
+        "Áo khoác": 0.65,
+        "Set & Phụ kiện": 0.35,
+        "Khác": 0.35,
+    },
+    "scenarios": {
+        "low": {
+            "replacement_rate": 0.25,
+            "additional_co2e_kg": 0.8,
+            "additional_water_l": 250,
+        },
+        "mid": {
+            "replacement_rate": 0.50,
+            "additional_co2e_kg": 0.5,
+            "additional_water_l": 150,
+        },
+        "high": {
+            "replacement_rate": 0.75,
+            "additional_co2e_kg": 0.2,
+            "additional_water_l": 50,
+        },
+    },
+    "sources": [
+        {
+            "name": (
+                "European Environment Agency (EEA), Textiles and the environment: "
+                "the role of design in Europe's circular economy"
+            ),
+            "year": 2022,
+            "url": (
+                "https://www.eea.europa.eu/en/analysis/publications/"
+                "textiles-and-the-environment-the-role-of-design-in-europes-circular-economy-1"
+            ),
+            "used_for": (
+                "Ước tính phát thải dệt may EU năm 2020, tiêu thụ quần áo 6 kg/người, "
+                "tỷ trọng phát thải quần áo 50%, khoảng 80% tác động khí hậu phát "
+                "sinh ở khâu sản xuất, nước xanh lam 9 m³/người và xanh lục 44 m³/người; "
+                "tỷ trọng quần áo lần lượt xấp xỉ 40% và gần 50%."
+            ),
+        },
+        {
+            "name": (
+                "Sandin & Peters, Environmental impact of textile reuse and recycling "
+                "– A review, Journal of Cleaner Production"
+            ),
+            "year": 2018,
+            "url": "https://doi.org/10.1016/j.jclepro.2018.02.266",
+            "used_for": (
+                "Cơ sở tổng quan rằng lợi ích tái sử dụng phụ thuộc vào thay thế sản "
+                "xuất mới và ranh giới vòng đời; không dùng bài tổng quan làm hệ số "
+                "thay thế cố định cho RE:LOOP."
+            ),
+        },
+    ],
+    "assumptions": [
+        (
+            "Hệ số khí hậu khâu sản xuất 18 kg CO₂e/kg được suy ra từ 270 kg CO₂e/người "
+            "cho dệt may EU năm 2020 × 50% thuộc quần áo ÷ 6 kg quần áo/người × "
+            "80% tác động ở khâu sản xuất."
+        ),
+        (
+            "Hệ số nước 4.267 L/kg là ước tính dấu chân nước xanh lam + xanh lục: "
+            "(9.000 × 40% + 44.000 × 50%) ÷ 6 kg. Tỷ trọng xanh lục 'gần 50%' "
+            "được xấp xỉ thành 50%; đây không đồng nghĩa với nước sạch có thể sử dụng."
+        ),
+        (
+            "Khối lượng đại diện theo danh mục, tỷ lệ thay thế 25%/50%/75% và tác "
+            "động phát sinh thêm cho vận chuyển/làm sạch/kiểm định đều là giả định "
+            "của dự án, không phải số đo hay hệ số LCA riêng cho RE:LOOP."
+        ),
+        (
+            "Mỗi món chỉ được tính sau đơn completed. Đây là đại diện cho một lượt "
+            "sử dụng tuần hoàn, không xác minh người mua thực sự đã mặc món đồ."
+        ),
+        (
+            "Đơn resolved có resolution_type refund, partial_refund hoặc exchange "
+            "không được tính; cách xử lý này thận trọng vì luồng hiện tại không "
+            "ghi nhận riêng việc người mua có giữ món hàng sau partial_refund hay không."
+        ),
+        (
+            "Nguồn dữ liệu nền là trung bình hệ thống dệt may EU, không được địa "
+            "phương hóa cho Việt Nam. Vật liệu, kích cỡ, vận chuyển từng đơn và "
+            "chất lượng nguồn nước không được mô hình hóa."
+        ),
+    ],
+    "limits": [
+        "Kết quả là khoảng ước tính theo mô hình, không phải số liệu đo trực tiếp.",
+        "Không chứng minh một giao dịch cụ thể đã thay thế việc mua đồ mới.",
+        "Dấu chân nước gộp nước xanh lam và nước xanh lục; không thể diễn giải là lượng nước sạch được giữ lại tại một lưu vực.",
+        "Các giá trị theo danh mục dùng khối lượng đại diện do dự án giả định; phụ kiện và sản phẩm thực tế có thể khác đáng kể.",
+    ],
+    "platform_cache_seconds": 60,
+}
 
 
 class WebSocketTicketLogFilter(logging.Filter):
@@ -1318,6 +1424,10 @@ def init_db():
             "CREATE INDEX IF NOT EXISTS idx_orders_status ON orders (order_status)"
         )
         cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_orders_impact_status_user "
+            "ON orders (order_status, user_id)"
+        )
+        cursor.execute(
             "SELECT id, created_at FROM orders WHERE order_status = 'processing'"
         )
         for legacy_order in cursor.fetchall():
@@ -1475,6 +1585,10 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_complaints_status_created
             ON complaints (status, created_at DESC)
         """)
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_complaints_impact_resolutions "
+            "ON complaints (status, resolution_type, order_id, product_id)"
+        )
         cursor.execute("""
             CREATE UNIQUE INDEX IF NOT EXISTS idx_complaints_active_order_product
             ON complaints (order_id, product_id)
@@ -2249,12 +2363,10 @@ def _finalize_order(cursor: sqlite3.Cursor, order_id: str, now: datetime) -> boo
     cursor.execute(
         """
         UPDATE users
-        SET green_points = green_points + ?,
-            co2_saved = co2_saved + ?,
-            water_saved = water_saved + ?
+        SET green_points = green_points + ?
         WHERE id = ?
         """,
-        (points_earned, round(len(products) * 5.8, 1), len(products) * 1350, order["user_id"]),
+        (points_earned, order["user_id"]),
     )
     cursor.execute(
         """
@@ -2390,6 +2502,212 @@ def enrich_product_dict(row: sqlite3.Row) -> Dict[str, Any]:
     item["is_verified_circular"] = is_circular
     item["circular_verification_message"] = CIRCULAR_BADGE_TEXT if is_circular else None
     return item
+
+
+def _impact_batches(values: List[str], batch_size: int = 500):
+    for offset in range(0, len(values), batch_size):
+        yield values[offset : offset + batch_size]
+
+
+def _calculate_impact_summary(cursor, user_id: Optional[str] = None) -> Dict[str, Any]:
+    if user_id:
+        cursor.execute(
+            """
+            SELECT id, user_id, items_json
+            FROM orders
+            WHERE order_status = 'completed' AND user_id = ?
+            """,
+            (user_id,),
+        )
+    else:
+        cursor.execute(
+            """
+            SELECT id, user_id, items_json
+            FROM orders
+            WHERE order_status = 'completed'
+            """
+        )
+
+    order_items = []
+    seen_order_products = set()
+    order_ids = set()
+    for row in cursor.fetchall():
+        order = dict(row)
+        order_ids.add(order["id"])
+        try:
+            product_ids = json.loads(order.get("items_json") or "[]")
+        except (TypeError, json.JSONDecodeError):
+            logger.warning("Skipping malformed completed-order item data.")
+            continue
+        if not isinstance(product_ids, list):
+            logger.warning("Skipping malformed completed-order item data.")
+            continue
+        for value in product_ids:
+            product_id = (
+                value.get("product_id") or value.get("id")
+                if isinstance(value, dict)
+                else value
+            )
+            if not isinstance(product_id, str) or not product_id:
+                continue
+            key = (order["id"], product_id)
+            if key in seen_order_products:
+                continue
+            seen_order_products.add(key)
+            order_items.append((order["id"], order["user_id"], product_id))
+
+    if not order_items:
+        return _empty_impact_summary()
+
+    refunded_items = set()
+    for batch in _impact_batches(sorted(order_ids)):
+        placeholders = ",".join("?" for _ in batch)
+        cursor.execute(
+            f"""
+            SELECT order_id, product_id
+            FROM complaints
+            WHERE status = 'resolved'
+              AND resolution_type IN ('refund', 'partial_refund', 'exchange')
+              AND order_id IN ({placeholders})
+            """,
+            batch,
+        )
+        refunded_items.update(
+            (row["order_id"], row["product_id"]) for row in cursor.fetchall()
+        )
+
+    product_ids = sorted({item[2] for item in order_items})
+    products_by_id = {}
+    for batch in _impact_batches(product_ids):
+        placeholders = ",".join("?" for _ in batch)
+        cursor.execute(
+            f"SELECT id, category FROM products WHERE id IN ({placeholders})",
+            batch,
+        )
+        products_by_id.update(
+            (row["id"], row["category"]) for row in cursor.fetchall()
+        )
+
+    category_totals = {}
+    for order_id, _, product_id in order_items:
+        if (order_id, product_id) in refunded_items:
+            continue
+        category = products_by_id.get(product_id)
+        if not category:
+            continue
+        category = (
+            category
+            if category in IMPACT_METHODOLOGY["category_mass_kg"]
+            else "Khác"
+        )
+        category_totals[category] = category_totals.get(category, 0) + 1
+
+    return _build_impact_summary(category_totals)
+
+
+def _empty_impact_summary() -> Dict[str, Any]:
+    return _build_impact_summary({})
+
+
+def _build_impact_summary(category_totals: Dict[str, int]) -> Dict[str, Any]:
+    scenarios = IMPACT_METHODOLOGY["scenarios"]
+    co2_totals = {name: 0.0 for name in scenarios}
+    water_totals = {name: 0.0 for name in scenarios}
+    by_category = []
+    production_per_kg = IMPACT_METHODOLOGY["production_impact_per_kg"]
+
+    category_order = [
+        "Áo",
+        "Quần",
+        "Váy",
+        "Áo khoác",
+        "Set & Phụ kiện",
+        "Khác",
+    ]
+    for category in category_order:
+        count = category_totals.get(category, 0)
+        if not count:
+            continue
+        mass = IMPACT_METHODOLOGY["category_mass_kg"][category]
+        production_co2e = mass * production_per_kg["co2e_kg"]
+        production_water = mass * production_per_kg["water_l"]
+        category_co2 = {}
+        category_water = {}
+        for scenario_name, scenario in scenarios.items():
+            category_co2[scenario_name] = count * max(
+                0.0,
+                production_co2e * scenario["replacement_rate"]
+                - scenario["additional_co2e_kg"],
+            )
+            category_water[scenario_name] = count * max(
+                0.0,
+                production_water * scenario["replacement_rate"]
+                - scenario["additional_water_l"],
+            )
+            co2_totals[scenario_name] += category_co2[scenario_name]
+            water_totals[scenario_name] += category_water[scenario_name]
+        by_category.append(
+            {
+                "category": category,
+                "items_reused": count,
+                "co2e_avoided_kg": category_co2,
+                "water_avoided_l": category_water,
+            }
+        )
+
+    return {
+        "items_reused": sum(category_totals.values()),
+        "co2e_avoided_kg": co2_totals,
+        "water_avoided_l": water_totals,
+        "by_category": by_category,
+        "methodology_version": IMPACT_METHODOLOGY["methodology_version"],
+        "is_estimate": True,
+        "calculated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@app.get("/api/impact/me", summary="Ước tính tác động tuần hoàn của tôi")
+def get_my_impact(user: Dict[str, Any] = Depends(get_current_user)):
+    with get_db() as conn:
+        impact = _calculate_impact_summary(conn.cursor(), user["id"])
+    return impact
+
+
+_impact_platform_cache_lock = threading.Lock()
+_impact_platform_cache = {"database": None, "expires_at": 0.0, "data": None}
+
+
+@app.get("/api/impact/platform", summary="Ước tính tác động toàn sàn")
+def get_platform_impact(response: Response):
+    database_key = DATABASE_URL or DB_PATH
+    now = time.monotonic()
+    with _impact_platform_cache_lock:
+        cached = _impact_platform_cache
+        if (
+            cached["database"] == database_key
+            and cached["expires_at"] > now
+            and cached["data"] is not None
+        ):
+            impact = cached["data"]
+        else:
+            with get_db() as conn:
+                impact = _calculate_impact_summary(conn.cursor())
+            _impact_platform_cache.update(
+                {
+                    "database": database_key,
+                    "expires_at": now + IMPACT_METHODOLOGY["platform_cache_seconds"],
+                    "data": impact,
+                }
+            )
+    response.headers["Cache-Control"] = (
+        f"public, max-age={IMPACT_METHODOLOGY['platform_cache_seconds']}"
+    )
+    return impact
+
+
+@app.get("/api/impact/methodology", summary="Công khai phương pháp ước tính tác động")
+def get_impact_methodology():
+    return IMPACT_METHODOLOGY
 
 
 # =============================================================================
@@ -2957,6 +3275,9 @@ def login_user(payload: LoginRequest):
             ),
         )
 
+    with get_db() as conn:
+        impact = _calculate_impact_summary(conn.cursor(), user_data["id"])
+
     return {
         "message": f"Chào mừng trở lại, {user_data['name']}!",
         "access_token": token,
@@ -2968,8 +3289,8 @@ def login_user(payload: LoginRequest):
             "height": user_data["height"],
             "weight": user_data["weight"],
             "green_points": user_data["green_points"],
-            "co2_saved": user_data["co2_saved"],
-            "water_saved": user_data["water_saved"],
+            "co2_saved": impact["co2e_avoided_kg"]["mid"],
+            "water_saved": impact["water_avoided_l"]["mid"],
             "donated_vnd": user_data["donated_vnd"],
             "is_admin": _is_admin_user(user_data),
         }
@@ -3029,8 +3350,11 @@ def get_me(user: Dict[str, Any] = Depends(get_current_user)):
         """, (user["id"],))
         notifications = [dict(r) for r in cursor.fetchall()]
         unread_notifications = sum(1 for notification in notifications if not notification["is_read"])
+        impact = _calculate_impact_summary(cursor, user["id"])
 
     user_safe = {k: v for k, v in user.items() if k not in ("password_hash", "salt")}
+    user_safe["co2_saved"] = impact["co2e_avoided_kg"]["mid"]
+    user_safe["water_saved"] = impact["water_avoided_l"]["mid"]
     return {
         "user": user_safe,
         "is_admin": _is_admin_user(user),
@@ -4035,11 +4359,7 @@ async def create_marketplace_listing(
 
         # Cộng Điểm Xanh & cập nhật chỉ số môi trường cho người bán
         cursor.execute("""
-            UPDATE users
-            SET green_points = green_points + ?,
-                co2_saved = co2_saved + 6.2,
-                water_saved = water_saved + 1400
-            WHERE id = ?
+            UPDATE users SET green_points = green_points + ? WHERE id = ?
         """, (points_earned, user["id"]))
 
         cursor.execute("""
@@ -4314,11 +4634,7 @@ def reconsign_wardrobe_item(
         # Thưởng +150 Điểm Xanh cho hành động ký gửi tuần hoàn
         points_reward = 150
         cursor.execute("""
-            UPDATE users
-            SET green_points = green_points + ?,
-                co2_saved = co2_saved + 7.5,
-                water_saved = water_saved + 1800
-            WHERE id = ?
+            UPDATE users SET green_points = green_points + ? WHERE id = ?
         """, (points_reward, user["id"]))
 
         cursor.execute("""
@@ -6122,8 +6438,9 @@ def donate_points_to_charity(
             VALUES (?, ?, ?, ?, 'spend', ?)
         """, (f"l-{uuid.uuid4().hex[:8]}", user["id"], f"Quy đổi {vnd_converted:,}đ góp {project['name']}", -payload.points_to_donate, now))
 
-        cursor.execute("SELECT green_points, donated_vnd, co2_saved, water_saved FROM users WHERE id = ?", (user["id"],))
+        cursor.execute("SELECT green_points, donated_vnd FROM users WHERE id = ?", (user["id"],))
         updated_stats = dict(cursor.fetchone())
+        impact = _calculate_impact_summary(cursor, user["id"])
         cursor.execute("SELECT raised_vnd FROM charity_projects WHERE id = ?", (payload.project_id,))
         raised_vnd = cursor.fetchone()["raised_vnd"]
 
@@ -6136,8 +6453,10 @@ def donate_points_to_charity(
         "green_certificate": {
             "holder_name": user["name"],
             "total_donated_vnd": updated_stats["donated_vnd"],
-            "co2_saved_kg": updated_stats["co2_saved"],
-            "water_saved_liters": updated_stats["water_saved"]
+            "co2_saved_kg": impact["co2e_avoided_kg"]["mid"],
+            "water_saved_liters": impact["water_avoided_l"]["mid"],
+            "methodology_version": impact["methodology_version"],
+            "is_estimate": True,
         }
     }
 
