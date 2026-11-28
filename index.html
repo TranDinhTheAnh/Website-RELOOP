@@ -4152,6 +4152,11 @@
           font-weight: 600;
         }
 
+        #admin-users-list td:not([colspan]):nth-child(4)::before {
+          content: "Thao tác: ";
+          font-weight: 600;
+        }
+
         .mobile-filter-sheet.is-open .mobile-filter-sheet-panel {
           max-height: min(70vh, 32rem);
           overflow-y: auto;
@@ -6266,11 +6271,12 @@
                   <th scope="col" class="px-4 py-3 font-semibold">Họ và tên</th>
                   <th scope="col" class="px-4 py-3 font-semibold">Email</th>
                   <th scope="col" class="px-4 py-3 font-semibold">Ngày đăng ký</th>
+                  <th scope="col" class="px-4 py-3 font-semibold">Thao tác</th>
                 </tr>
               </thead>
               <tbody id="admin-users-list" class="divide-y divide-slate-100">
                 <tr>
-                  <td colspan="3" class="px-4 py-8 text-center text-xs text-ink-500">
+                  <td colspan="4" class="px-4 py-8 text-center text-xs text-ink-500">
                     Chọn “Danh sách tài khoản” trong menu Admin để tải dữ liệu.
                   </td>
                 </tr>
@@ -8037,7 +8043,7 @@
         status.textContent = "Đang tải danh sách tài khoản...";
         list.innerHTML = `
           <tr>
-            <td colspan="3" class="px-4 py-8 text-center text-xs text-ink-500">
+            <td colspan="4" class="px-4 py-8 text-center text-xs text-ink-500">
               Đang tải...
             </td>
           </tr>`;
@@ -8051,7 +8057,7 @@
           if (response.items.length === 0) {
             list.innerHTML = `
               <tr>
-                <td colspan="3" class="px-4 py-8 text-center text-xs text-ink-500">
+                <td colspan="4" class="px-4 py-8 text-center text-xs text-ink-500">
                   Chưa có tài khoản nào.
                 </td>
               </tr>`;
@@ -8065,6 +8071,13 @@
                   <td class="px-4 py-3 font-medium text-ink-900">${escapeHtml(account.name || "—")}</td>
                   <td class="px-4 py-3 text-ink-700">${escapeHtml(account.email || "—")}</td>
                   <td class="px-4 py-3 text-ink-600">${escapeHtml(account.created_at ? formatNotificationDate(account.created_at) : "—")}</td>
+                  <td class="px-4 py-3">
+                    ${
+                      account.is_admin
+                        ? '<span class="text-xs font-semibold text-ink-500">Tài khoản quản trị</span>'
+                        : `<button type="button" data-user-id="${escapeHtml(account.id)}" onclick="deleteAdminUser(this.dataset.userId)" class="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-50">Xóa</button>`
+                    }
+                  </td>
                 </tr>`,
             )
             .join("");
@@ -8072,13 +8085,41 @@
           status.textContent = "Không tải được danh sách tài khoản.";
           list.innerHTML = `
             <tr>
-              <td colspan="3" class="px-4 py-8 text-center text-xs text-rose-700">
+              <td colspan="4" class="px-4 py-8 text-center text-xs text-rose-700">
                 ${escapeHtml(error.message || "Đã xảy ra lỗi khi tải dữ liệu.")}
               </td>
             </tr>`;
           showToast(`Không tải được tài khoản: ${error.message}`, "error");
         } finally {
           await loadAdminCodOrders();
+        }
+      }
+
+      async function deleteAdminUser(userId) {
+        if (!checkIsAdmin(state.user)) {
+          showToast("Chức năng này chỉ dành cho tài khoản Quản trị viên.", "warning");
+          return;
+        }
+        if (
+          !window.confirm(
+            "Xóa vĩnh viễn tài khoản này cùng đơn hàng, tin nhắn, khiếu nại và dữ liệu liên quan? Tin đăng đã có người mua sẽ được ẩn khỏi sàn nhưng giữ lại để bảo toàn lịch sử của người mua. Thao tác này không thể hoàn tác.",
+          )
+        ) {
+          return;
+        }
+
+        try {
+          const result = await apiFetch(
+            `/api/admin/users/${encodeURIComponent(userId)}`,
+            { method: "DELETE" },
+          );
+          showToast(
+            [result.message, result.storage_cleanup_warning].filter(Boolean).join(" "),
+            result.storage_cleanup_warning ? "warning" : "success",
+          );
+          await loadAdminUsers();
+        } catch (error) {
+          showToast(`Không thể xóa tài khoản: ${error.message}`, "error");
         }
       }
 

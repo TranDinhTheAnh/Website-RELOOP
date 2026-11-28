@@ -51,6 +51,203 @@ class AuditFixTests(unittest.TestCase):
             payment_method=method,
         )
 
+    def insert_user(self, user_id, email):
+        created_at = datetime.utcnow().isoformat()
+        with self.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO users (id, name, email, password_hash, salt, created_at)
+                VALUES (?, 'Tài khoản kiểm thử', ?, '', '', ?)
+                """,
+                (user_id, email, created_at),
+            )
+        return {"id": user_id, "email": email, "name": "Tài khoản kiểm thử"}
+
+    def test_admin_can_hard_delete_user_and_owned_data(self):
+        target = self.insert_user("u-delete-test", "delete-test@example.vn")
+        with self.connect() as conn:
+            conn.execute("UPDATE products SET seller_id = ? WHERE id = 'p-1'", (target["id"],))
+            conn.execute(
+                "UPDATE products SET seller_id = ?, image_url = ? WHERE id = 'p-4'",
+                (target["id"], "neon-s3://uploads/products/p-4/test.jpg"),
+            )
+            conn.execute(
+                "INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)",
+                ("test-delete-session", target["id"], "2099-01-01T00:00:00"),
+            )
+            conn.execute(
+                "INSERT INTO login_attempts VALUES (?, 1, ?)",
+                (
+                    backend.hashlib.sha256(target["email"].encode("utf-8")).hexdigest(),
+                    datetime.utcnow().isoformat(),
+                ),
+            )
+            conn.execute(
+                """
+                INSERT INTO wardrobe_items (
+                    id, user_id, source_product_id, title, category, size, color, material,
+                    cycle, original_price, paid_price, image_url, reconsigned, purchased_at
+                ) VALUES ('wardrobe-delete', ?, 'p-1', 'Áo thử', 'Áo', 'M', 'Đen', 'Cotton',
+                          1, 100000, 50000, 'https://example.test/item.jpg', 0, ?)
+                """,
+                (target["id"], datetime.utcnow().isoformat()),
+            )
+            conn.execute(
+                """
+                INSERT INTO wardrobe_items (
+                    id, user_id, source_product_id, title, category, size, color, material,
+                    cycle, original_price, paid_price, image_url, reconsigned, purchased_at
+                ) VALUES ('wardrobe-other', 'u-demo', 'p-1', 'Áo đã mua', 'Áo', 'M', 'Đen',
+                          'Cotton', 1, 100000, 50000, 'https://example.test/item.jpg', 0, ?)
+                """,
+                (datetime.utcnow().isoformat(),),
+            )
+            conn.execute(
+                """
+                INSERT INTO vouchers (id, user_id, code, discount_amount, min_order, is_used, created_at)
+                VALUES ('voucher-delete', ?, 'DELETE-1', 10000, 0, 0, ?)
+                """,
+                (target["id"], datetime.utcnow().isoformat()),
+            )
+            conn.execute(
+                """
+                INSERT INTO points_ledger (id, user_id, title, delta, entry_type, created_at)
+                VALUES ('ledger-delete', ?, 'Điểm thử', 10, 'earn', ?)
+                """,
+                (target["id"], datetime.utcnow().isoformat()),
+            )
+            conn.execute(
+                """
+                INSERT INTO message_presence (user_id, last_seen_at) VALUES (?, ?)
+                """,
+                (target["id"], datetime.utcnow().isoformat()),
+            )
+            conn.execute(
+                """
+                INSERT INTO notifications (
+                    id, user_id, notification_type, title, message, buyer_email, created_at
+                ) VALUES ('notification-delete', 'u-demo', 'order_received', 'Đơn thử',
+                          'Thông báo thử', ?, ?)
+                """,
+                (target["email"], datetime.utcnow().isoformat()),
+            )
+            conn.execute(
+                """
+                INSERT INTO conversations (id, product_id, buyer_id, seller_id, created_at, updated_at)
+                VALUES ('conversation-delete', 'p-3', ?, 'u-demo', ?, ?)
+                """,
+                (target["id"], datetime.utcnow().isoformat(), datetime.utcnow().isoformat()),
+            )
+            conn.execute(
+                """
+                INSERT INTO messages (id, conversation_id, sender_id, recipient_id, content, created_at)
+                VALUES ('message-delete', 'conversation-delete', ?, 'u-demo', 'Tin nhắn thử', ?)
+                """,
+                (target["id"], datetime.utcnow().isoformat()),
+            )
+
+        order = backend.checkout_order(self.checkout_payload("p-2"), target)
+        with self.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO payments (id, order_id, method, amount_vnd, status, created_at)
+                VALUES ('payment-delete', ?, 'COD', 50000, 'unpaid', ?)
+                """,
+                (order["order_id"], datetime.utcnow().isoformat()),
+            )
+            conn.execute(
+                """
+                INSERT INTO complaints (
+                    id, order_id, product_id, buyer_id, seller_id, reason_code, description,
+                    desired_resolution, evidence_json, product_snapshot_json, status,
+                    created_at, updated_at
+                ) VALUES ('complaint-delete', ?, 'p-2', ?, 'u-demo', 'other', 'Mô tả thử',
+                          'refund', '[]', '{}', 'open', ?, ?)
+                """,
+                (
+                    order["order_id"],
+                    target["id"],
+                    datetime.utcnow().isoformat(),
+                    datetime.utcnow().isoformat(),
+                ),
+            )
+            conn.execute(
+                """
+                INSERT INTO complaint_events (
+                    id, complaint_id, actor_id, actor_role, event_type, note, created_at
+                ) VALUES ('complaint-event-delete', 'complaint-delete', ?, 'buyer',
+                          'created', 'Tạo khiếu nại thử', ?)
+                """,
+                (target["id"], datetime.utcnow().isoformat()),
+            )
+
+        with patch.object(backend, "delete_stored_product_image", return_value=True) as delete_image:
+            result = backend.delete_registered_user(target["id"], self.admin)
+
+        self.assertEqual(result["user_id"], target["id"])
+        self.assertEqual(result["archived_products"], 1)
+        self.assertIsNone(result["storage_cleanup_warning"])
+        delete_image.assert_called_once_with("neon-s3://uploads/products/p-4/test.jpg")
+        with self.connect() as conn:
+            self.assertIsNone(conn.execute("SELECT id FROM users WHERE id = ?", (target["id"],)).fetchone())
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM orders WHERE user_id = ?", (target["id"],)).fetchone()[0], 0)
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM payments WHERE id = 'payment-delete'").fetchone()[0], 0)
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM order_status_history WHERE order_id = ?", (order["order_id"],)).fetchone()[0], 0)
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM product_reservations WHERE order_id = ?", (order["order_id"],)).fetchone()[0], 0)
+            self.assertEqual(conn.execute("SELECT status FROM products WHERE id = 'p-2'").fetchone()[0], "available")
+            archived_product = conn.execute(
+                "SELECT seller_id, status FROM products WHERE id = 'p-1'"
+            ).fetchone()
+            self.assertEqual(archived_product, (None, "removed"))
+            self.assertIsNone(conn.execute("SELECT id FROM products WHERE id = 'p-4'").fetchone())
+            self.assertEqual(
+                conn.execute(
+                    "SELECT source_product_id FROM wardrobe_items WHERE id = 'wardrobe-other'"
+                ).fetchone()[0],
+                "p-1",
+            )
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM wardrobe_items WHERE user_id = ?", (target["id"],)).fetchone()[0], 0)
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM conversations WHERE id = 'conversation-delete'").fetchone()[0], 0)
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM messages WHERE id = 'message-delete'").fetchone()[0], 0)
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM complaints WHERE id = 'complaint-delete'").fetchone()[0], 0)
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM complaint_events WHERE id = 'complaint-event-delete'").fetchone()[0], 0)
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM notifications WHERE buyer_email = ?", (target["email"],)).fetchone()[0], 0)
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM sessions WHERE user_id = ?", (target["id"],)).fetchone()[0], 0)
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM login_attempts WHERE identifier_hash = ?", (backend.hashlib.sha256(target["email"].encode("utf-8")).hexdigest(),)).fetchone()[0], 0)
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM vouchers WHERE user_id = ?", (target["id"],)).fetchone()[0], 0)
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM points_ledger WHERE user_id = ?", (target["id"],)).fetchone()[0], 0)
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM message_presence WHERE user_id = ?", (target["id"],)).fetchone()[0], 0)
+
+    def test_admin_delete_rejects_non_admin_admin_target_and_active_sale(self):
+        target = self.insert_user("u-delete-blocked", "delete-blocked@example.vn")
+        with self.assertRaises(backend.HTTPException) as unauthorized:
+            backend.delete_registered_user(target["id"], self.user)
+        self.assertEqual(unauthorized.exception.status_code, 403)
+
+        admin_id = None
+        with self.connect() as conn:
+            admin_id = conn.execute(
+                "SELECT id FROM users WHERE LOWER(email) = ?",
+                (backend.ADMIN_EMAIL,),
+            ).fetchone()[0]
+        with self.assertRaises(backend.HTTPException) as protected_admin:
+            backend.delete_registered_user(admin_id, self.admin)
+        self.assertEqual(protected_admin.exception.status_code, 409)
+
+        with self.connect() as conn:
+            conn.execute("UPDATE products SET seller_id = ? WHERE id = 'p-1'", (target["id"],))
+        order = backend.checkout_order(self.checkout_payload("p-1"), self.user)
+        with self.assertRaises(backend.HTTPException) as active_order:
+            backend.delete_registered_user(target["id"], self.admin)
+        self.assertEqual(active_order.exception.status_code, 409)
+        with self.connect() as conn:
+            self.assertIsNotNone(conn.execute("SELECT id FROM users WHERE id = ?", (target["id"],)).fetchone())
+            self.assertIsNotNone(conn.execute("SELECT id FROM products WHERE id = 'p-1'").fetchone())
+            self.assertEqual(
+                conn.execute("SELECT order_status FROM orders WHERE id = ?", (order["order_id"],)).fetchone()[0],
+                "pending_confirmation",
+            )
+
     def test_order_migration_is_idempotent_and_preserves_legacy_confirmed(self):
         created_at = datetime.utcnow().isoformat()
         with self.connect() as conn:

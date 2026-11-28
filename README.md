@@ -18,6 +18,8 @@ Tài khoản Minh Anh chỉ còn là dữ liệu mẫu, không thể đăng nh�
 
 Vé WebSocket được gửi qua subprotocol thay vì query string để tránh lộ trong access log; endpoint cũng từ chối vé đã dùng hoặc hết hạn.
 
+Trong trang quản trị tài khoản, admin có thể xóa vĩnh viễn người dùng cùng phiên đăng nhập, đơn hàng, tin nhắn, khiếu nại và dữ liệu liên quan. Tài khoản admin không thể bị xóa; việc xóa bị chặn khi sản phẩm của người bán còn nằm trong đơn chưa kết thúc. Tin đăng đã xuất hiện trong lịch sử mua của người khác sẽ được ẩn khỏi sàn và gỡ liên kết người bán nhưng giữ bản ghi để lịch sử đơn/tủ đồ không bị hỏng. Ảnh lưu trong Neon Object Storage của tin đăng không cần giữ sẽ được xóa cùng tài khoản.
+
 ## Neon và Render
 
 Ứng dụng dùng custom auth hiện tại; Neon Auth đã được provision nhưng không dùng để đăng nhập. Để dùng Neon Postgres, cấu hình các biến môi trường sau trong Render Web Service:

@@ -246,6 +246,30 @@ def resolve_product_image(image_url: Optional[str]) -> Optional[str]:
         ) from error
 
 
+def delete_stored_product_image(image_url: Optional[str]) -> bool:
+    if not image_url or not image_url.startswith("neon-s3://"):
+        return True
+    bucket_and_key = image_url.removeprefix("neon-s3://")
+    bucket, separator, object_key = bucket_and_key.partition("/")
+    if not separator or bucket != NEON_STORAGE_BUCKET or not object_key:
+        logger.error("Cannot delete product image with an invalid Neon storage reference.")
+        return False
+    if not NEON_STORAGE_CONFIGURED:
+        logger.error("Cannot delete a product image because Neon Object Storage is not configured.")
+        return False
+    try:
+        _neon_storage_client().delete_object(Bucket=bucket, Key=object_key)
+    except (BotoCoreError, ClientError) as error:
+        error_code = (
+            error.response.get("Error", {}).get("Code")
+            if isinstance(error, ClientError)
+            else type(error).__name__
+        )
+        logger.error("Could not delete Neon product image (%s).", error_code)
+        return False
+    return True
+
+
 def call_vilao_chat_completion(
     messages: List[Dict[str, Any]],
     response_format: Optional[Dict[str, str]] = None,
@@ -2160,13 +2184,261 @@ def list_registered_users(user: Dict[str, Any] = Depends(get_current_user)):
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT name, email, created_at
+            SELECT id, name, email, created_at
             FROM users
             ORDER BY created_at DESC, id
         """)
         users = [dict(row) for row in cursor.fetchall()]
 
+    for account in users:
+        account["is_admin"] = _is_admin_user(account)
     return {"items": users, "total": len(users)}
+
+
+@app.delete("/api/admin/users/{user_id}", summary="Admin xóa vĩnh viễn tài khoản và dữ liệu liên quan")
+def delete_registered_user(
+    user_id: str,
+    user: Dict[str, Any] = Depends(get_current_user),
+):
+    if not _is_admin_user(user):
+        raise HTTPException(
+            status_code=403,
+            detail="Chỉ tài khoản quản trị viên mới được xóa tài khoản.",
+        )
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        if DATABASE_URL:
+            cursor.execute(
+                "SELECT id, email FROM users WHERE id = ? FOR UPDATE",
+                (user_id,),
+            )
+        else:
+            cursor.execute("BEGIN IMMEDIATE")
+            cursor.execute(
+                "SELECT id, email FROM users WHERE id = ?",
+                (user_id,),
+            )
+        target = cursor.fetchone()
+        if not target:
+            raise HTTPException(status_code=404, detail="Không tìm thấy tài khoản cần xóa.")
+        target = dict(target)
+        if _is_admin_user(target):
+            raise HTTPException(
+                status_code=409,
+                detail="Không thể xóa tài khoản quản trị viên.",
+            )
+
+        cursor.execute("SELECT id, image_url FROM products WHERE seller_id = ?", (user_id,))
+        owned_products = {row["id"]: row["image_url"] for row in cursor.fetchall()}
+        owned_product_ids = set(owned_products)
+        cursor.execute(
+            """
+            SELECT 1
+            FROM product_reservations AS reservations
+            JOIN products ON products.id = reservations.product_id
+            JOIN orders ON orders.id = reservations.order_id
+            WHERE products.seller_id = ?
+              AND orders.user_id != ?
+              AND COALESCE(orders.order_status, '') NOT IN ('completed', 'cancelled', 'expired')
+            LIMIT 1
+            """,
+            (user_id, user_id),
+        )
+        if cursor.fetchone():
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Không thể xóa tài khoản vì sản phẩm của người này đang nằm trong "
+                    "đơn hàng chưa kết thúc. Hãy hoàn tất hoặc hủy đơn trước."
+                ),
+            )
+
+        preserved_product_ids = set()
+        if owned_product_ids:
+            cursor.execute(
+                """
+                SELECT items_json, order_status
+                FROM orders
+                WHERE user_id != ?
+                """,
+                (user_id,),
+            )
+            for order_row in cursor.fetchall():
+                order_product_ids = set(_parse_json_list(order_row["items_json"]))
+                linked_product_ids = owned_product_ids.intersection(order_product_ids)
+                if not linked_product_ids:
+                    continue
+                if (order_row["order_status"] or "") not in {
+                    "completed", "confirmed", "cancelled", "expired",
+                }:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=(
+                            "Không thể xóa tài khoản vì sản phẩm của người này đang nằm trong "
+                            "đơn hàng chưa kết thúc. Hãy hoàn tất hoặc hủy đơn trước."
+                        ),
+                    )
+                preserved_product_ids.update(linked_product_ids)
+
+            cursor.execute(
+                """
+                SELECT source_product_id FROM wardrobe_items
+                WHERE user_id != ? AND source_product_id IS NOT NULL
+                """,
+                (user_id,),
+            )
+            preserved_product_ids.update(
+                row["source_product_id"]
+                for row in cursor.fetchall()
+                if row["source_product_id"] in owned_product_ids
+            )
+
+        cursor.execute(
+            """
+            UPDATE products SET status = 'available'
+            WHERE status = 'reserved'
+              AND id IN (
+                  SELECT product_id FROM product_reservations
+                  WHERE order_id IN (SELECT id FROM orders WHERE user_id = ?)
+              )
+            """,
+            (user_id,),
+        )
+        cursor.execute(
+            """
+            DELETE FROM order_status_history
+            WHERE order_id IN (SELECT id FROM orders WHERE user_id = ?)
+            """,
+            (user_id,),
+        )
+        cursor.execute(
+            "DELETE FROM payments WHERE order_id IN (SELECT id FROM orders WHERE user_id = ?)",
+            (user_id,),
+        )
+        cursor.execute(
+            """
+            DELETE FROM notifications
+            WHERE user_id = ? OR buyer_email = ?
+               OR order_id IN (SELECT id FROM orders WHERE user_id = ?)
+            """,
+            (user_id, target["email"], user_id),
+        )
+
+        cursor.execute(
+            """
+            UPDATE notifications SET conversation_id = NULL
+            WHERE conversation_id IN (
+                SELECT id FROM conversations
+                WHERE buyer_id = ? OR seller_id = ?
+                   OR product_id IN (SELECT id FROM products WHERE seller_id = ?)
+            )
+            """,
+            (user_id, user_id, user_id),
+        )
+        cursor.execute(
+            """
+            DELETE FROM messages
+            WHERE sender_id = ? OR recipient_id = ?
+               OR conversation_id IN (
+                   SELECT id FROM conversations
+                   WHERE buyer_id = ? OR seller_id = ?
+                      OR product_id IN (SELECT id FROM products WHERE seller_id = ?)
+               )
+            """,
+            (user_id, user_id, user_id, user_id, user_id),
+        )
+        cursor.execute(
+            """
+            DELETE FROM conversations
+            WHERE buyer_id = ? OR seller_id = ?
+               OR product_id IN (SELECT id FROM products WHERE seller_id = ?)
+            """,
+            (user_id, user_id, user_id),
+        )
+
+        cursor.execute(
+            """
+            DELETE FROM complaint_events
+            WHERE actor_id = ?
+               OR complaint_id IN (
+                   SELECT id FROM complaints WHERE buyer_id = ? OR seller_id = ?
+               )
+            """,
+            (user_id, user_id, user_id),
+        )
+        cursor.execute(
+            "DELETE FROM complaints WHERE buyer_id = ? OR seller_id = ?",
+            (user_id, user_id),
+        )
+        cursor.execute(
+            """
+            DELETE FROM wardrobe_items WHERE user_id = ?
+            """,
+            (user_id,),
+        )
+        cursor.execute("DELETE FROM vouchers WHERE user_id = ?", (user_id,))
+        cursor.execute("DELETE FROM points_ledger WHERE user_id = ?", (user_id,))
+        cursor.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
+        cursor.execute("DELETE FROM message_presence WHERE user_id = ?", (user_id,))
+        cursor.execute(
+            "DELETE FROM login_attempts WHERE identifier_hash = ?",
+            (hashlib.sha256(target["email"].strip().lower().encode("utf-8")).hexdigest(),),
+        )
+        cursor.execute(
+            """
+            DELETE FROM product_reservations
+            WHERE order_id IN (SELECT id FROM orders WHERE user_id = ?)
+               OR product_id IN (SELECT id FROM products WHERE seller_id = ?)
+            """,
+            (user_id, user_id),
+        )
+        cursor.execute("DELETE FROM orders WHERE user_id = ?", (user_id,))
+        for product_id in owned_product_ids - preserved_product_ids:
+            cursor.execute(
+                "UPDATE notifications SET product_id = NULL WHERE product_id = ?",
+                (product_id,),
+            )
+            cursor.execute(
+                "UPDATE wardrobe_items SET source_product_id = NULL WHERE source_product_id = ?",
+                (product_id,),
+            )
+        for product_id in preserved_product_ids:
+            cursor.execute(
+                """
+                UPDATE products SET seller_id = NULL, status = 'removed'
+                WHERE id = ? AND seller_id = ?
+                """,
+                (product_id, user_id),
+            )
+        cursor.execute("DELETE FROM products WHERE seller_id = ?", (user_id,))
+        cursor.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        if cursor.rowcount != 1:
+            raise HTTPException(status_code=409, detail="Tài khoản đã thay đổi, hãy tải lại danh sách.")
+
+    failed_image_deletes = [
+        product_id
+        for product_id in owned_product_ids - preserved_product_ids
+        if not delete_stored_product_image(owned_products[product_id])
+    ]
+    return {
+        "message": (
+            "Tài khoản và dữ liệu liên quan đã được xóa vĩnh viễn."
+            + (
+                f" Đã ẩn {len(preserved_product_ids)} tin đăng để giữ lịch sử mua của người khác."
+                if preserved_product_ids
+                else ""
+            )
+        ),
+        "user_id": user_id,
+        "archived_products": len(preserved_product_ids),
+        "storage_cleanup_warning": (
+            f"Không xóa được ảnh lưu trữ của {len(failed_image_deletes)} tin đăng. "
+            "Vui lòng kiểm tra cấu hình Neon Object Storage."
+            if failed_image_deletes
+            else None
+        ),
+    }
 
 
 @app.get("/api/notifications", summary="Danh sách thông báo của người dùng")
