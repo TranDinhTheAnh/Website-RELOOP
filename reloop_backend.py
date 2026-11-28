@@ -389,11 +389,26 @@ def send_welcome_email(name: str, email: str) -> tuple[bool, Optional[str]]:
             error_data = {}
 
         if isinstance(error_data, dict):
-            error_name = str(error_data.get("name", "unknown"))[:100]
-            error_message = str(error_data.get("message", "No error details returned."))[:1000]
+            error_name = str(
+                error_data.get("name")
+                or error_data.get("type")
+                or error_data.get("code")
+                or "unknown"
+            )[:100]
+            detail_value = (
+                error_data.get("message")
+                or error_data.get("error")
+                or error_data.get("detail")
+                or error_data.get("description")
+            )
+            if detail_value is None:
+                detail_value = json.dumps(error_data, ensure_ascii=False)
+            elif isinstance(detail_value, (dict, list)):
+                detail_value = json.dumps(detail_value, ensure_ascii=False)
+            error_message = str(detail_value)[:1000]
         else:
             error_name = "unknown"
-            error_message = "Resend returned an unrecognized error response."
+            error_message = response_body[:1000] or "Resend returned an empty error response."
         error_message = re.sub(
             r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b",
             "[email]",
@@ -401,6 +416,16 @@ def send_welcome_email(name: str, email: str) -> tuple[bool, Optional[str]]:
             flags=re.IGNORECASE,
         )
         error_message = re.sub(r"\bre_[A-Za-z0-9_-]+\b", "[REDACTED_API_KEY]", error_message)
+        error_message = re.sub(
+            r"(?i)(\"(?:api[_-]?key|authorization|token|secret|password)\"\s*:\s*\")[^\"]*(\")",
+            r"\1[REDACTED]\2",
+            error_message,
+        )
+        error_message = re.sub(
+            r"(?i)\bBearer\s+[A-Za-z0-9._~+/-]+=*",
+            "Bearer [REDACTED]",
+            error_message,
+        )
         logger.error(
             "Resend rejected welcome email with HTTP %s (%s): %s",
             error.code,

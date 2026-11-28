@@ -593,8 +593,8 @@ class AuditFixTests(unittest.TestCase):
 
     def test_welcome_email_logs_resend_error_details_without_secrets(self):
         response_body = json.dumps({
-            "name": "validation_error",
-            "message": "Sending to qa@example.com failed for key re_testSecret123",
+            "type": "validation_error",
+            "error": "Sending to qa@example.com failed for key re_testSecret123",
         }).encode("utf-8")
         resend_error = backend.urllib.error.HTTPError(
             "https://api.resend.com/emails",
