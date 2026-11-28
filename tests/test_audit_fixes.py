@@ -587,6 +587,7 @@ class AuditFixTests(unittest.TestCase):
         request = urlopen.call_args.args[0]
         payload = json.loads(request.data)
         self.assertEqual(request.full_url, "https://api.resend.com/emails")
+        self.assertEqual(request.get_header("User-agent"), "reloop/1.0")
         self.assertEqual(payload["template"], {"id": "th-cho-mng", "variables": {}})
         self.assertNotIn("html", payload)
         self.assertNotIn("text", payload)
@@ -624,6 +625,30 @@ class AuditFixTests(unittest.TestCase):
         self.assertIn("[REDACTED_API_KEY]", log_output)
         self.assertNotIn("qa@example.com", log_output)
         self.assertNotIn("re_testSecret123", log_output)
+
+    def test_welcome_email_logs_plain_text_resend_errors(self):
+        resend_error = backend.urllib.error.HTTPError(
+            "https://api.resend.com/emails",
+            403,
+            "Forbidden",
+            hdrs=None,
+            fp=io.BytesIO(b"error code: 1010 Access denied"),
+        )
+
+        with patch.dict(
+            os.environ,
+            {
+                "RESEND_API_KEY": "test-resend-key",
+                "RESEND_FROM_EMAIL": "RE:LOOP <no-reply@reloop.help>",
+            },
+            clear=False,
+        ), patch.object(
+            backend.urllib.request, "urlopen", side_effect=resend_error
+        ), self.assertLogs(backend.logger, level="ERROR") as captured:
+            sent, _ = backend.send_welcome_email("Nguyễn An", "qa@example.com")
+
+        self.assertFalse(sent)
+        self.assertIn("HTTP 403 (non_json_error): error code: 1010 Access denied", captured.output[0])
 
     def test_expired_session_is_committed_before_unauthorized_response(self):
         stored_token = backend.hash_session_token("expired-test-token")

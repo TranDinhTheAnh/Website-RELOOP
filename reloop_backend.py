@@ -373,6 +373,7 @@ def send_welcome_email(name: str, email: str) -> tuple[bool, Optional[str]]:
         headers={
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
+            "User-Agent": "reloop/1.0",
         },
         method="POST",
     )
@@ -386,7 +387,7 @@ def send_welcome_email(name: str, email: str) -> tuple[bool, Optional[str]]:
         try:
             error_data = json.loads(response_body)
         except json.JSONDecodeError:
-            error_data = {}
+            error_data = None
 
         if isinstance(error_data, dict):
             error_name = str(
@@ -406,6 +407,9 @@ def send_welcome_email(name: str, email: str) -> tuple[bool, Optional[str]]:
             elif isinstance(detail_value, (dict, list)):
                 detail_value = json.dumps(detail_value, ensure_ascii=False)
             error_message = str(detail_value)[:1000]
+        elif error_data is None:
+            error_name = "non_json_error"
+            error_message = response_body[:1000] or "Resend returned an empty error response."
         else:
             error_name = "unknown"
             error_message = response_body[:1000] or "Resend returned an empty error response."
