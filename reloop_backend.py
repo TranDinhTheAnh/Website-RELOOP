@@ -381,7 +381,32 @@ def send_welcome_email(name: str, email: str) -> tuple[bool, Optional[str]]:
         with urllib.request.urlopen(request, timeout=10):
             return True, None
     except urllib.error.HTTPError as error:
-        logger.error("Resend rejected welcome email with HTTP %s.", error.code)
+        response_body = error.read(4096).decode("utf-8", errors="replace")
+        error.close()
+        try:
+            error_data = json.loads(response_body)
+        except json.JSONDecodeError:
+            error_data = {}
+
+        if isinstance(error_data, dict):
+            error_name = str(error_data.get("name", "unknown"))[:100]
+            error_message = str(error_data.get("message", "No error details returned."))[:1000]
+        else:
+            error_name = "unknown"
+            error_message = "Resend returned an unrecognized error response."
+        error_message = re.sub(
+            r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b",
+            "[email]",
+            error_message,
+            flags=re.IGNORECASE,
+        )
+        error_message = re.sub(r"\bre_[A-Za-z0-9_-]+\b", "[REDACTED_API_KEY]", error_message)
+        logger.error(
+            "Resend rejected welcome email with HTTP %s (%s): %s",
+            error.code,
+            error_name,
+            error_message,
+        )
         return False, "Không gửi được email chào mừng. Kiểm tra cấu hình Resend và địa chỉ gửi đã xác minh."
     except (urllib.error.URLError, TimeoutError) as error:
         logger.error("Could not reach Resend to send welcome email: %s", error)

@@ -1,4 +1,5 @@
 import asyncio
+import io
 import logging
 import os
 import json
@@ -589,6 +590,40 @@ class AuditFixTests(unittest.TestCase):
         self.assertEqual(payload["template"], {"id": "th-cho-mng", "variables": {}})
         self.assertNotIn("html", payload)
         self.assertNotIn("text", payload)
+
+    def test_welcome_email_logs_resend_error_details_without_secrets(self):
+        response_body = json.dumps({
+            "name": "validation_error",
+            "message": "Sending to qa@example.com failed for key re_testSecret123",
+        }).encode("utf-8")
+        resend_error = backend.urllib.error.HTTPError(
+            "https://api.resend.com/emails",
+            403,
+            "Forbidden",
+            hdrs=None,
+            fp=io.BytesIO(response_body),
+        )
+
+        with patch.dict(
+            os.environ,
+            {
+                "RESEND_API_KEY": "re_testSecret123",
+                "RESEND_FROM_EMAIL": "RE:LOOP <no-reply@reloop.help>",
+            },
+            clear=False,
+        ), patch.object(
+            backend.urllib.request, "urlopen", side_effect=resend_error
+        ), self.assertLogs(backend.logger, level="ERROR") as captured:
+            sent, notice = backend.send_welcome_email("Nguyễn An", "qa@example.com")
+
+        self.assertFalse(sent)
+        self.assertIsNotNone(notice)
+        log_output = "\n".join(captured.output)
+        self.assertIn("HTTP 403 (validation_error)", log_output)
+        self.assertIn("[email]", log_output)
+        self.assertIn("[REDACTED_API_KEY]", log_output)
+        self.assertNotIn("qa@example.com", log_output)
+        self.assertNotIn("re_testSecret123", log_output)
 
     def test_expired_session_is_committed_before_unauthorized_response(self):
         stored_token = backend.hash_session_token("expired-test-token")
