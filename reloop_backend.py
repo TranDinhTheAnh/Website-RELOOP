@@ -114,6 +114,8 @@ LOGIN_MAX_FAILED_ATTEMPTS = 10
 LOGIN_ATTEMPT_WINDOW = timedelta(minutes=15)
 EMAIL_VERIFICATION_TOKEN_TTL = timedelta(hours=24)
 EMAIL_VERIFICATION_RESEND_COOLDOWN = timedelta(minutes=1)
+PASSWORD_RESET_TOKEN_TTL = timedelta(hours=1)
+PASSWORD_RESET_RESEND_COOLDOWN = timedelta(minutes=1)
 COMPLAINT_WINDOW_DAYS = 7
 MESSAGE_ONLINE_THRESHOLD_SECONDS = 75
 CIRCULAR_BADGE_TEXT = "Sản phẩm chính hãng thuộc hệ tuần hoàn, đã được kiểm định từ vòng trước"
@@ -143,6 +145,7 @@ class WebSocketTicketLogFilter(logging.Filter):
             and (
                 "/api/messages/ws" in value
                 or "/api/auth/verify-email" in value
+                or "/api/auth/reset-password" in value
             )
             else value
             for value in record.args
@@ -457,6 +460,7 @@ def _send_resend_email(
         purpose_label = {
             "welcome": "chào mừng",
             "verification": "xác minh",
+            "password_reset": "đặt lại mật khẩu",
             "order_confirmation": "xác nhận đơn hàng",
             "seller_order": "thông báo đơn hàng",
         }.get(purpose, purpose)
@@ -572,6 +576,86 @@ def send_email_verification(name: str, email: str, token: str) -> tuple[bool, Op
         },
         "verification",
         "Chưa cấu hình Resend để gửi email xác minh.",
+    )
+
+
+def send_password_reset_email(
+    name: str,
+    email: str,
+    token: str,
+) -> tuple[bool, Optional[str]]:
+    reset_url = (
+        f"{RELOOP_PUBLIC_API_URL}/api/auth/reset-password?token={quote(token, safe='')}"
+    )
+    safe_name = html.escape(name or "bạn")
+    safe_url = html.escape(reset_url, quote=True)
+    email_html = f"""<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width">
+    <title>Đặt lại mật khẩu RE:LOOP</title>
+  </head>
+  <body style="margin:0;padding:0;background-color:#f3f6f1;font-family:Arial,Helvetica,sans-serif;color:#18352c;">
+    <span style="display:none!important;visibility:hidden;opacity:0;height:0;width:0;overflow:hidden;">Tạo mật khẩu mới để tiếp tục sử dụng tài khoản RE:LOOP.</span>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#f3f6f1;">
+      <tr>
+        <td align="center" style="padding:36px 16px;">
+          <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:600px;background-color:#ffffff;border:1px solid #e3e9e2;border-radius:20px;overflow:hidden;">
+            <tr>
+              <td align="center" style="padding:32px 28px 24px;background-color:#123d31;">
+                <p style="margin:0;color:#d5ead9;font-size:11px;font-weight:700;letter-spacing:2px;">THỜI TRANG TUẦN HOÀN</p>
+                <p style="margin:9px 0 0;color:#ffffff;font-size:27px;font-weight:800;letter-spacing:1px;">RE:LOOP</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:34px 36px 12px;">
+                <p style="margin:0 0 12px;color:#527265;font-size:14px;">Xin chào {safe_name},</p>
+                <h1 style="margin:0 0 16px;color:#18352c;font-size:25px;line-height:1.3;">Đặt lại mật khẩu</h1>
+                <p style="margin:0;color:#52645d;font-size:15px;line-height:1.7;">Chúng tôi nhận được yêu cầu tạo mật khẩu mới cho tài khoản RE:LOOP của bạn. Nhấn nút bên dưới để tiếp tục.</p>
+              </td>
+            </tr>
+            <tr>
+              <td align="center" style="padding:26px 36px 22px;">
+                <a href="{safe_url}" target="_blank" style="display:inline-block;padding:15px 28px;background-color:#087f5b;border-radius:10px;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;">TẠO MẬT KHẨU MỚI</a>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:0 36px 28px;">
+                <p style="margin:0 0 10px;color:#52645d;font-size:13px;line-height:1.7;">Liên kết có hiệu lực trong <strong>1 giờ</strong> và chỉ sử dụng được một lần. Nếu nút không hoạt động, hãy sao chép liên kết này vào trình duyệt:</p>
+                <p style="margin:0;color:#087f5b;font-size:12px;line-height:1.6;word-break:break-all;"><a href="{safe_url}" style="color:#087f5b;">{safe_url}</a></p>
+                <p style="margin:18px 0 0;padding:13px 15px;background:#f7f9f6;border-radius:10px;color:#52645d;font-size:12px;line-height:1.7;">Nếu bạn không yêu cầu đặt lại mật khẩu, hãy bỏ qua email này. Mật khẩu hiện tại của bạn sẽ không thay đổi.</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:18px 36px;background-color:#f7f9f6;border-top:1px solid #e8eee8;">
+                <p style="margin:0;color:#65756e;font-size:12px;line-height:1.6;">Email tự động từ RE:LOOP. Vui lòng không trả lời trực tiếp thư này.</p>
+                <p style="margin:5px 0 0;color:#65756e;font-size:12px;">RE:LOOP · Mặc đẹp. Sống xanh.</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>"""
+    return _send_resend_email(
+        {
+            "to": [email],
+            "subject": "Đặt lại mật khẩu tài khoản RE:LOOP",
+            "html": email_html,
+            "text": (
+                f"Xin chào {name or 'bạn'},\n\n"
+                "Chúng tôi nhận được yêu cầu tạo mật khẩu mới cho tài khoản RE:LOOP.\n"
+                f"Mở liên kết sau để tiếp tục: {reset_url}\n\n"
+                "Liên kết có hiệu lực trong 1 giờ và chỉ sử dụng được một lần.\n"
+                "Nếu bạn không yêu cầu đặt lại mật khẩu, hãy bỏ qua email này. "
+                "Mật khẩu hiện tại sẽ không thay đổi.\n\n"
+                "RE:LOOP · Mặc đẹp. Sống xanh."
+            ),
+        },
+        "password_reset",
+        "Chưa cấu hình Resend để gửi email đặt lại mật khẩu.",
     )
 
 
@@ -1092,6 +1176,15 @@ def init_db():
         """)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS email_verification_tokens (
+                user_id TEXT PRIMARY KEY,
+                token_hash TEXT NOT NULL UNIQUE,
+                expires_at TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS password_reset_tokens (
                 user_id TEXT PRIMARY KEY,
                 token_hash TEXT NOT NULL UNIQUE,
                 expires_at TEXT NOT NULL,
@@ -1746,6 +1839,10 @@ class ResendVerificationRequest(BaseModel):
     email: str = Field(..., min_length=5, max_length=120)
 
 
+class PasswordResetRequest(BaseModel):
+    email: str = Field(..., min_length=5, max_length=120)
+
+
 class CreateListingRequest(BaseModel):
     title: str = Field(..., min_length=3, max_length=120)
     category: str = Field(..., min_length=1, max_length=40)
@@ -2337,6 +2434,53 @@ button{{border:0;border-radius:10px;background:#047857;color:white;font-weight:7
     )
 
 
+def _password_reset_page(
+    title: str,
+    message: str,
+    token: Optional[str] = None,
+    status_code: int = 200,
+) -> HTMLResponse:
+    reset_form = ""
+    if token:
+        safe_token = html.escape(token, quote=True)
+        reset_form = f"""<form action="/api/auth/reset-password/confirm" method="post">
+<input type="hidden" name="token" value="{safe_token}">
+<label for="new-password">Mật khẩu mới</label>
+<input id="new-password" name="new_password" type="password" minlength="6" maxlength="100" autocomplete="new-password" required>
+<label for="confirm-password">Nhập lại mật khẩu</label>
+<input id="confirm-password" name="confirm_password" type="password" minlength="6" maxlength="100" autocomplete="new-password" required>
+<button type="submit">Lưu mật khẩu mới</button></form>"""
+    content = f"""<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{html.escape(title)} · RE:LOOP</title>
+<style>
+*{{box-sizing:border-box}}body{{font-family:Arial,Helvetica,sans-serif;background:#f3f6f1;color:#18352c;margin:0;padding:24px}}
+main{{max-width:520px;margin:8vh auto;background:white;border:1px solid #e3e9e2;border-radius:20px;padding:32px;box-shadow:0 16px 48px #123d3114}}
+.brand{{margin:-32px -32px 28px;padding:24px;text-align:center;background:#123d31;border-radius:20px 20px 0 0;color:#fff}}
+.brand small{{color:#d5ead9;font-size:11px;font-weight:700;letter-spacing:2px}}.brand strong{{display:block;margin-top:8px;font-size:25px;letter-spacing:1px}}
+h1{{font-size:24px;line-height:1.3;margin:0 0 12px}}p{{line-height:1.7;color:#52645d}}
+label{{display:block;margin:16px 0 7px;font-size:13px;font-weight:700}}
+input{{width:100%;padding:13px 14px;border:1px solid #dce5de;border-radius:10px;font-size:15px}}
+input:focus{{outline:2px solid #087f5b;outline-offset:1px}}
+button{{width:100%;margin-top:22px;border:0;border-radius:10px;background:#087f5b;color:white;font-size:15px;font-weight:700;padding:14px;cursor:pointer}}
+.footer{{margin-top:24px;padding-top:16px;border-top:1px solid #e8eee8;color:#718078;font-size:12px}}
+</style></head><body><main><div class="brand"><small>THỜI TRANG TUẦN HOÀN</small><strong>RE:LOOP</strong></div>
+<h1>{html.escape(title)}</h1><p>{html.escape(message)}</p>{reset_form}
+<div class="footer">RE:LOOP · Mặc đẹp. Sống xanh.</div></main></body></html>"""
+    return HTMLResponse(
+        content=content,
+        status_code=status_code,
+        headers={
+            "Cache-Control": "no-store",
+            "Referrer-Policy": "no-referrer",
+            "Content-Security-Policy": (
+                "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; "
+                "base-uri 'none'; frame-ancestors 'none'"
+            ),
+        },
+    )
+
+
 @app.get("/api/auth/verify-email", response_class=HTMLResponse, include_in_schema=False)
 def show_email_verification(token: str = Query(..., min_length=16, max_length=200)):
     token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
@@ -2469,6 +2613,196 @@ def resend_email_verification(payload: ResendVerificationRequest):
             "hướng dẫn xác minh."
         )
     }
+
+
+@app.post("/api/auth/forgot-password", summary="Gửi liên kết đặt lại mật khẩu")
+def request_password_reset(payload: PasswordResetRequest):
+    email_clean = payload.email.strip().lower()
+    if not EMAIL_PATTERN.fullmatch(email_clean):
+        raise HTTPException(status_code=422, detail="Vui lòng nhập địa chỉ email hợp lệ.")
+
+    now = datetime.utcnow()
+    raw_token = None
+    user = None
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT id, name, email, password_hash, salt
+            FROM users
+            WHERE LOWER(email) = ? AND email_verified = 1
+            """,
+            (email_clean,),
+        )
+        user = cursor.fetchone()
+        if (
+            user
+            and user["password_hash"]
+            and user["salt"]
+        ):
+            cursor.execute(
+                "SELECT created_at FROM password_reset_tokens WHERE user_id = ?",
+                (user["id"],),
+            )
+            previous = cursor.fetchone()
+            last_sent = _utc_naive_datetime(previous["created_at"]) if previous else None
+            if not last_sent or now - last_sent >= PASSWORD_RESET_RESEND_COOLDOWN:
+                raw_token = secrets.token_urlsafe(32)
+                cursor.execute(
+                    """
+                    INSERT INTO password_reset_tokens (user_id, token_hash, expires_at, created_at)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(user_id) DO UPDATE SET
+                        token_hash = excluded.token_hash,
+                        expires_at = excluded.expires_at,
+                        created_at = excluded.created_at
+                    """,
+                    (
+                        user["id"],
+                        hashlib.sha256(raw_token.encode("utf-8")).hexdigest(),
+                        (now + PASSWORD_RESET_TOKEN_TTL).isoformat(),
+                        now.isoformat(),
+                    ),
+                )
+
+    if user and raw_token:
+        email_sent, _ = send_password_reset_email(
+            user["name"],
+            user["email"],
+            raw_token,
+        )
+        if not email_sent:
+            with get_db() as conn:
+                conn.execute(
+                    """
+                    UPDATE password_reset_tokens SET created_at = ?
+                    WHERE user_id = ? AND token_hash = ?
+                    """,
+                    (
+                        (datetime.utcnow() - PASSWORD_RESET_RESEND_COOLDOWN).isoformat(),
+                        user["id"],
+                        hashlib.sha256(raw_token.encode("utf-8")).hexdigest(),
+                    ),
+                )
+
+    return {
+        "message": (
+            "Nếu email thuộc tài khoản RE:LOOP đã xác minh, chúng tôi sẽ gửi "
+            "hướng dẫn đặt lại mật khẩu."
+        )
+    }
+
+
+@app.get("/api/auth/reset-password", response_class=HTMLResponse, include_in_schema=False)
+def show_password_reset(token: str = Query(..., min_length=16, max_length=200)):
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    with get_db() as conn:
+        reset = conn.execute(
+            """
+            SELECT expires_at FROM password_reset_tokens
+            WHERE token_hash = ?
+            """,
+            (token_hash,),
+        ).fetchone()
+
+    expiry = _utc_naive_datetime(reset["expires_at"]) if reset else None
+    if not expiry or expiry <= datetime.utcnow():
+        return _password_reset_page(
+            "Liên kết không hợp lệ",
+            "Liên kết đặt lại mật khẩu không hợp lệ, đã hết hạn hoặc đã được sử dụng. "
+            "Hãy yêu cầu một liên kết mới.",
+            status_code=400,
+        )
+    return _password_reset_page(
+        "Tạo mật khẩu mới",
+        "Chọn một mật khẩu mới có ít nhất 6 ký tự cho tài khoản RE:LOOP của bạn.",
+        token=token,
+    )
+
+
+@app.post(
+    "/api/auth/reset-password/confirm",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+)
+def confirm_password_reset(
+    token: str = Form(..., min_length=16, max_length=200),
+    new_password: str = Form(..., max_length=100),
+    confirm_password: str = Form(..., max_length=100),
+):
+    if len(new_password) < 6:
+        return _password_reset_page(
+            "Mật khẩu chưa hợp lệ",
+            "Mật khẩu mới cần có ít nhất 6 ký tự. Vui lòng thử lại.",
+            token=token,
+            status_code=400,
+        )
+    if new_password != confirm_password:
+        return _password_reset_page(
+            "Mật khẩu chưa khớp",
+            "Hai mật khẩu bạn nhập chưa giống nhau. Vui lòng nhập lại.",
+            token=token,
+            status_code=400,
+        )
+
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    now = datetime.utcnow()
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT users.id, tokens.expires_at
+            FROM password_reset_tokens AS tokens
+            JOIN users ON users.id = tokens.user_id
+            WHERE tokens.token_hash = ? AND users.email_verified = 1
+            """,
+            (token_hash,),
+        )
+        reset = cursor.fetchone()
+        expiry = _utc_naive_datetime(reset["expires_at"]) if reset else None
+        if not expiry or expiry <= now:
+            return _password_reset_page(
+                "Liên kết không hợp lệ",
+                "Liên kết đặt lại mật khẩu không hợp lệ, đã hết hạn hoặc đã được sử dụng. "
+                "Hãy yêu cầu một liên kết mới.",
+                status_code=400,
+            )
+
+        cursor.execute(
+            """
+            DELETE FROM password_reset_tokens
+            WHERE user_id = ? AND token_hash = ? AND expires_at > ?
+            """,
+            (reset["id"], token_hash, now.isoformat()),
+        )
+        if cursor.rowcount != 1:
+            return _password_reset_page(
+                "Liên kết không hợp lệ",
+                "Liên kết đặt lại mật khẩu không hợp lệ, đã hết hạn hoặc đã được sử dụng. "
+                "Hãy yêu cầu một liên kết mới.",
+                status_code=400,
+            )
+
+        password_hash, salt = hash_password(new_password)
+        cursor.execute(
+            """
+            UPDATE users SET password_hash = ?, salt = ?
+            WHERE id = ? AND email_verified = 1
+            """,
+            (password_hash, salt, reset["id"]),
+        )
+        if cursor.rowcount != 1:
+            raise HTTPException(
+                status_code=409,
+                detail="Không thể cập nhật mật khẩu. Vui lòng yêu cầu liên kết mới.",
+            )
+        cursor.execute("DELETE FROM sessions WHERE user_id = ?", (reset["id"],))
+
+    return _password_reset_page(
+        "Đã cập nhật mật khẩu",
+        "Mật khẩu của bạn đã được thay đổi thành công. Các phiên đăng nhập cũ đã được đăng xuất; "
+        "bạn có thể quay lại RE:LOOP và đăng nhập bằng mật khẩu mới.",
+    )
 
 
 @app.post("/api/auth/register", summary="Tạo tài khoản thành viên mới (+100 Điểm Xanh)")
@@ -2917,6 +3251,10 @@ def delete_registered_user(
         cursor.execute("DELETE FROM points_ledger WHERE user_id = ?", (user_id,))
         cursor.execute(
             "DELETE FROM email_verification_tokens WHERE user_id = ?",
+            (user_id,),
+        )
+        cursor.execute(
+            "DELETE FROM password_reset_tokens WHERE user_id = ?",
             (user_id,),
         )
         cursor.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))

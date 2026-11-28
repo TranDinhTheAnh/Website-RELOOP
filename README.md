@@ -27,11 +27,13 @@ Trong trang quản trị tài khoản, admin có thể xóa vĩnh viễn ngườ
 - `DATABASE_URL`: pooled connection string của Neon, dùng cho truy vấn runtime.
 - `DATABASE_URL_UNPOOLED`: direct connection string, dùng lúc khởi động để khởi tạo/cập nhật schema.
 - `ADMIN_EMAIL` và `ADMIN_PASSWORD`: thông tin tài khoản quản trị riêng.
-- `RESEND_API_KEY` và `RESEND_FROM_EMAIL`: cấu hình Resend để gửi email xác minh và email chào mừng; địa chỉ gửi cần được xác minh trong Resend.
-- `RELOOP_PUBLIC_API_URL`: URL công khai của backend để tạo liên kết xác minh; mặc định là `https://website-reloop-1.onrender.com` (chạy local thì đặt `http://127.0.0.1:8000`).
+- `RESEND_API_KEY` và `RESEND_FROM_EMAIL`: cấu hình Resend để gửi email xác minh, đặt lại mật khẩu, chào mừng và thông báo đơn hàng; địa chỉ gửi cần được xác minh trong Resend.
+- `RELOOP_PUBLIC_API_URL`: URL công khai của backend để tạo liên kết xác minh và đặt lại mật khẩu; mặc định là `https://website-reloop-1.onrender.com` (chạy local thì đặt `http://127.0.0.1:8000`).
 - `RESEND_WELCOME_TEMPLATE_ID`: tùy chọn; ID hoặc alias của template email chào mừng Resend đã publish. Email xác minh dùng mẫu HTML RE:LOOP tích hợp trong backend.
 
 Tài khoản đăng ký mới chỉ đăng nhập được sau khi mở email xác minh và bấm nút xác nhận. Liên kết có hiệu lực 24 giờ; người dùng có thể yêu cầu gửi lại email xác minh từ màn hình đăng nhập, tối đa một email mỗi phút (gửi lại ngay được nếu lần gửi trước lỗi).
+
+Người dùng có thể chọn **Quên mật khẩu?** tại màn hình đăng nhập để nhận email đặt lại mật khẩu. Liên kết đặt lại có hiệu lực một giờ, chỉ dùng được một lần; mỗi tài khoản chỉ nhận tối đa một email mỗi phút. Sau khi đổi mật khẩu, mọi phiên đăng nhập hiện tại của tài khoản sẽ bị thu hồi. API luôn trả thông báo chung để không tiết lộ email có đăng ký hay không.
 
 Khi checkout được ghi nhận, RE:LOOP gửi email xác nhận cho người mua và email thông báo riêng cho từng người bán có sản phẩm trong đơn. Email người bán chỉ liệt kê sản phẩm của họ; đơn online đang chờ thanh toán được ghi rõ để người bán chưa gửi hàng sớm.
 

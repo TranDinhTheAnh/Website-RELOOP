@@ -6523,7 +6523,10 @@
         </div>
 
         <!-- Mode Switch Tabs -->
-        <div class="grid grid-cols-2 gap-1 bg-slate-100 p-1 rounded-xl">
+        <div
+          id="auth-mode-tabs"
+          class="grid grid-cols-2 gap-1 bg-slate-100 p-1 rounded-xl"
+        >
           <button
             type="button"
             id="tab-auth-login"
@@ -6601,7 +6604,7 @@
             </p>
           </div>
 
-          <div>
+          <div id="auth-password-field">
             <label class="block text-xs font-semibold text-ink-700 mb-1"
               >Mật khẩu</label
             >
@@ -6612,6 +6615,14 @@
               placeholder="Nhập mật khẩu của bạn"
               class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-eco-500"
             />
+            <button
+              type="button"
+              id="forgot-password-link"
+              onclick="openAuthModal('forgot-password', true)"
+              class="mt-2 text-xs font-semibold text-eco-700 hover:text-eco-900"
+            >
+              Quên mật khẩu?
+            </button>
           </div>
 
           <div
@@ -6625,6 +6636,14 @@
             class="w-full py-3 rounded-xl bg-eco-600 hover:bg-eco-700 text-white text-sm font-semibold shadow-sm transition"
           >
             Đăng nhập ngay
+          </button>
+          <button
+            type="button"
+            id="forgot-password-back-link"
+            onclick="openAuthModal('login', true)"
+            class="hidden w-full text-xs font-semibold text-eco-700 hover:text-eco-900"
+          >
+            Quay lại đăng nhập
           </button>
         </form>
 
@@ -7698,6 +7717,12 @@
         const nameInput = document.getElementById("auth-name");
         const emailInput = document.getElementById("auth-email");
         const passInput = document.getElementById("auth-password");
+        const passwordField = document.getElementById("auth-password-field");
+        const modeTabs = document.getElementById("auth-mode-tabs");
+        const forgotLink = document.getElementById("forgot-password-link");
+        const forgotBackLink = document.getElementById(
+          "forgot-password-back-link",
+        );
         const emailHelp = document.getElementById("auth-email-help");
         const title = document.getElementById("auth-modal-title");
         const subtitle = document.getElementById("auth-modal-subtitle");
@@ -7712,6 +7737,13 @@
         }
 
         modal.classList.remove("hidden");
+        const isForgotPassword = mode === "forgot-password";
+        modeTabs.classList.toggle("hidden", isForgotPassword);
+        passwordField.classList.toggle("hidden", isForgotPassword);
+        passInput.required = !isForgotPassword;
+        forgotLink.classList.toggle("hidden", mode !== "login");
+        forgotBackLink.classList.toggle("hidden", !isForgotPassword);
+
         if (mode === "register") {
           regFields.classList.remove("hidden");
           nameInput.required = true;
@@ -7725,6 +7757,16 @@
             "py-2 rounded-lg text-xs font-bold bg-white text-ink-900 shadow-xs";
           tabLogin.className =
             "py-2 rounded-lg text-xs font-semibold text-ink-600";
+        } else if (isForgotPassword) {
+          regFields.classList.add("hidden");
+          nameInput.required = false;
+          passInput.value = "";
+          title.textContent = "Quên mật khẩu?";
+          subtitle.textContent =
+            "Chúng tôi sẽ gửi liên kết bảo mật đến email của bạn";
+          emailHelp.textContent =
+            "Nhập email đã đăng ký. Hãy kiểm tra cả hộp thư Spam.";
+          btn.textContent = "Gửi liên kết đặt lại";
         } else {
           regFields.classList.add("hidden");
           nameInput.required = false;
@@ -7774,8 +7816,8 @@
         const weight =
           Number(document.getElementById("auth-weight").value) || 55;
 
-        if (!email || !password) {
-          showAuthError("Vui lòng nhập đầy đủ Email và Mật khẩu.");
+        if (!email) {
+          showAuthError("Vui lòng nhập địa chỉ Email.");
           return;
         }
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
@@ -7785,6 +7827,33 @@
           return;
         }
         emailInput.setCustomValidity("");
+
+        if (currentAuthMode === "forgot-password") {
+          try {
+            const response = await apiFetch("/api/auth/forgot-password", {
+              method: "POST",
+              body: JSON.stringify({ email: rawEmail }),
+            });
+            document.getElementById("auth-email-help").textContent =
+              response.message;
+            showToast(
+              "Nếu email thuộc tài khoản hợp lệ, hướng dẫn sẽ được gửi đến hộp thư (kể cả Spam).",
+              "success",
+            );
+          } catch (error) {
+            const message = error.isNetworkError
+              ? "Không thể kết nối máy chủ. Vui lòng thử lại sau."
+              : `Không thể gửi yêu cầu đặt lại mật khẩu: ${error.message || "Vui lòng thử lại."}`;
+            showAuthError(message);
+            showToast(message, "error");
+          }
+          return;
+        }
+
+        if (!password) {
+          showAuthError("Vui lòng nhập mật khẩu.");
+          return;
+        }
 
         // =========================================================
         // ACCOUNT REGISTRATION FLOW

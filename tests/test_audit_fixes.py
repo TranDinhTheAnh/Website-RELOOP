@@ -83,6 +83,18 @@ class AuditFixTests(unittest.TestCase):
                 ("test-delete-session", target["id"], "2099-01-01T00:00:00"),
             )
             conn.execute(
+                """
+                INSERT INTO password_reset_tokens (user_id, token_hash, expires_at, created_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    target["id"],
+                    "delete-test-reset-hash",
+                    "2099-01-01T00:00:00",
+                    datetime.utcnow().isoformat(),
+                ),
+            )
+            conn.execute(
                 "INSERT INTO login_attempts VALUES (?, 1, ?)",
                 (
                     backend.hashlib.sha256(target["email"].encode("utf-8")).hexdigest(),
@@ -1100,6 +1112,22 @@ class AuditFixTests(unittest.TestCase):
             self.assertNotIn("QA_EMAIL_TOKEN_SENTINEL", verification_record.getMessage())
             self.assertIn("[REDACTED]", verification_record.getMessage())
 
+            reset_record = logging.LogRecord(
+                logger_name,
+                logging.INFO,
+                __file__,
+                1,
+                '%s - "GET %s" 200',
+                (
+                    "127.0.0.1:1234",
+                    "/api/auth/reset-password?token=QA_RESET_TOKEN_SENTINEL",
+                ),
+                None,
+            )
+            backend.WebSocketTicketLogFilter().filter(reset_record)
+            self.assertNotIn("QA_RESET_TOKEN_SENTINEL", reset_record.getMessage())
+            self.assertIn("[REDACTED]", reset_record.getMessage())
+
     def test_login_attempts_are_rate_limited_per_email(self):
         payload = backend.LoginRequest(
             email="locked-account@example.vn", password="wrong-password"
@@ -1266,6 +1294,200 @@ class AuditFixTests(unittest.TestCase):
 
         self.assertIn("chúng tôi sẽ gửi email", response["message"])
         self.assertEqual(send_verification.call_count, 2)
+
+    def test_password_reset_email_is_branded_and_escapes_user_content(self):
+        with patch.object(
+            backend,
+            "_send_resend_email",
+            return_value=(True, None),
+        ) as send_resend:
+            result = backend.send_password_reset_email(
+                "<QA User>",
+                "qa-reset@example.vn",
+                "qa-reset-token-1234567890",
+            )
+
+        self.assertEqual(result, (True, None))
+        payload = send_resend.call_args.args[0]
+        self.assertEqual(payload["to"], ["qa-reset@example.vn"])
+        self.assertIn("Đặt lại mật khẩu", payload["subject"])
+        self.assertIn("RE:LOOP", payload["html"])
+        self.assertIn("TẠO MẬT KHẨU MỚI", payload["html"])
+        self.assertIn("&lt;QA User&gt;", payload["html"])
+        self.assertNotIn("<QA User>", payload["html"])
+        self.assertIn("qa-reset-token-1234567890", payload["text"])
+
+    def test_password_reset_is_generic_throttled_single_use_and_revokes_sessions(self):
+        old_password = "old-test-password"
+        new_password = "new-test-password"
+        password_hash, salt = backend.hash_password(old_password)
+        with self.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO users (
+                    id, name, email, password_hash, salt, created_at, email_verified
+                ) VALUES (?, ?, ?, ?, ?, ?, 1)
+                """,
+                (
+                    "u-password-reset",
+                    "QA Reset User",
+                    "qa-reset@example.vn",
+                    password_hash,
+                    salt,
+                    datetime.utcnow().isoformat(),
+                ),
+            )
+
+        reset_token = "qa-password-reset-token-1234567890"
+        with patch.object(
+            backend.secrets,
+            "token_urlsafe",
+            return_value=reset_token,
+        ), patch.object(
+            backend,
+            "send_password_reset_email",
+            return_value=(True, None),
+        ) as send_reset_email:
+            response = backend.request_password_reset(
+                backend.PasswordResetRequest(email="QA-RESET@example.vn")
+            )
+            repeated_response = backend.request_password_reset(
+                backend.PasswordResetRequest(email="qa-reset@example.vn")
+            )
+            unknown_response = backend.request_password_reset(
+                backend.PasswordResetRequest(email="unknown-reset@example.vn")
+            )
+
+        self.assertEqual(response, repeated_response)
+        self.assertEqual(response, unknown_response)
+        self.assertEqual(send_reset_email.call_count, 1)
+        send_reset_email.assert_called_once_with(
+            "QA Reset User",
+            "qa-reset@example.vn",
+            reset_token,
+        )
+        with self.connect() as conn:
+            reset_row = conn.execute(
+                """
+                SELECT token_hash FROM password_reset_tokens
+                WHERE user_id = 'u-password-reset'
+                """
+            ).fetchone()
+            conn.execute(
+                "INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)",
+                (
+                    "session-to-revoke",
+                    "u-password-reset",
+                    (datetime.utcnow() + timedelta(days=1)).isoformat(),
+                ),
+            )
+        self.assertEqual(
+            reset_row[0],
+            backend.hashlib.sha256(reset_token.encode("utf-8")).hexdigest(),
+        )
+        self.assertNotEqual(reset_row[0], reset_token)
+
+        page = backend.show_password_reset(token=reset_token)
+        self.assertEqual(page.status_code, 200)
+        self.assertIn(b"new_password", page.body)
+        self.assertEqual(page.headers["Referrer-Policy"], "no-referrer")
+
+        mismatch = backend.confirm_password_reset(
+            token=reset_token,
+            new_password=new_password,
+            confirm_password="different-password",
+        )
+        self.assertEqual(mismatch.status_code, 400)
+        self.assertTrue(
+            backend.verify_password(
+                old_password,
+                password_hash,
+                salt,
+            )
+        )
+
+        confirmation = backend.confirm_password_reset(
+            token=reset_token,
+            new_password=new_password,
+            confirm_password=new_password,
+        )
+        self.assertEqual(confirmation.status_code, 200)
+        self.assertIn(b"M\xe1\xba\xadt kh\xe1\xba\xa9u", confirmation.body)
+        with self.connect() as conn:
+            updated = conn.execute(
+                "SELECT password_hash, salt FROM users WHERE id = 'u-password-reset'"
+            ).fetchone()
+            self.assertEqual(
+                conn.execute(
+                    "SELECT COUNT(*) FROM sessions WHERE user_id = 'u-password-reset'"
+                ).fetchone()[0],
+                0,
+            )
+            self.assertEqual(
+                conn.execute(
+                    "SELECT COUNT(*) FROM password_reset_tokens WHERE user_id = 'u-password-reset'"
+                ).fetchone()[0],
+                0,
+            )
+        self.assertTrue(backend.verify_password(new_password, updated[0], updated[1]))
+        self.assertFalse(backend.verify_password(old_password, updated[0], updated[1]))
+        reused = backend.confirm_password_reset(
+            token=reset_token,
+            new_password="another-password",
+            confirm_password="another-password",
+        )
+        self.assertEqual(reused.status_code, 400)
+
+    def test_expired_password_reset_links_are_rejected(self):
+        password_hash, salt = backend.hash_password("keep-this-password")
+        with self.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO users (
+                    id, name, email, password_hash, salt, created_at, email_verified
+                ) VALUES (?, ?, ?, ?, ?, ?, 1)
+                """,
+                (
+                    "u-expired-reset",
+                    "QA Expired User",
+                    "qa-expired-reset@example.vn",
+                    password_hash,
+                    salt,
+                    datetime.utcnow().isoformat(),
+                ),
+            )
+
+        reset_token = "qa-expired-password-reset-token"
+        with patch.object(
+            backend.secrets,
+            "token_urlsafe",
+            return_value=reset_token,
+        ), patch.object(
+            backend,
+            "send_password_reset_email",
+            return_value=(True, None),
+        ):
+            backend.request_password_reset(
+                backend.PasswordResetRequest(email="qa-expired-reset@example.vn")
+            )
+        with self.connect() as conn:
+            conn.execute(
+                """
+                UPDATE password_reset_tokens SET expires_at = ?
+                WHERE user_id = 'u-expired-reset'
+                """,
+                ((datetime.utcnow() - timedelta(seconds=1)).isoformat(),),
+            )
+
+        page = backend.show_password_reset(token=reset_token)
+        self.assertEqual(page.status_code, 400)
+        response = backend.confirm_password_reset(
+            token=reset_token,
+            new_password="new-password-123",
+            confirm_password="new-password-123",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertTrue(backend.verify_password("keep-this-password", password_hash, salt))
 
     def test_existing_plaintext_sessions_are_migrated_without_revocation(self):
         raw_token = "legacy-session-token"
