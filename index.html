@@ -8169,6 +8169,9 @@
         refreshAllUI();
         showToast(`Chào mừng ${state.user.name} quay lại!`, "success");
         await syncFromBackend(false);
+        if (!document.getElementById("section-green").classList.contains("hidden")) {
+          await loadImpactData(true);
+        }
       }
 
       async function logoutUser() {
@@ -12953,7 +12956,9 @@
             ? Math.round(numeric * 10) / 10
             : unit === "mass"
               ? Math.round(numeric * 100) / 100
-            : Math.round(numeric / 10) * 10;
+              : unit === "water"
+                ? Math.round(numeric / 10) * 10
+                : Math.round(numeric);
         return new Intl.NumberFormat("vi-VN", {
           minimumFractionDigits: unit === "co2" ? 1 : unit === "mass" ? 2 : 0,
           maximumFractionDigits: unit === "co2" ? 1 : unit === "mass" ? 2 : 0,
@@ -13287,7 +13292,7 @@
             return `
               <tr class="border-t border-sand-200">
                 <th scope="row" class="py-2 pr-3 text-left font-semibold text-ink-800">${scenarioLabels[key]}</th>
-                <td class="py-2 px-2 text-right text-ink-700">${formatImpactNumber(Number(scenario.replacement_rate) * 100, "water")}%</td>
+                <td class="py-2 px-2 text-right text-ink-700">${formatImpactNumber(Number(scenario.replacement_rate) * 100, "count")}%</td>
                 <td class="py-2 px-2 text-right text-ink-700">${formatImpactNumber(scenario.additional_co2e_kg, "co2")} kg CO₂e</td>
                 <td class="py-2 pl-2 text-right text-ink-700">${formatImpactNumber(scenario.additional_water_l, "water")} L</td>
               </tr>
