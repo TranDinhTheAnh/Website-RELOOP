@@ -789,6 +789,43 @@ class AuditFixTests(unittest.TestCase):
         self.assertNotIn("html", payload)
         self.assertNotIn("text", payload)
 
+    def test_verification_email_contains_public_confirmation_link(self):
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                return False
+
+        with patch.dict(
+            os.environ,
+            {
+                "RESEND_API_KEY": "test-resend-key",
+                "RESEND_FROM_EMAIL": "RE:LOOP <no-reply@reloop.help>",
+            },
+        ), patch.object(
+            backend, "RELOOP_PUBLIC_API_URL", "https://api.example.test"
+        ), patch.object(
+            backend.urllib.request, "urlopen", return_value=FakeResponse()
+        ) as urlopen:
+            sent, notice = backend.send_email_verification(
+                "Nguyễn An",
+                "qa@example.com",
+                "opaque-verification-token",
+            )
+
+        self.assertTrue(sent)
+        self.assertIsNone(notice)
+        payload = json.loads(urlopen.call_args.args[0].data)
+        verification_url = (
+            "https://api.example.test/api/auth/verify-email"
+            "?token=opaque-verification-token"
+        )
+        self.assertEqual(payload["to"], ["qa@example.com"])
+        self.assertIn(verification_url, payload["text"])
+        self.assertIn(verification_url, payload["html"])
+        self.assertIn("24 giờ", payload["text"])
+
     def test_welcome_email_logs_resend_error_details_without_secrets(self):
         response_body = json.dumps({
             "type": "validation_error",
@@ -913,6 +950,22 @@ class AuditFixTests(unittest.TestCase):
             self.assertNotIn("QA_LOG_SENTINEL", record.getMessage())
             self.assertIn("[REDACTED]", record.getMessage())
 
+            verification_record = logging.LogRecord(
+                logger_name,
+                logging.INFO,
+                __file__,
+                1,
+                '%s - "GET %s" 200',
+                (
+                    "127.0.0.1:1234",
+                    "/api/auth/verify-email?token=QA_EMAIL_TOKEN_SENTINEL",
+                ),
+                None,
+            )
+            backend.WebSocketTicketLogFilter().filter(verification_record)
+            self.assertNotIn("QA_EMAIL_TOKEN_SENTINEL", verification_record.getMessage())
+            self.assertIn("[REDACTED]", verification_record.getMessage())
+
     def test_login_attempts_are_rate_limited_per_email(self):
         payload = backend.LoginRequest(
             email="locked-account@example.vn", password="wrong-password"
@@ -926,20 +979,82 @@ class AuditFixTests(unittest.TestCase):
             backend.login_user(payload)
         self.assertEqual(error.exception.status_code, 429)
 
-    def test_session_tokens_are_hashed_and_logout_revokes_them(self):
-        response = backend.register_user(
-            backend.RegisterRequest(
-                name="QA Session User",
-                email="qa-session@example.vn",
-                password="test-password-2026",
+    def test_email_verification_is_required_before_login_and_session_tokens_are_hashed(self):
+        verification_token = "test-email-verification-token"
+        with patch.object(backend.secrets, "token_urlsafe", return_value=verification_token), patch.object(
+            backend, "send_email_verification", return_value=(True, None)
+        ), patch.object(backend, "send_welcome_email", return_value=(True, None)) as welcome_email:
+            response = backend.register_user(
+                backend.RegisterRequest(
+                    name="QA Session User",
+                    email="qa-session@example.vn",
+                    password="test-password-2026",
+                )
             )
-        )
-        token = response["access_token"]
+
+            self.assertTrue(response["email_sent"])
+            self.assertNotIn("access_token", response)
+            with self.connect() as conn:
+                user_id = conn.execute(
+                    "SELECT id FROM users WHERE email = ?",
+                    ("qa-session@example.vn",),
+                ).fetchone()[0]
+                user_row = conn.execute(
+                    "SELECT email_verified FROM users WHERE id = ?", (user_id,)
+                ).fetchone()
+                verification_hash = conn.execute(
+                    "SELECT token_hash FROM email_verification_tokens WHERE user_id = ?",
+                    (user_id,),
+                ).fetchone()[0]
+                self.assertEqual(
+                    conn.execute(
+                        "SELECT COUNT(*) FROM sessions WHERE user_id = ?", (user_id,)
+                    ).fetchone()[0],
+                    0,
+                )
+            self.assertEqual(user_row[0], 0)
+            self.assertEqual(
+                verification_hash,
+                backend.hashlib.sha256(verification_token.encode("utf-8")).hexdigest(),
+            )
+            self.assertNotEqual(verification_hash, verification_token)
+
+            with self.assertRaises(backend.HTTPException) as unverified_login:
+                backend.login_user(
+                    backend.LoginRequest(
+                        email="qa-session@example.vn",
+                        password="test-password-2026",
+                    )
+                )
+            self.assertEqual(unverified_login.exception.status_code, 403)
+
+            page = backend.show_email_verification(token=verification_token)
+            self.assertEqual(page.status_code, 200)
+            self.assertIn(b"X\xc3\xa1c nh\xe1\xba\xadn", page.body)
+            with self.connect() as conn:
+                self.assertEqual(
+                    conn.execute(
+                        "SELECT email_verified FROM users WHERE id = ?", (user_id,)
+                    ).fetchone()[0],
+                    0,
+                )
+
+            confirmation = backend.confirm_email_verification(token=verification_token)
+            self.assertEqual(confirmation.status_code, 200)
+            welcome_email.assert_called_once_with("QA Session User", "qa-session@example.vn")
+            login_response = backend.login_user(
+                backend.LoginRequest(
+                    email="qa-session@example.vn",
+                    password="test-password-2026",
+                )
+            )
+
+        token = login_response["access_token"]
         hashed_token = backend.hash_session_token(token)
 
         with self.connect() as conn:
             stored_token = conn.execute(
-                "SELECT token FROM sessions WHERE user_id = ?", (response["user"]["id"],)
+                "SELECT token FROM sessions WHERE user_id = ?", (login_response["user"]["id"],)
             ).fetchone()[0]
         self.assertEqual(stored_token, hashed_token)
         self.assertNotEqual(stored_token, token)
@@ -949,6 +1064,73 @@ class AuditFixTests(unittest.TestCase):
         with self.assertRaises(backend.HTTPException) as error:
             backend.get_current_user(f"Bearer {token}")
         self.assertEqual(error.exception.status_code, 401)
+
+    def test_email_verification_resend_is_throttled_and_expired_links_are_rejected(self):
+        verification_token = "test-expiring-verification-token"
+        with patch.object(backend.secrets, "token_urlsafe", return_value=verification_token), patch.object(
+            backend, "send_email_verification", return_value=(True, None)
+        ) as send_verification, patch.object(
+            backend, "send_welcome_email", return_value=(True, None)
+        ):
+            backend.register_user(
+                backend.RegisterRequest(
+                    name="QA Pending User",
+                    email="qa-pending@example.vn",
+                    password="test-password-2026",
+                )
+            )
+            generic_response = backend.resend_email_verification(
+                backend.ResendVerificationRequest(email="unknown@example.vn")
+            )
+            cooldown_response = backend.resend_email_verification(
+                backend.ResendVerificationRequest(email="qa-pending@example.vn")
+            )
+            self.assertEqual(generic_response, cooldown_response)
+            send_verification.assert_called_once()
+
+            with self.connect() as conn:
+                conn.execute(
+                    """
+                    UPDATE email_verification_tokens SET expires_at = ?
+                    WHERE user_id = (
+                        SELECT id FROM users WHERE email = 'qa-pending@example.vn'
+                    )
+                    """,
+                    ((datetime.utcnow() - timedelta(seconds=1)).isoformat(),),
+                )
+            page = backend.show_email_verification(token=verification_token)
+            self.assertEqual(page.status_code, 400)
+            failed_confirmation = backend.confirm_email_verification(token=verification_token)
+            self.assertEqual(failed_confirmation.status_code, 400)
+            with self.connect() as conn:
+                self.assertEqual(
+                    conn.execute(
+                        "SELECT email_verified FROM users WHERE email = ?",
+                        ("qa-pending@example.vn",),
+                    ).fetchone()[0],
+                    0,
+                )
+
+    def test_failed_verification_delivery_can_be_retried_immediately(self):
+        verification_token = "test-retry-verification-token"
+        with patch.object(backend.secrets, "token_urlsafe", return_value=verification_token), patch.object(
+            backend,
+            "send_email_verification",
+            side_effect=[(False, "Resend unavailable"), (True, None)],
+        ) as send_verification:
+            backend.register_user(
+                backend.RegisterRequest(
+                    name="QA Retry User",
+                    email="qa-retry@example.vn",
+                    password="test-password-2026",
+                )
+            )
+            response = backend.resend_email_verification(
+                backend.ResendVerificationRequest(email="qa-retry@example.vn")
+            )
+
+        self.assertIn("chúng tôi sẽ gửi email", response["message"])
+        self.assertEqual(send_verification.call_count, 2)
 
     def test_existing_plaintext_sessions_are_migrated_without_revocation(self):
         raw_token = "legacy-session-token"

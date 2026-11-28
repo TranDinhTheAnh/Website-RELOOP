@@ -6596,7 +6596,7 @@
               placeholder="VD: tenban@example.com"
               class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-eco-500"
             />
-            <p class="mt-1 text-[11px] text-ink-500">
+            <p id="auth-email-help" class="mt-1 text-[11px] text-ink-500">
               Dùng email bạn đã đăng ký trên RE:LOOP.
             </p>
           </div>
@@ -7698,6 +7698,7 @@
         const nameInput = document.getElementById("auth-name");
         const emailInput = document.getElementById("auth-email");
         const passInput = document.getElementById("auth-password");
+        const emailHelp = document.getElementById("auth-email-help");
         const title = document.getElementById("auth-modal-title");
         const subtitle = document.getElementById("auth-modal-subtitle");
         const btn = document.getElementById("auth-submit-btn");
@@ -7717,6 +7718,8 @@
           title.textContent = "Tạo tài khoản RE:LOOP";
           subtitle.textContent =
             "Đăng ký thành viên mới để nhận ngay +100 Điểm Xanh";
+          emailHelp.textContent =
+            "Bạn sẽ nhận liên kết xác minh qua email để kích hoạt tài khoản.";
           btn.textContent = "Đăng ký & Nhận +100 Điểm Xanh";
           tabReg.className =
             "py-2 rounded-lg text-xs font-bold bg-white text-ink-900 shadow-xs";
@@ -7728,6 +7731,7 @@
           title.textContent = "Đăng nhập RE:LOOP";
           subtitle.textContent =
             "Truy cập tủ đồ số, Điểm Xanh và ưu đãi thành viên";
+          emailHelp.textContent = "Dùng email bạn đã đăng ký trên RE:LOOP.";
           btn.textContent = "Đăng nhập ngay";
           tabLogin.className =
             "py-2 rounded-lg text-xs font-bold bg-white text-ink-900 shadow-xs";
@@ -7739,6 +7743,21 @@
       function closeAuthModal() {
         showAuthError("");
         document.getElementById("auth-modal").classList.add("hidden");
+      }
+
+      async function resendVerificationEmail(email) {
+        try {
+          const response = await apiFetch("/api/auth/resend-verification", {
+            method: "POST",
+            body: JSON.stringify({ email }),
+          });
+          showAuthError(response.message);
+          showToast(response.message, "success");
+        } catch (error) {
+          const message = `Không thể gửi lại email xác minh: ${error.message}`;
+          showAuthError(message);
+          showToast(message, "error");
+        }
       }
 
       async function handleAuthSubmit(e) {
@@ -7825,32 +7844,20 @@
             return;
           }
 
-          const accessToken = backendRes.access_token;
-          if (typeof accessToken !== "string" || !accessToken.trim()) {
-            const message = "Backend không trả về phiên đăng nhập hợp lệ.";
-            showAuthError(message);
-            showToast(message, "error");
-            return;
-          }
-
-          const u = backendRes.user || {};
-          state.token = accessToken;
-          state.user = {
-            id: u.id,
-            name: u.full_name || u.name || fullNameInput,
-            email: u.email || rawEmail,
-            points: u.green_points ?? u.points ?? 100,
-            height: u.height_cm || u.height || height,
-            weight: u.weight_kg || u.weight || weight,
-            isAdmin: false,
-          };
-          localStorage.setItem("reloop_token", state.token);
-          closeAuthModal();
+          document.getElementById("auth-password").value = "";
+          const registrationMessage = backendRes.email_sent
+            ? backendRes.message
+            : `${backendRes.message} ${backendRes.email_notice || "Email chưa được gửi; bạn có thể thử gửi lại."}`;
+          showAuthError(registrationMessage, {
+            label: "Gửi lại email xác minh",
+            run: () => resendVerificationEmail(email),
+          });
           showToast(
-            `Tạo tài khoản thành công! Chào mừng ${state.user.name} (+100 Điểm Xanh)`,
-            "success",
+            backendRes.email_sent
+              ? "Đã gửi email xác minh. Hãy kiểm tra Hộp thư đến hoặc Spam."
+              : "Tài khoản đã tạo nhưng email xác minh chưa được gửi.",
+            backendRes.email_sent ? "success" : "warning",
           );
-          await syncFromBackend(false);
           return;
         }
 
@@ -7879,6 +7886,14 @@
               );
             } else if (err.status === 401) {
               showAuthError("Email hoặc mật khẩu chưa chính xác.");
+            } else if (
+              err.status === 403 &&
+              (err.message || "").toLowerCase().includes("xác minh")
+            ) {
+              showAuthError(err.message, {
+                label: "Gửi lại email xác minh",
+                run: () => resendVerificationEmail(email),
+              });
             } else {
               showAuthError(`Đăng nhập không thành công: ${err.message}`);
             }

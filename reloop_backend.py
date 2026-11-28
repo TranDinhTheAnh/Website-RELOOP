@@ -27,6 +27,7 @@ import html
 import logging
 import urllib.error
 import urllib.request
+from urllib.parse import quote
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any, Literal
 from contextlib import contextmanager
@@ -44,6 +45,7 @@ from fastapi import (
     WebSocketDisconnect,
 )
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field, field_validator
 import psycopg
 import boto3
@@ -61,6 +63,10 @@ DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 DATABASE_URL_UNPOOLED = os.getenv("DATABASE_URL_UNPOOLED", "").strip()
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "").strip().lower()
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
+RELOOP_PUBLIC_API_URL = (
+    os.getenv("RELOOP_PUBLIC_API_URL", "").strip().rstrip("/")
+    or "https://website-reloop-1.onrender.com"
+)
 RELOOP_CORS_ORIGINS = tuple(
     origin.strip().rstrip("/")
     for origin in os.getenv(
@@ -106,6 +112,8 @@ ORDER_SIM_STEP_SECONDS = max(
 PAYMENT_SIMULATION_ENABLED = os.getenv("PAYMENT_SIMULATION_ENABLED", "1") == "1"
 LOGIN_MAX_FAILED_ATTEMPTS = 10
 LOGIN_ATTEMPT_WINDOW = timedelta(minutes=15)
+EMAIL_VERIFICATION_TOKEN_TTL = timedelta(hours=24)
+EMAIL_VERIFICATION_RESEND_COOLDOWN = timedelta(minutes=1)
 COMPLAINT_WINDOW_DAYS = 7
 MESSAGE_ONLINE_THRESHOLD_SECONDS = 75
 CIRCULAR_BADGE_TEXT = "Sản phẩm chính hãng thuộc hệ tuần hoàn, đã được kiểm định từ vòng trước"
@@ -126,12 +134,16 @@ class WebSocketTicketLogFilter(logging.Filter):
             return True
         record.args = tuple(
             re.sub(
-                r"([?&]ticket=)[^&\s]+",
+                r"([?&](?:ticket|token)=)[^&\s]+",
                 r"\1[REDACTED]",
                 value,
                 flags=re.IGNORECASE,
             )
-            if isinstance(value, str) and "/api/messages/ws" in value
+            if isinstance(value, str)
+            and (
+                "/api/messages/ws" in value
+                or "/api/auth/verify-email" in value
+            )
             else value
             for value in record.args
         )
@@ -360,37 +372,18 @@ def call_vilao_chat_completion(
     return data
 
 
-def send_welcome_email(name: str, email: str) -> tuple[bool, Optional[str]]:
+def _send_resend_email(
+    email_payload: Dict[str, Any],
+    purpose: str,
+    configuration_notice: str,
+) -> tuple[bool, Optional[str]]:
     api_key = os.getenv("RESEND_API_KEY", "").strip()
     from_email = os.getenv("RESEND_FROM_EMAIL", "").strip()
-    template_id = os.getenv("RESEND_WELCOME_TEMPLATE_ID", "").strip()
     if not api_key or not from_email:
-        logger.warning("Welcome email not sent because Resend is not configured.")
-        return False, "Chưa cấu hình Resend để gửi email chào mừng."
+        logger.warning("%s email not sent because Resend is not configured.", purpose.title())
+        return False, configuration_notice
 
-    if template_id:
-        email_payload = {
-            "from": from_email,
-            "to": [email],
-            "template": {"id": template_id, "variables": {}},
-        }
-    else:
-        safe_name = html.escape(name)
-        email_payload = {
-            "from": from_email,
-            "to": [email],
-            "subject": "Chào mừng bạn đến với RE:LOOP",
-            "html": (
-                f"<p>Xin chào {safe_name},</p>"
-                "<p>Tài khoản RE:LOOP của bạn đã được tạo thành công.</p>"
-                "<p>Cảm ơn bạn đã tham gia thời trang tuần hoàn cùng chúng tôi!</p>"
-            ),
-            "text": (
-                f"Xin chào {name},\n\n"
-                "Tài khoản RE:LOOP của bạn đã được tạo thành công.\n"
-                "Cảm ơn bạn đã tham gia thời trang tuần hoàn cùng chúng tôi!"
-            ),
-        }
+    email_payload["from"] = from_email
     request = urllib.request.Request(
         "https://api.resend.com/emails",
         data=json.dumps(email_payload).encode("utf-8"),
@@ -455,15 +448,97 @@ def send_welcome_email(name: str, email: str) -> tuple[bool, Optional[str]]:
             error_message,
         )
         logger.error(
-            "Resend rejected welcome email with HTTP %s (%s): %s",
+            "Resend rejected %s email with HTTP %s (%s): %s",
+            purpose,
             error.code,
             error_name,
             error_message,
         )
-        return False, "Không gửi được email chào mừng. Kiểm tra cấu hình Resend và địa chỉ gửi đã xác minh."
+        purpose_label = {"welcome": "chào mừng", "verification": "xác minh"}.get(
+            purpose,
+            purpose,
+        )
+        return False, (
+            f"Không gửi được email {purpose_label}. Kiểm tra cấu hình Resend "
+            "và địa chỉ gửi đã xác minh."
+        )
     except (urllib.error.URLError, TimeoutError) as error:
-        logger.error("Could not reach Resend to send welcome email: %s", error)
+        logger.error("Could not reach Resend to send %s email: %s", purpose, error)
         return False, "Không kết nối được dịch vụ gửi email Resend."
+
+
+def send_welcome_email(name: str, email: str) -> tuple[bool, Optional[str]]:
+    template_id = os.getenv("RESEND_WELCOME_TEMPLATE_ID", "").strip()
+    if template_id:
+        email_payload = {
+            "to": [email],
+            "template": {"id": template_id, "variables": {}},
+        }
+    else:
+        safe_name = html.escape(name)
+        email_payload = {
+            "to": [email],
+            "subject": "Chào mừng bạn đến với RE:LOOP",
+            "html": (
+                f"<p>Xin chào {safe_name},</p>"
+                "<p>Tài khoản RE:LOOP của bạn đã được xác minh thành công.</p>"
+                "<p>Cảm ơn bạn đã tham gia thời trang tuần hoàn cùng chúng tôi!</p>"
+            ),
+            "text": (
+                f"Xin chào {name},\n\n"
+                "Tài khoản RE:LOOP của bạn đã được xác minh thành công.\n"
+                "Cảm ơn bạn đã tham gia thời trang tuần hoàn cùng chúng tôi!"
+            ),
+        }
+    return _send_resend_email(
+        email_payload,
+        "welcome",
+        "Chưa cấu hình Resend để gửi email chào mừng.",
+    )
+
+
+def send_email_verification(name: str, email: str, token: str) -> tuple[bool, Optional[str]]:
+    verification_url = (
+        f"{RELOOP_PUBLIC_API_URL}/api/auth/verify-email?token={quote(token, safe='')}"
+    )
+    safe_name = html.escape(name)
+    safe_url = html.escape(verification_url, quote=True)
+    return _send_resend_email(
+        {
+            "to": [email],
+            "subject": "Xác minh email tài khoản RE:LOOP",
+            "html": (
+                f"<p>Xin chào {safe_name},</p>"
+                "<p>Vui lòng xác minh địa chỉ email để kích hoạt tài khoản RE:LOOP.</p>"
+                f'<p><a href="{safe_url}">Xác minh email</a></p>'
+                "<p>Liên kết có hiệu lực trong 24 giờ. Nếu bạn không tạo tài khoản, "
+                "hãy bỏ qua email này.</p>"
+            ),
+            "text": (
+                f"Xin chào {name},\n\n"
+                "Vui lòng mở liên kết sau để xác minh email tài khoản RE:LOOP:\n"
+                f"{verification_url}\n\n"
+                "Liên kết có hiệu lực trong 24 giờ. Nếu bạn không tạo tài khoản, "
+                "hãy bỏ qua email này."
+            ),
+        },
+        "verification",
+        "Chưa cấu hình Resend để gửi email xác minh.",
+    )
+
+
+def _allow_immediate_verification_resend(user_id: str, token: str) -> None:
+    retry_time = (datetime.utcnow() - EMAIL_VERIFICATION_RESEND_COOLDOWN).isoformat()
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    with get_db() as conn:
+        conn.execute(
+            """
+            UPDATE email_verification_tokens SET created_at = ?
+            WHERE user_id = ? AND token_hash = ?
+            """,
+            (retry_time, user_id, token_hash),
+        )
+
 
 app = FastAPI(
     title="RE:LOOP Circular Fashion AI API",
@@ -732,6 +807,18 @@ def init_db():
                 created_at TEXT NOT NULL
             )
         """)
+        if DATABASE_URL:
+            cursor.execute(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified INTEGER NOT NULL DEFAULT 1"
+            )
+        else:
+            try:
+                cursor.execute(
+                    "ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 1"
+                )
+            except sqlite3.OperationalError as error:
+                if "duplicate column name" not in str(error).lower():
+                    raise
         cursor.execute("""
             CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_lower
             ON users (LOWER(email))
@@ -751,6 +838,15 @@ def init_db():
                 identifier_hash TEXT PRIMARY KEY,
                 failed_attempts INTEGER NOT NULL,
                 window_started_at TEXT NOT NULL
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS email_verification_tokens (
+                user_id TEXT PRIMARY KEY,
+                token_hash TEXT NOT NULL UNIQUE,
+                expires_at TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id)
             )
         """)
 
@@ -1396,6 +1492,10 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class ResendVerificationRequest(BaseModel):
+    email: str = Field(..., min_length=5, max_length=120)
+
+
 class CreateListingRequest(BaseModel):
     title: str = Field(..., min_length=3, max_length=120)
     category: str = Field(..., min_length=1, max_length=40)
@@ -1949,6 +2049,178 @@ def enrich_product_dict(row: sqlite3.Row) -> Dict[str, Any]:
 # 4. ENDPOINTS: TẠO TÀI KHOẢN, ĐĂNG NHẬP & HỒ SƠ
 # =============================================================================
 
+def _email_verification_page(
+    title: str,
+    message: str,
+    token: Optional[str] = None,
+    status_code: int = 200,
+) -> HTMLResponse:
+    confirmation_form = ""
+    if token:
+        safe_token = html.escape(token, quote=True)
+        confirmation_form = (
+            '<form action="/api/auth/verify-email/confirm" method="post">'
+            f'<input type="hidden" name="token" value="{safe_token}">'
+            '<button type="submit">Xác nhận địa chỉ email</button></form>'
+        )
+    content = f"""<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{html.escape(title)}</title>
+<style>
+body{{font-family:Arial,sans-serif;background:#f0fdf4;color:#17221c;margin:0;padding:24px}}
+main{{max-width:520px;margin:10vh auto;background:white;border-radius:20px;padding:32px;box-shadow:0 12px 36px #064e3b18}}
+h1{{font-size:24px}}p{{line-height:1.6;color:#475569}}
+button{{border:0;border-radius:10px;background:#047857;color:white;font-weight:700;padding:13px 18px;cursor:pointer}}
+</style></head><body><main><h1>{html.escape(title)}</h1>
+<p>{html.escape(message)}</p>{confirmation_form}</main></body></html>"""
+    return HTMLResponse(
+        content=content,
+        status_code=status_code,
+        headers={
+            "Cache-Control": "no-store",
+            "Referrer-Policy": "no-referrer",
+            "Content-Security-Policy": (
+                "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; "
+                "base-uri 'none'; frame-ancestors 'none'"
+            ),
+        },
+    )
+
+
+@app.get("/api/auth/verify-email", response_class=HTMLResponse, include_in_schema=False)
+def show_email_verification(token: str = Query(..., min_length=16, max_length=200)):
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT expires_at FROM email_verification_tokens
+            WHERE token_hash = ?
+            """,
+            (token_hash,),
+        )
+        verification = cursor.fetchone()
+
+    expiry = _utc_naive_datetime(verification["expires_at"]) if verification else None
+    if not expiry or expiry <= datetime.utcnow():
+        return _email_verification_page(
+            "Liên kết không hợp lệ",
+            "Liên kết xác minh không hợp lệ hoặc đã hết hạn. Hãy đăng nhập RE:LOOP để yêu cầu gửi lại email.",
+            status_code=400,
+        )
+    return _email_verification_page(
+        "Xác minh email RE:LOOP",
+        "Nhấn nút bên dưới để xác nhận bạn sở hữu địa chỉ email này.",
+        token=token,
+    )
+
+
+@app.post(
+    "/api/auth/verify-email/confirm",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+)
+def confirm_email_verification(token: str = Form(..., min_length=16, max_length=200)):
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    now = datetime.utcnow()
+    user = None
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT users.id, users.name, users.email, tokens.expires_at
+            FROM email_verification_tokens AS tokens
+            JOIN users ON users.id = tokens.user_id
+            WHERE tokens.token_hash = ?
+            """,
+            (token_hash,),
+        )
+        verification = cursor.fetchone()
+        expiry = _utc_naive_datetime(verification["expires_at"]) if verification else None
+        if not verification or not expiry or expiry <= now:
+            return _email_verification_page(
+                "Liên kết không hợp lệ",
+                "Liên kết xác minh không hợp lệ hoặc đã hết hạn. Hãy đăng nhập RE:LOOP để yêu cầu gửi lại email.",
+                status_code=400,
+            )
+
+        cursor.execute(
+            "UPDATE users SET email_verified = 1 WHERE id = ? AND email_verified = 0",
+            (verification["id"],),
+        )
+        if cursor.rowcount != 1:
+            return _email_verification_page(
+                "Liên kết không hợp lệ",
+                "Tài khoản đã được xác minh hoặc liên kết này không còn hiệu lực.",
+                status_code=400,
+            )
+        cursor.execute(
+            "DELETE FROM email_verification_tokens WHERE user_id = ?",
+            (verification["id"],),
+        )
+        user = dict(verification)
+
+    send_welcome_email(user["name"], user["email"])
+    return _email_verification_page(
+        "Email đã được xác minh",
+        "Tài khoản RE:LOOP đã được kích hoạt. Bạn có thể quay lại trang web và đăng nhập.",
+    )
+
+
+@app.post("/api/auth/resend-verification", summary="Gửi lại email xác minh tài khoản")
+def resend_email_verification(payload: ResendVerificationRequest):
+    email_clean = payload.email.strip().lower()
+    if not EMAIL_PATTERN.fullmatch(email_clean):
+        raise HTTPException(status_code=422, detail="Vui lòng nhập địa chỉ email hợp lệ.")
+
+    now = datetime.utcnow()
+    raw_token = None
+    user = None
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, name, email FROM users WHERE LOWER(email) = ? AND email_verified = 0",
+            (email_clean,),
+        )
+        user = cursor.fetchone()
+        if user:
+            cursor.execute(
+                "SELECT created_at FROM email_verification_tokens WHERE user_id = ?",
+                (user["id"],),
+            )
+            previous = cursor.fetchone()
+            last_sent = _utc_naive_datetime(previous["created_at"]) if previous else None
+            if not last_sent or now - last_sent >= EMAIL_VERIFICATION_RESEND_COOLDOWN:
+                raw_token = secrets.token_urlsafe(32)
+                cursor.execute(
+                    """
+                    INSERT INTO email_verification_tokens (user_id, token_hash, expires_at, created_at)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(user_id) DO UPDATE SET
+                        token_hash = excluded.token_hash,
+                        expires_at = excluded.expires_at,
+                        created_at = excluded.created_at
+                    """,
+                    (
+                        user["id"],
+                        hashlib.sha256(raw_token.encode("utf-8")).hexdigest(),
+                        (now + EMAIL_VERIFICATION_TOKEN_TTL).isoformat(),
+                        now.isoformat(),
+                    ),
+                )
+
+    if user and raw_token:
+        email_sent, _ = send_email_verification(user["name"], user["email"], raw_token)
+        if not email_sent:
+            _allow_immediate_verification_resend(user["id"], raw_token)
+    return {
+        "message": (
+            "Nếu địa chỉ thuộc tài khoản chưa xác minh, chúng tôi sẽ gửi email "
+            "hướng dẫn xác minh."
+        )
+    }
+
+
 @app.post("/api/auth/register", summary="Tạo tài khoản thành viên mới (+100 Điểm Xanh)")
 def register_user(payload: RegisterRequest):
     email_clean = payload.email.strip().lower()
@@ -1964,41 +2236,44 @@ def register_user(payload: RegisterRequest):
 
         user_id = f"u-{uuid.uuid4().hex[:8]}"
         pwd_hash, salt = hash_password(payload.password)
-        now = datetime.utcnow().isoformat()
+        now = datetime.utcnow()
+        raw_token = secrets.token_urlsafe(32)
 
         cursor.execute("""
-            INSERT INTO users (id, name, email, password_hash, salt, height, weight, green_points, co2_saved, water_saved, donated_vnd, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 100, 0.0, 0, 0, ?)
-        """, (user_id, payload.name.strip(), email_clean, pwd_hash, salt, payload.height, payload.weight, now))
+            INSERT INTO users (id, name, email, password_hash, salt, height, weight, green_points, co2_saved, water_saved, donated_vnd, created_at, email_verified)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 100, 0.0, 0, 0, ?, 0)
+        """, (user_id, payload.name.strip(), email_clean, pwd_hash, salt, payload.height, payload.weight, now.isoformat()))
 
         cursor.execute("""
             INSERT INTO points_ledger (id, user_id, title, delta, entry_type, created_at)
             VALUES (?, ?, ?, 100, 'earn', ?)
-        """, (f"l-{uuid.uuid4().hex[:8]}", user_id, "Quà chào mừng thành viên Sống Xanh mới", now))
+        """, (f"l-{uuid.uuid4().hex[:8]}", user_id, "Quà chào mừng thành viên Sống Xanh mới", now.isoformat()))
 
-        token = secrets.token_urlsafe(32)
-        expires_at = (datetime.utcnow() + timedelta(days=7)).isoformat()
         cursor.execute(
-            "INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)",
-            (hash_session_token(token), user_id, expires_at),
+            """
+            INSERT INTO email_verification_tokens (user_id, token_hash, expires_at, created_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                user_id,
+                hashlib.sha256(raw_token.encode("utf-8")).hexdigest(),
+                (now + EMAIL_VERIFICATION_TOKEN_TTL).isoformat(),
+                now.isoformat(),
+            ),
         )
 
-    email_sent, email_notice = send_welcome_email(payload.name.strip(), email_clean)
+    email_sent, email_notice = send_email_verification(
+        payload.name.strip(),
+        email_clean,
+        raw_token,
+    )
+    if not email_sent:
+        _allow_immediate_verification_resend(user_id, raw_token)
     return {
-        "message": "Tạo tài khoản thành công! Tặng ngay +100 Điểm Xanh.",
-        "access_token": token,
-        "token_type": "bearer",
+        "message": "Tài khoản đã được tạo. Vui lòng xác minh email để kích hoạt và đăng nhập.",
+        "email": email_clean,
         "email_sent": email_sent,
         "email_notice": email_notice,
-        "user": {
-            "id": user_id,
-            "name": payload.name.strip(),
-            "email": email_clean,
-            "height": payload.height,
-            "weight": payload.weight,
-            "green_points": 100,
-            "is_admin": False,
-        }
     }
 
 
@@ -2011,6 +2286,7 @@ def login_user(payload: LoginRequest):
     cutoff_text = (now - LOGIN_ATTEMPT_WINDOW).isoformat()
     rate_limited = False
     invalid_credentials = False
+    email_unverified = False
     user_data = None
     token = None
     expires_at = None
@@ -2070,13 +2346,16 @@ def login_user(payload: LoginRequest):
                     "DELETE FROM login_attempts WHERE identifier_hash = ?",
                     (email_hash,),
                 )
-                token = secrets.token_urlsafe(32)
-                expires_at = (now + timedelta(days=7)).isoformat()
-                cursor.execute(
-                    "INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)",
-                    (hash_session_token(token), user["id"], expires_at),
-                )
-                user_data = dict(user)
+                if not user["email_verified"]:
+                    email_unverified = True
+                else:
+                    token = secrets.token_urlsafe(32)
+                    expires_at = (now + timedelta(days=7)).isoformat()
+                    cursor.execute(
+                        "INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)",
+                        (hash_session_token(token), user["id"], expires_at),
+                    )
+                    user_data = dict(user)
 
     if rate_limited:
         raise HTTPException(
@@ -2086,6 +2365,11 @@ def login_user(payload: LoginRequest):
         )
     if invalid_credentials:
         raise HTTPException(status_code=401, detail="Email hoặc mật khẩu chưa chính xác.")
+    if email_unverified:
+        raise HTTPException(
+            status_code=403,
+            detail="Vui lòng xác minh email trước khi đăng nhập.",
+        )
 
     return {
         "message": f"Chào mừng trở lại, {user_data['name']}!",
@@ -2121,8 +2405,8 @@ def logout_user(authorization: Optional[str] = Header(None)):
             (hash_session_token(token),),
         )
         if cursor.rowcount != 1:
-            raise HTTPException(status_code=401, detail="Phiên đăng nhập không hợp lệ hoặc đã hết hạn.")
-    return {"message": "Đăng xuất thành công."}
+            raise HTTPException(status_code=401, detail="Phiên đăng nhập không hợp lệ.")
+    return {"message": "Đã đăng xuất thành công."}
 
 
 @app.get("/api/auth/me", summary="Lấy hồ sơ cá nhân, điểm xanh & voucher")
@@ -2379,6 +2663,10 @@ def delete_registered_user(
         )
         cursor.execute("DELETE FROM vouchers WHERE user_id = ?", (user_id,))
         cursor.execute("DELETE FROM points_ledger WHERE user_id = ?", (user_id,))
+        cursor.execute(
+            "DELETE FROM email_verification_tokens WHERE user_id = ?",
+            (user_id,),
+        )
         cursor.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
         cursor.execute("DELETE FROM message_presence WHERE user_id = ?", (user_id,))
         cursor.execute(
