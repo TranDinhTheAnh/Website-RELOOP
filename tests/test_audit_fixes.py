@@ -822,9 +822,39 @@ class AuditFixTests(unittest.TestCase):
             "?token=opaque-verification-token"
         )
         self.assertEqual(payload["to"], ["qa@example.com"])
+        self.assertIn("Chào mừng bạn đến với RE:LOOP", payload["subject"])
+        self.assertIn("background-color:#123d31", payload["html"])
+        self.assertIn("XÁC MINH EMAIL", payload["html"])
         self.assertIn(verification_url, payload["text"])
         self.assertIn(verification_url, payload["html"])
         self.assertIn("24 giờ", payload["text"])
+
+    def test_verification_email_escapes_name_in_html(self):
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                return False
+
+        with patch.dict(
+            os.environ,
+            {
+                "RESEND_API_KEY": "test-resend-key",
+                "RESEND_FROM_EMAIL": "RE:LOOP <no-reply@reloop.help>",
+            },
+        ), patch.object(
+            backend.urllib.request, "urlopen", return_value=FakeResponse()
+        ) as urlopen:
+            backend.send_email_verification(
+                "<script>alert(1)</script>",
+                "qa@example.com",
+                "opaque-verification-token",
+            )
+
+        payload = json.loads(urlopen.call_args.args[0].data)
+        self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;", payload["html"])
+        self.assertNotIn("<script>", payload["html"])
 
     def test_welcome_email_logs_resend_error_details_without_secrets(self):
         response_body = json.dumps({

@@ -503,23 +503,69 @@ def send_email_verification(name: str, email: str, token: str) -> tuple[bool, Op
     )
     safe_name = html.escape(name)
     safe_url = html.escape(verification_url, quote=True)
+    email_html = f"""<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width">
+    <title>Xác minh email RE:LOOP</title>
+  </head>
+  <body style="margin:0;padding:0;background-color:#f3f6f1;font-family:Arial,Helvetica,sans-serif;color:#18352c;">
+    <span style="display:none!important;visibility:hidden;opacity:0;height:0;width:0;overflow:hidden;">Xác minh email để kích hoạt tài khoản RE:LOOP.</span>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#f3f6f1;">
+      <tr>
+        <td align="center" style="padding:36px 16px;">
+          <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:600px;background-color:#ffffff;border:1px solid #e3e9e2;border-radius:20px;overflow:hidden;">
+            <tr>
+              <td align="center" style="padding:32px 28px 24px;background-color:#123d31;">
+                <p style="margin:0;color:#d5ead9;font-size:11px;font-weight:700;letter-spacing:2px;">THỜI TRANG TUẦN HOÀN</p>
+                <p style="margin:9px 0 0;color:#ffffff;font-size:27px;font-weight:800;letter-spacing:1px;">RE:LOOP</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:34px 36px 12px;">
+                <p style="margin:0 0 12px;color:#527265;font-size:14px;">Xin chào {safe_name},</p>
+                <h1 style="margin:0 0 16px;color:#18352c;font-size:26px;line-height:1.3;">Chào mừng bạn đến với RE:LOOP!</h1>
+                <p style="margin:0;color:#52645d;font-size:15px;line-height:1.7;">Cảm ơn bạn đã tham gia cộng đồng thời trang tuần hoàn. Xác minh địa chỉ email để kích hoạt tài khoản và bắt đầu hành trình sống xanh.</p>
+              </td>
+            </tr>
+            <tr>
+              <td align="center" style="padding:26px 36px 20px;">
+                <a href="{safe_url}" target="_blank" style="display:inline-block;padding:15px 28px;background-color:#087f5b;border-radius:10px;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;">XÁC MINH EMAIL</a>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:0 36px 26px;">
+                <p style="margin:0 0 10px;color:#52645d;font-size:13px;line-height:1.6;">Liên kết có hiệu lực trong <strong>24 giờ</strong>. Nếu nút không hoạt động, hãy sao chép liên kết này vào trình duyệt:</p>
+                <p style="margin:0;color:#087f5b;font-size:12px;line-height:1.6;word-break:break-all;"><a href="{safe_url}" style="color:#087f5b;">{safe_url}</a></p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:18px 36px;background-color:#f7f9f6;border-top:1px solid #e8eee8;">
+                <p style="margin:0;color:#65756e;font-size:12px;line-height:1.6;">Nếu bạn không tạo tài khoản RE:LOOP, hãy bỏ qua email này. Tài khoản sẽ không được kích hoạt.</p>
+              </td>
+            </tr>
+          </table>
+          <p style="margin:20px 0 0;color:#7a8982;font-size:11px;line-height:1.6;">RE:LOOP · Mặc đẹp. Sống xanh.</p>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>"""
     return _send_resend_email(
         {
             "to": [email],
-            "subject": "Xác minh email tài khoản RE:LOOP",
-            "html": (
-                f"<p>Xin chào {safe_name},</p>"
-                "<p>Vui lòng xác minh địa chỉ email để kích hoạt tài khoản RE:LOOP.</p>"
-                f'<p><a href="{safe_url}">Xác minh email</a></p>'
-                "<p>Liên kết có hiệu lực trong 24 giờ. Nếu bạn không tạo tài khoản, "
-                "hãy bỏ qua email này.</p>"
-            ),
+            "subject": "Chào mừng bạn đến với RE:LOOP — Xác minh email",
+            "html": email_html,
             "text": (
-                f"Xin chào {name},\n\n"
-                "Vui lòng mở liên kết sau để xác minh email tài khoản RE:LOOP:\n"
+                "RE:LOOP | MẶC ĐẸP. SỐNG XANH.\n\n"
+                f"Chào mừng bạn, {name}!\n\n"
+                "Xác minh địa chỉ email để kích hoạt tài khoản và bắt đầu hành trình "
+                "thời trang tuần hoàn:\n"
                 f"{verification_url}\n\n"
-                "Liên kết có hiệu lực trong 24 giờ. Nếu bạn không tạo tài khoản, "
-                "hãy bỏ qua email này."
+                "Liên kết có hiệu lực trong 24 giờ. Mở liên kết và bấm nút xác nhận "
+                "để hoàn tất.\n\n"
+                "Nếu bạn không tạo tài khoản RE:LOOP, hãy bỏ qua email này."
             ),
         },
         "verification",

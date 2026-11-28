@@ -29,7 +29,7 @@ Trong trang quản trị tài khoản, admin có thể xóa vĩnh viễn ngườ
 - `ADMIN_EMAIL` và `ADMIN_PASSWORD`: thông tin tài khoản quản trị riêng.
 - `RESEND_API_KEY` và `RESEND_FROM_EMAIL`: cấu hình Resend để gửi email xác minh và email chào mừng; địa chỉ gửi cần được xác minh trong Resend.
 - `RELOOP_PUBLIC_API_URL`: URL công khai của backend để tạo liên kết xác minh; mặc định là `https://website-reloop-1.onrender.com` (chạy local thì đặt `http://127.0.0.1:8000`).
-- `RESEND_WELCOME_TEMPLATE_ID`: tùy chọn; ID hoặc alias của template email chào mừng Resend đã publish. Email xác minh luôn dùng nội dung mặc định của backend.
+- `RESEND_WELCOME_TEMPLATE_ID`: tùy chọn; ID hoặc alias của template email chào mừng Resend đã publish. Email xác minh dùng mẫu HTML RE:LOOP tích hợp trong backend.
 
 Tài khoản đăng ký mới chỉ đăng nhập được sau khi mở email xác minh và bấm nút xác nhận. Liên kết có hiệu lực 24 giờ; người dùng có thể yêu cầu gửi lại email xác minh từ màn hình đăng nhập, tối đa một email mỗi phút (gửi lại ngay được nếu lần gửi trước lỗi).
 
